@@ -1,0 +1,42 @@
+[tool.poetry]
+name = "av-agents"
+version = "0.1.0"
+description = ""
+authors = ["Michael Walters <michaelwalters3000@gmail.com>"]
+readme = "README.md"
+license = "MIT"
+
+packages = [
+    {include = "sim", from = "src"},
+]
+
+# Dependencies
+# Remember to 'poetry update' after changing
+[tool.poetry.dependencies]
+# python = ">=3.12,<3.13"  # pytensor has a restrictive range
+python = ">=3.10,<3.13"
+numpy = "^1.26.4"
+scikit-learn = "^1.4.1"
+pytensor = "^2.20.0"
+pymc = "^5.13.1"
+diffrax = "^0.5.0"
+arviz = "^0.18.0"
+namedtupled = "^0.3.3"
+jax = {extras = ["cpu"], version = "^0.4.26"}
+
+[tool.poetry.dev-dependencies]
+notebook = "*"
+jupyterlab = "*"
+matplotlib = "*"
+seaborn = "*"
+
+[tool.poetry.extras]
+cuda = [
+	# The line below is an example; change for your system
+  #torch = { url = "https://download.pytorch.org/whl/cu113/torch-1.10.0+cu113-cp38-cp38-linux_x86_64.whl" }
+]
+
+# Build system configuration
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
