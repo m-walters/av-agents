@@ -2,7 +2,10 @@
 name = "av-agents"
 version = "0.1.0"
 description = ""
-authors = ["Michael Walters <michaelwalters3000@gmail.com>"]
+authors = [
+    "Michael Walters <michaelwalters3000@gmail.com>",
+    "Utkarsh Priyadarshi <priyadarshiutkarshofficial@gmail.com>",
+]
 readme = "README.md"
 license = "MIT"
 
