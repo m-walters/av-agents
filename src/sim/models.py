@@ -15,6 +15,7 @@ from sim.utils import (
 
 if TYPE_CHECKING:
     from sim.vehicle import Vehicle
+    from gymnasium import Env
 
 logger = logging.getLogger("av-sim")
 
@@ -41,6 +42,7 @@ class DefaultPolicy(Policy):
     """
     This policy is the HighwayEnv default policy
     """
+
     def sample(self, env, params: ParamCollection):
         ...
 
@@ -270,6 +272,7 @@ class WorldModel(ModelBase):
 
     def __init__(
         self,
+        env: Env,
         params: ParamCollection,
         world_draws: int,
         n_montecarlo: int,

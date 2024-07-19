@@ -1,6 +1,5 @@
 import logging
-import os
-import shutil
+from typing import TYPE_CHECKING
 
 import gymnasium as gym
 import hydra
@@ -10,7 +9,10 @@ from matplotlib import pyplot as plt
 from omegaconf import DictConfig, OmegaConf
 
 import sim.params as sim_params
-from sim import models, plotting, utils, vehicle
+from sim import models, utils, vehicle
+
+if TYPE_CHECKING:
+    from gymnasium import Env
 
 RESULTS_DIR = "../results"
 
@@ -64,10 +66,11 @@ def main(cfg: DictConfig):
         preference_prior=preference_prior, **cfg.risk, seed=cfg.seed
     )
 
-    env = gym.make('highway-v0', render_mode='rgb_array')
+    env: "Env" = gym.make('highway-v0', render_mode='rgb_array')
     env.reset()
 
     world_model = models.WorldModel(
+        env,
         param_collection,
         cfg.world_draws,
         cfg.n_montecarlo,
@@ -79,33 +82,16 @@ def main(cfg: DictConfig):
     )
     output = world_model()
 
-    return
+    # Test the display is working etc.
+    for _ in range(cfg.env.duration):
+        action = env.unwrapped.action_type.actions_indexes["IDLE"]
+        obs, reward, done, truncated, info = env.step(action)
+        env.render()
 
-    # Store the outputs from this run as xArray Dataset
-    omega_results = utils.OmegaResults(omegas, outputs, cfg.duration, cfg.world_draws)
-    ds = omega_results.to_dataset()
-    # Automatically save latest
-    latest_dir = RESULTS_DIR + "/latest"
-    # Clear latest_dir if it exists
-    if os.path.exists(latest_dir):
-        shutil.rmtree(latest_dir)
-
-    os.makedirs(latest_dir, exist_ok=True)
-    OmegaConf.save(config=cfg, f=f"{latest_dir}/config.yaml")
-    highway_results.save_ds(ds, f"{latest_dir}/highway_results.nc")
-
-    # If a name is provided, save there too
-    if "name" in cfg:
-        save_dir: str = cfg.get("save_dir", RESULTS_DIR)
-        run_dir: str = os.path.join(save_dir, cfg.name)
-        os.makedirs(run_dir, exist_ok=True)
-        OmegaConf.save(config=cfg, f=f"{run_dir}/config.yaml")
-        omega_results.save_ds(ds, f"{run_dir}/highway_results.nc")
-
-    # Display a plot of results
-    plotter = plotting.Plotter(ds)
-    plotter.omega_quad_plot(save_path=f"{latest_dir}/highway_results.png")
+    plt.imshow(env.render())
     plt.show()
+
+    return
 
 
 if __name__ == '__main__':
