@@ -34,7 +34,7 @@ example:
 ```bash
 poetry shell  # Enter poetry env
 cd scripts
-python evolve_preference.py --config-name=evolve-preference  # not evolve-preference.yaml btw
+python basic.py --config-name=highway  # not highway.yaml btw
 ```
 
 ### Configs

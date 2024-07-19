@@ -6,9 +6,8 @@ import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
-import pymc as pm
 import xarray as xr
-from omegaconf import DictConfig, ListConfig
+from omegaconf import DictConfig
 
 Params = namedtuple('Params', 'B, w, r, k, qE')
 FishParams = namedtuple('Params', 'B, r, k, qE')  # Remove 'w'
@@ -17,86 +16,6 @@ FishParams = namedtuple('Params', 'B, r, k, qE')  # Remove 'w'
 Array = Union[jnp.ndarray, np.ndarray]
 # Shortcut
 Number = Union[float, int]
-
-
-def init_run_params(
-    cfg,
-    B0: Array | None = None,
-    r: Array | None = None,
-    k: Array | None = None,
-    w: Array | None = None,
-    qE: Array | None = None,
-):
-    """
-    Initialize run params and return a Param object
-    Optionally provide arrays to be inserted into Params as overrides
-    """
-    fish_params = DictConfig(cfg.fish_params)
-    B0_ = fish_params.B0
-    k_ = fish_params.k
-    r_ = fish_params.r
-    qE_ = fish_params.qE
-    omega = cfg.run_params.omega
-
-    # For values that are constants or not being sampled, they need to have this shape
-    param_cast = np.ones((1, cfg.run_params.num_param_batches))
-
-    with pm.Model() as pm_model:  # this is a pymc model and in particular the "with...as..." syntax means all assignments in this block are associated with this model's context!
-        # Below, when we do not want a variable to be sampled, we create a Data object
-        # We have to call get_value to get its array value though.
-        # This is because sample_prior_predictive creates these expanded values for the sampled variables.
-        # I think this is virtually equivalent to just calling e.g. B0_ * param_cast as a numpy array, but anyway...
-        if B0 is None:
-            B0 = pm.Data("B", B0_ * param_cast).get_value(return_internal_type=True)
-
-        if r is None:
-            if not r_:
-                r = pm.Uniform("r", 0.1, 0.5)
-            elif isinstance(r_, DictConfig) and 'lower' in r_:
-                r = pm.Uniform("r", r_.lower, r_.upper)
-            else:
-                r = pm.Data("r", r_ * param_cast).get_value(return_internal_type=True)
-
-        if k is None:
-            if not k_:
-                # Select k s.t. B0 is between 50% and 90% k
-                k = pm.Uniform("k", int(fish_params.B0 / 0.9), int(fish_params.B0 / 0.5))
-            elif isinstance(k_, DictConfig) and 'lower' in k_:
-                k = pm.Uniform("k", k_.lower, k_.upper)
-            else:
-                k = pm.Data("k", k_ * param_cast).get_value(return_internal_type=True)
-
-        if w is None:
-            if not omega:
-                w = pm.Data("w", 0.1 * param_cast).get_value(return_internal_type=True)
-            elif isinstance(omega, DictConfig) and 'lower' in omega:
-                w = pm.Uniform("w", omega.lower, omega.upper)
-            elif isinstance(omega, ListConfig):
-                raise ValueError("List of w values not supported")
-            else:
-                w = pm.Data("w", omega * param_cast).get_value(return_internal_type=True)
-
-        # w = pm.MutableData("w", cfg.run_params.omega.min)
-        # qE = pm.Uniform("qE", fish_params.qE.lower, fish_params.qE.upper)
-        if qE is None:
-            if not qE_:
-                qE = pm.Uniform("qE", 0.2, 0.8)
-            elif isinstance(qE_, DictConfig) and 'lower' in qE_:
-                qE = pm.Uniform("qE", qE_.lower, qE_.upper)
-            else:
-                qE = pm.Data("qE", qE_ * param_cast).get_value(return_internal_type=True)
-
-        samples = pm.sample_prior_predictive(
-            samples=cfg.run_params.num_param_batches,
-        )
-
-    return Params(
-        B=samples.prior.get('B', B0),
-        r=samples.prior.get('r', r),
-        k=samples.prior.get('k', k),
-        w=samples.prior.get('w', w),
-        qE=samples.prior.get('qE', qE),
-    )
 
 
 class ParamEvolution(Enum):
@@ -265,9 +184,9 @@ class Output:
     ):
         """
         Outputs from the main world model sim.
-        Each variable is a list of length real_horizon,
-        and each element therein is an array of shape either (1, num_param_batches) or (num_param_batches).
-        The stored values become numpy ndarrays of shape [real_horizon, num_param_batches].
+        Each variable is a list of length duration,
+        and each element therein is an array of shape either (1, world_draws) or (world_draws).
+        The stored values become numpy ndarrays of shape [duration, world_draws].
 
         param_history
         """
@@ -317,13 +236,13 @@ class OmegaResults(Results):
         self,
         omegas: Union[np.ndarray, List[float]],
         outputs: List[Output],
-        real_horizon: int,
-        num_param_batches: int,
+        duration: int,
+        world_draws: int,
     ):
         self.omegas = omegas
         self.outputs = outputs
-        self.real_horizon = real_horizon
-        self.num_param_batches = num_param_batches
+        self.duration = duration
+        self.world_draws = world_draws
 
     def to_dataset(self) -> xr.Dataset:
         """
@@ -344,8 +263,8 @@ class OmegaResults(Results):
             },
             coords={
                 "omega": self.omegas,
-                "time": np.arange(self.real_horizon),
-                "batch": np.arange(self.num_param_batches),
+                "time": np.arange(self.duration),
+                "batch": np.arange(self.world_draws),
             },
         )
         return ds
@@ -364,7 +283,7 @@ class LambdaResults(Results):
     ):
         self.qEs = qEs
         self.risks = risks
-        self.plan_horizon = qEs.shape[1]
+        self.plan_duration = qEs.shape[1]
 
     def to_dataset(self) -> xr.Dataset:
         pass
@@ -375,7 +294,7 @@ class LambdaResults(Results):
         #      },
         #      coords={
         #          "lmbda": self.risks,
-        #          "time": np.arange(self.plan_horizon),
+        #          "time": np.arange(self.plan_duration),
         #      },
         # )
         # return ds
@@ -391,13 +310,13 @@ class ProjectionResults(Results):
         self,
         Es: Union[np.ndarray, List[float]],
         outputs: List[Output],
-        real_horizon: int,
-        num_param_batches: int,
+        duration: int,
+        world_draws: int,
     ):
         self.Es = Es
         self.outputs = outputs
-        self.real_horizon = real_horizon
-        self.num_param_batches = num_param_batches
+        self.duration = duration
+        self.world_draws = world_draws
 
     def to_dataset(self) -> xr.Dataset:
         """
@@ -415,8 +334,8 @@ class ProjectionResults(Results):
             },
             coords={
                 "E": self.Es,
-                "time": np.arange(self.real_horizon),
-                "batch": np.arange(self.num_param_batches),
+                "time": np.arange(self.duration),
+                "batch": np.arange(self.world_draws),
             },
         )
         return ds
@@ -430,12 +349,12 @@ class EvolvePreferenceResults(Results):
     def __init__(
         self,
         output: Output,
-        real_horizon: int,
-        num_param_batches: int,
+        duration: int,
+        world_draws: int,
     ):
         self.output = output
-        self.real_horizon = real_horizon
-        self.num_param_batches = num_param_batches
+        self.duration = duration
+        self.world_draws = world_draws
 
     def to_dataset(self) -> xr.Dataset:
         """
@@ -463,8 +382,15 @@ class EvolvePreferenceResults(Results):
                 **param_data,
             },
             coords={
-                "time": np.arange(self.real_horizon),
-                "batch": np.arange(self.num_param_batches),
+                "time": np.arange(self.duration),
+                "batch": np.arange(self.world_draws),
             },
         )
         return ds
+
+
+def validate_env_config(cfg: DictConfig) -> DictConfig:
+    """
+    Validate the highway-env Environment config
+    """
+    return cfg

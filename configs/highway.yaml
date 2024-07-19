@@ -1,0 +1,45 @@
+# Special hydra param, inherit defaults
+defaults:
+  - env: highway
+  - _self_
+
+# highway-env overrides
+env_overrides:
+  controlled_vehicles: 1
+  duration: 40
+  high_speed_reward: 0.4
+  vehicles_count: 50
+  vehicles_density: 1
+  other_vehicles_type: highway_env.vehicle.behavior.IDMVehicle
+#==============
+seed: 8675309
+world_draws: 5
+plan_duration: 20
+n_montecarlo: 10
+v_l: &v_l 30 # Target velocity
+
+# Params for world sampling
+params:
+  - name: vehicles_density
+    sampler:
+      _target_: pymc.Uniform
+      _args_:
+        - vehicles_density
+        - 0.5
+        - 2.0
+  - name: duration  # Just for testing
+    fixed_value: 40
+
+policy:
+  model: "ProfitMaximizingPolicy"
+loss:
+  model: "LossModel"
+  alpha: 10
+  v_l: *v_l
+  beta: 1
+  scale: 0.1
+preference_prior:
+  model: "ExponentialPreferencePrior"
+  p_star: 0.5
+risk:
+  model: "MonteCarloRiskModel"

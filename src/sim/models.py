@@ -1,20 +1,22 @@
 import logging
 import warnings
 from abc import ABC
-from copy import copy
-from typing import List, Tuple, Union
+from typing import Tuple, TYPE_CHECKING, Union
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 from omegaconf import DictConfig
 from scipy.stats import differential_entropy as entr
 
+from sim.params import ParamCollection
 from sim.utils import (
-    Array, JaxGaussian, JaxRKey, Number, Output, ParamEvolution, ParamIterator, ParamIteratorConfig, Params
+    Array, JaxGaussian, JaxRKey, Number, Output, ParamEvolution, ParamIterator, ParamIteratorConfig
 )
 
-logger = logging.getLogger("fish-risk")
+if TYPE_CHECKING:
+    from sim.vehicle import Vehicle
+
+logger = logging.getLogger("av-sim")
 
 
 class ModelBase(ABC):
@@ -27,51 +29,43 @@ class ModelBase(ABC):
         self.key = JaxRKey(seed=kwargs.get("seed", 8675309))
 
 
-class EulerMaruyamaDynamics(ModelBase):
-    """
-    Evolve an ODE
-    """
-
-    def __init__(self, t_end: int, num_points: int, D: float, max_b: float, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.time_points = jnp.linspace(0., t_end, num_points)
-        self.dt = t_end / num_points
-        self.D = D  # diffusion coefficient
-
-    def rhs_pymcode(self) -> Array:
-        """
-        Will be passed into DifferentialEquation
-        p is our parameter tuple (r, k, qE)
-        """
-        raise NotImplementedError
-
-    def __call__(self, params: Params) -> List[Array]:
-        """
-        Generate sample data
-        Processes batch of params at once
-        Shape of Bs is [m, num_param_batches]
-        where m is either 1 for the "real" timestep or n_montecarlo for planning
-        """
-        raise NotImplementedError
-
-
 class Policy(ModelBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def sample(self, params: Params):
+    def sample(self, env, params: ParamCollection):
         raise NotImplementedError
+
+
+class DefaultPolicy(Policy):
+    """
+    This policy is the HighwayEnv default policy
+    """
+    def sample(self, env, params: ParamCollection):
+        ...
 
 
 class LossModel(ModelBase):
-    def __call__(self, t: int) -> Tuple[Array, Array]:
+    def __init__(self, alpha: float, v_l: Number, beta: float, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.alpha = alpha
+        self.v_l = v_l
+        self.beta = beta
+
+    def __call__(self, v: float, neighbors: Array) -> Tuple[Array, Array]:
         """
-        Return loss and log-prob arrays of shape [m, num_param_batches]
+        Return loss and log-prob arrays of shape [m, world_draws]
         where m is either 1 for the "real" timestep or n_montecarlo for planning
 
-        :param t: Future time step
+        :param v: speed of vehicle
+        :param neighbors: num_neighbors x 3 array, columns are [distance, speed, lane]
         """
-        raise NotImplementedError
+        speed_loss = - self.alpha * jnp.exp(-(v - self.v_l) ** 2 / self.alpha)
+        collision_loss = self.beta * jnp.mean(
+            1 / (2 ** neighbors[:, 2]) * jnp.divide(jnp.max(0, v - neighbors[:, 1]), neighbors[:, 0])
+        )
+        loss = speed_loss + collision_loss
+        return loss, -10 * jnp.ones(loss.shape)  # Set log_probs to -10 to show high precision
 
 
 class NoisyLossModel(LossModel):
@@ -79,14 +73,13 @@ class NoisyLossModel(LossModel):
         super().__init__(*args, **kwargs)
         self.scale = scale
 
-    def __call__(self, t: int) -> Tuple[Array, Array]:
+    def __call__(self, v: float, neighbors: Array) -> Tuple[Array, Array]:
         """
-        Return loss and log-prob arrays of shape [m, num_param_batches]
+        Return loss and log-prob arrays of shape [m, world_draws]
         where m is either 1 for the "real" timestep or n_montecarlo for planning
 
-        :param V_t: Net profit (revenue - cost) at time t | shap
-        :param t: Future time step
-        :param omega: Discount factor
+        :param v: speed of vehicle
+        :param neighbors: num_neighbors x 3 array, columns are [distance, speed, lane]
         """
         loss, _ = super(NoisyLossModel, self).__call__(t)
         key = self.key.next_seed()
@@ -131,37 +124,6 @@ class PreferencePrior(ModelBase):
         raise NotImplementedError
 
 
-class SigmoidPreferencePrior(PreferencePrior):
-    """
-    l_bar is a maximal loss we can expect from the simulation
-    """
-
-    def __init__(
-        self,
-        l_bar: Union[ParamIterator, ParamIteratorConfig],
-        *args, **kwargs
-    ):
-        super().__init__(*args, **kwargs)
-
-        self._param_history["l_bar"] = []
-
-        l_bar_iter = self._init_param(l_bar)
-        self.l_bar_iter = l_bar_iter
-        # Init value
-        self.l_bar = l_bar_iter()
-
-    def step(self):
-        self._param_history["l_bar"].append(self.l_bar)
-        self.l_bar = self.l_bar_iter()
-
-    def __call__(self, Lt: Array) -> Array:
-        """
-        Compute the sigmoid preference prior using loss and l_bar
-        Returns an array of shape [m, num_param_batches]
-        """
-        return jax.nn.log_sigmoid(self.l_bar - Lt)
-
-
 class ExponentialPreferencePrior(PreferencePrior):
     """
     k is an empirical constant related to stakeholder loss aversion
@@ -170,7 +132,7 @@ class ExponentialPreferencePrior(PreferencePrior):
 
     def __init__(
         self,
-        p_star: Union[ParamIterator, ParamIteratorConfig],
+        p_star: Number,
         l_star: Union[ParamIterator, ParamIteratorConfig],
         *args, **kwargs
     ):
@@ -206,7 +168,7 @@ class ExponentialPreferencePrior(PreferencePrior):
     def __call__(self, Lt: Array) -> Array:
         """
         Compute the exponential preference prior
-        Returns an array of shape [m, num_param_batches]
+        Returns an array of shape [m, world_draws]
         """
         return -self.k * Lt
 
@@ -233,7 +195,7 @@ class UniformPreferencePrior(PreferencePrior):
     def __call__(self, Lt):
         """
         Compute the uniform preference prior
-        Returns an array of shape [m, num_param_batches]
+        Returns an array of shape [m, world_draws]
         """
         return np.zeros(Lt.shape) - np.log(self.l_bar)
 
@@ -254,7 +216,7 @@ class RiskModel(ModelBase):
     def __call__(self, Lt: Array, Lt_logprob: Array, Vt: Array) -> Tuple[Array, Array, Array]:
         """
         Compute an array of risk values at a given timestep
-        Arrays have shape [n_montecarlo, num_param_batches]
+        Arrays have shape [n_montecarlo, world_draws]
         """
         # this printing is important for evolving the preference model
         sample_mean = self.preference_prior(Lt).mean(axis=0)
@@ -268,8 +230,8 @@ class DifferentialEntropyRiskModel(RiskModel):
     def compute_entropy(self, Lt: Array, Lt_logprob: Array, Vt: Array) -> Array:
         """
         Compute the differential entropy of the loss distribution
-        Input Arrays have shape [n_montecarlo, num_param_batches] since this isn't called for real timesteps
-        Return Array has shape [num_param_batches] since we reduce along the montecarlo axis=0
+        Input Arrays have shape [n_montecarlo, world_draws] since this isn't called for real timesteps
+        Return Array has shape [world_draws] since we reduce along the montecarlo axis=0
         """
         ent = entr(Lt, axis=0) if len(Lt) > 1 else 0.
         if np.any(ent == float('-inf')):
@@ -285,8 +247,8 @@ class MonteCarloRiskModel(RiskModel):
     def compute_entropy(self, Lt: Array, Lt_logprob: Array, Vt: Array) -> Array:
         """
         Compute the Monte Carlo estimate of the entropy of the loss distribution
-        Input Arrays have shape [n_montecarlo, num_param_batches] since this isn't called for real timesteps
-        Return Array has shape [num_param_batches] since we reduce along the montecarlo axis=0
+        Input Arrays have shape [n_montecarlo, world_draws] since this isn't called for real timesteps
+        Return Array has shape [world_draws] since we reduce along the montecarlo axis=0
         """
         return Lt_logprob.mean(axis=0)
 
@@ -308,15 +270,12 @@ class WorldModel(ModelBase):
 
     def __init__(
         self,
-        params,
-        num_param_batches,
-        n_montecarlo,
-        real_horizon,
-        plan_horizon,
-        dynamics,
-        policy,
-        revenue_model,
-        cost_model,
+        params: ParamCollection,
+        world_draws: int,
+        n_montecarlo: int,
+        duration: int,
+        plan_duration: int,
+        ego: "Vehicle",
         loss_model,
         risk_model,
         *args,
@@ -325,45 +284,44 @@ class WorldModel(ModelBase):
         super().__init__(*args, **kwargs)
 
         self.params = params
-        self.num_param_batches = num_param_batches
+        self.world_draws = world_draws
         self.n_montecarlo = n_montecarlo
-        self.dynamics = dynamics
-        self.real_horizon = real_horizon
-        self.plan_horizon = plan_horizon
-        self.policy = policy
-        self.revenue_model = revenue_model
-        self.cost_model = cost_model
+        self.ego = ego
+        self.duration = duration
+        self.plan_duration = plan_duration
         self.loss_model = loss_model
         self.risk_model = risk_model
 
-    def sample_policy(self, params: Params) -> Params:
+    def sample_policy(self, params: ParamCollection) -> ParamCollection:
         raise NotImplementedError
 
     def timestep(
-        self, t: int, old_params: Params, planning: bool, omega_iter: ParamIterator | None = None
-    ) -> Tuple[Array, Array, Array, Array, Params]:
+        self, t: int, old_params: ParamCollection, planning: bool, omega_iter: ParamIterator | None = None
+    ) -> Tuple[Array, Array, Array, Array, ParamCollection]:
         """
         Shapes of variables (like Bt, Ct, ...) will be
-        (m, num_param_batches)
+        (m, world_draws)
         where m is either 1 for the "real" timestep or n_montecarlo for planning
         """
         raise NotImplementedError
 
-    def plan(self, params: Params) -> Array:
+    def plan(self, params: ParamCollection) -> Array:
         """
         Calculate the risk value at the present timestep and the current set of params
         by simulating across a planning horizon with n_montecarlo simulations
-        Return shape is [num_param_batches]
+        Return shape is [world_draws]
         """
-        Rt_sim = jnp.zeros(self.num_param_batches)
-        ent = jnp.zeros(self.num_param_batches)
-        extrinsic = jnp.zeros(self.num_param_batches)
-        for t_plan in range(self.plan_horizon):
-            # ... = self.timestep(t_plan, params, planning=True)
-            # Gt, entropy, sample_mean = self.risk_model(Lt, Lt_logprob, Vt)
-            # Rt_sim += Gt
-            # ent += entropy
-            # extrinsic += sample_mean
+        Rt_sim = jnp.zeros(self.world_draws)
+        ent = jnp.zeros(self.world_draws)
+        extrinsic = jnp.zeros(self.world_draws)
+        for t_plan in range(self.plan_duration):
+            ...
+
+        # ... = self.timestep(t_plan, params, planning=True)
+        # Gt, entropy, sample_mean = self.risk_model(Lt, Lt_logprob, Vt)
+        # Rt_sim += Gt
+        # ent += entropy
+        # extrinsic += sample_mean
 
         logger.debug(
             "plan last: -entropy.mean {} | -sample_mean.mean {} | risk.mean {}".format(
@@ -376,23 +334,20 @@ class WorldModel(ModelBase):
     def get_montecarlo_params(self):
         """
         Return a replicated stack of current params for running MC predictive simulations
-        Returned object is a Params object where each param is an n_montecarlo x num_param_batches size
-        The params are identical across n_montecarlo dimension, but differ across num_param_batches dimension
+        Returned object is a params tuple object where each param is an n_montecarlo x world_draws size
+        The params are identical across n_montecarlo dimension, but differ across world_draws dimension
         """
-        param_montecarlo_dup = [copy(self.params) for _ in range(self.n_montecarlo)]
-        # Bs = jnp.vstack([np.array(p.B) for p in param_montecarlo_dup])
-        # return Params(Bs, ws, rs, ks, qEs)
-        raise NotImplementedError
+        return self.params.monte_carlo_stack(self.n_montecarlo)
 
     def __call__(self) -> Output:
         """
         Run the main world model simulation.
         We collect various values at each real timestep and store them.
-        Collected values will have dimension either (1, num_param_batches) or (num_param_batches).
+        Collected values will have dimension either (1, world_draws) or (world_draws).
         However, these get squeezed in the Output object.
-        The final [real_horizon, num_param_batch] set of results will be passed into an Output object.
+        The final [duration, num_param_batch] set of results will be passed into an Output object.
         """
-        for t_sim in range(self.real_horizon):
+        for t_sim in range(self.duration):
             ...
 
         # Save the preference params and omega history
@@ -400,4 +355,5 @@ class WorldModel(ModelBase):
             **self.risk_model.preference_prior.get_param_history()
         }
 
-        return Output(...)
+        return 0
+        # return Output(...)

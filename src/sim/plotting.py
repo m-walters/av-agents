@@ -15,7 +15,6 @@ class Plotter:
     """
     Plotting util for xArray Datasets
     """
-
     def __init__(
         self,
         ds_or_path: Union[xr.Dataset, str],

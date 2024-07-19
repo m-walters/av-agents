@@ -1,0 +1,4 @@
+top_speed: 100
+aggression: 0.6
+policy: ExponentialPolicy
+
