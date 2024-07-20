@@ -13,10 +13,10 @@ env_overrides:
   other_vehicles_type: highway_env.vehicle.behavior.IDMVehicle
 #==============
 seed: 8675309
-world_draws: 5
+world_draws: 8
 plan_duration: 20
 n_montecarlo: 10
-v_l: &v_l 30 # Target velocity
+v_r: &v_r 30 # Target velocity
 
 # Params for world sampling
 params:
@@ -35,7 +35,7 @@ policy:
 loss:
   model: "LossModel"
   alpha: 10
-  v_l: *v_l
+  v_r: *v_r
   beta: 1
   scale: 0.1
 preference_prior:

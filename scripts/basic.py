@@ -5,7 +5,6 @@ import gymnasium as gym
 import hydra
 import numpy as np
 import pymc as pm
-from matplotlib import pyplot as plt
 from omegaconf import DictConfig, OmegaConf
 
 import sim.params as sim_params
@@ -48,12 +47,12 @@ def main(cfg: DictConfig):
         param_collection = sim_params.ParamCollection(params)
         param_collection.draw(cfg.world_draws)
 
-    v_l = cfg.v_l
+    v_r = cfg.v_r
     alpha, beta = cfg.loss.alpha, cfg.loss.beta
     p_star = cfg.preference_prior.p_star
-    l_star = - alpha * np.exp(-(0.1 * v_l) ** 2 / alpha)
+    l_star = - alpha * np.exp(-(0.1 * v_r) ** 2 / alpha)
 
-    loss_model = models.LossModel(alpha=alpha, beta=beta, v_l=v_l, seed=cfg.seed)
+    loss_model = models.LossModel(alpha=alpha, beta=beta, v_r=v_r, seed=cfg.seed)
     preference_prior = models.ExponentialPreferencePrior(p_star=p_star, l_star=l_star, seed=cfg.seed)
 
     # For now we just look at a single ego vehicle and use the default policy
@@ -66,11 +65,28 @@ def main(cfg: DictConfig):
         preference_prior=preference_prior, **cfg.risk, seed=cfg.seed
     )
 
-    env: "Env" = gym.make('highway-v0', render_mode='rgb_array')
-    env.reset()
+    # Set render_mode=None to disable rendering
+    # env: "Env" = gym.make(
+    #     'highway-v0',
+    #     render_mode='human',
+    #     max_episode_steps=cfg.env.duration,
+    #     **cfg.env
+    # )
+    # obs, info = env.reset()
 
-    world_model = models.WorldModel(
-        env,
+    # envs = gym.vector.AsyncVectorEnv(
+    #     [
+    #         lambda: gym.make(
+    #             'highway-v0',
+    #             render_mode=None,
+    #             max_episode_steps=cfg.env.duration,
+    #             # **cfg.env
+    #         ) for _ in range(cfg.world_draws)
+    #     ]
+    # )
+
+    world_model = models.AsyncWorldModel(
+        env_cfg,
         param_collection,
         cfg.world_draws,
         cfg.n_montecarlo,
@@ -79,17 +95,21 @@ def main(cfg: DictConfig):
         ego,
         loss_model,
         risk_model,
+        seed=cfg.seed,
     )
+
     output = world_model()
 
     # Test the display is working etc.
-    for _ in range(cfg.env.duration):
-        action = env.unwrapped.action_type.actions_indexes["IDLE"]
-        obs, reward, done, truncated, info = env.step(action)
-        env.render()
-
-    plt.imshow(env.render())
-    plt.show()
+    # for _ in range(cfg.env.duration):
+    #     action = env.unwrapped.action_type.actions_indexes["IDLE"]
+    #     obs, reward, done, truncated, info = env.step(action)
+    #     if done or truncated:
+    #         break
+    #     env.render()
+    #
+    # plt.imshow(env.render())
+    # plt.show()
 
     return
 

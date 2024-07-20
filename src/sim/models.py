@@ -3,6 +3,7 @@ import warnings
 from abc import ABC
 from typing import Tuple, TYPE_CHECKING, Union
 
+import gymnasium as gym
 import jax.numpy as jnp
 import numpy as np
 from omegaconf import DictConfig
@@ -15,7 +16,6 @@ from sim.utils import (
 
 if TYPE_CHECKING:
     from sim.vehicle import Vehicle
-    from gymnasium import Env
 
 logger = logging.getLogger("av-sim")
 
@@ -48,10 +48,10 @@ class DefaultPolicy(Policy):
 
 
 class LossModel(ModelBase):
-    def __init__(self, alpha: float, v_l: Number, beta: float, *args, **kwargs):
+    def __init__(self, alpha: float, v_r: Number, beta: float, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.alpha = alpha
-        self.v_l = v_l
+        self.v_r = v_r
         self.beta = beta
 
     def __call__(self, v: float, neighbors: Array) -> Tuple[Array, Array]:
@@ -62,7 +62,7 @@ class LossModel(ModelBase):
         :param v: speed of vehicle
         :param neighbors: num_neighbors x 3 array, columns are [distance, speed, lane]
         """
-        speed_loss = - self.alpha * jnp.exp(-(v - self.v_l) ** 2 / self.alpha)
+        speed_loss = - self.alpha * jnp.exp(-(v - self.v_r) ** 2 / self.alpha)
         collision_loss = self.beta * jnp.mean(
             1 / (2 ** neighbors[:, 2]) * jnp.divide(jnp.max(0, v - neighbors[:, 1]), neighbors[:, 0])
         )
@@ -263,16 +263,15 @@ class NullEntropy(RiskModel):
         return jnp.zeros(Lt.shape[1])
 
 
-class WorldModel(ModelBase):
+class AsyncWorldModel(ModelBase):
     """
-    Main model that computes risk etc. through simulation of fishery evolution.
-    Uses `n_montecarlo` MonteCarlo predictive simulations at a given realworld
-    time step to calculate statistics.
+    Fires off world_draws number of randomly initialized envs
+    Within, egos use `n_montecarlo` predictive action samples
     """
 
     def __init__(
         self,
-        env: Env,
+        env_cfg: DictConfig,
         params: ParamCollection,
         world_draws: int,
         n_montecarlo: int,
@@ -281,11 +280,13 @@ class WorldModel(ModelBase):
         ego: "Vehicle",
         loss_model,
         risk_model,
+        seed=8675309,
         *args,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
 
+        self.env_cfg = env_cfg
         self.params = params
         self.world_draws = world_draws
         self.n_montecarlo = n_montecarlo
@@ -294,6 +295,7 @@ class WorldModel(ModelBase):
         self.plan_duration = plan_duration
         self.loss_model = loss_model
         self.risk_model = risk_model
+        self.seed = seed
 
     def sample_policy(self, params: ParamCollection) -> ParamCollection:
         raise NotImplementedError
@@ -342,17 +344,61 @@ class WorldModel(ModelBase):
         """
         return self.params.monte_carlo_stack(self.n_montecarlo)
 
-    def __call__(self) -> Output:
+    def __call__(self, *args, **kwargs) -> Output:
         """
-        Run the main world model simulation.
         We collect various values at each real timestep and store them.
         Collected values will have dimension either (1, world_draws) or (world_draws).
         However, these get squeezed in the Output object.
         The final [duration, num_param_batch] set of results will be passed into an Output object.
         """
-        for t_sim in range(self.duration):
-            ...
+        # For some reason these two values can't be passed directly into AsyncVectorEnv
+        max_steps = int(self.duration)
+        n_envs = int(self.world_draws)
+        envs = gym.vector.AsyncVectorEnv(
+            [
+                lambda: gym.make(
+                    'highway-v0',
+                    render_mode=None,
+                    max_episode_steps=max_steps,
+                    # **cfg.env
+                ) for _ in range(n_envs)
+            ]
+        )
 
+        # create a wrapper environment to save episode returns and episode lengths
+        envs_wrapper = gym.wrappers.RecordEpisodeStatistics(envs, deque_size=self.world_draws)
+        states, info = envs_wrapper.reset(seed=self.seed)
+
+        results = {
+            "rewards": []
+        }
+        for step in range(self.duration):
+            actions = envs.action_space.sample()
+            # action = env.unwrapped.action_type.actions_indexes["IDLE"]
+            states, rewards, terminated, truncated, infos = envs_wrapper.step(actions)
+            print(f"MW SHAPES -- {states.shape}, {rewards.shape}, {infos}")
+            results['rewards'].append(rewards)
+
+            # # select an action A_{t} using S_{t} as input for the agent
+            # actions, action_log_probs, state_value_preds, entropy = agent.select_action(
+            #     states
+            # )
+            #
+            # # perform the action A_{t} in the environment to get S_{t+1} and R_{t+1}
+            # states, rewards, terminated, truncated, infos = envs_wrapper.step(
+            #     actions.cpu().numpy()
+            # )
+            #
+            # ep_value_preds[step] = torch.squeeze(state_value_preds)
+            # ep_rewards[step] = torch.tensor(rewards, device=device)
+            # ep_action_log_probs[step] = action_log_probs
+            #
+            # # add a mask (for the return calculation later);
+            # # for each env the mask is 1 if the episode is ongoing and 0 if it is terminated (not by truncation!)
+            # masks[step] = torch.tensor([not term for term in terminated])
+
+
+        # print(f"MW RESULTS -- {results}")
         # Save the preference params and omega history
         param_history = {
             **self.risk_model.preference_prior.get_param_history()
