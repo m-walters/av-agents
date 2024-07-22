@@ -7,7 +7,10 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
 import xarray as xr
+import gymnasium as gym
+import highway_env
 from omegaconf import DictConfig
+
 
 Params = namedtuple('Params', 'B, w, r, k, qE')
 FishParams = namedtuple('Params', 'B, r, k, qE')  # Remove 'w'
@@ -388,7 +391,23 @@ class EvolvePreferenceResults(Results):
         )
         return ds
 
+def create_highway_env(env_id: str = "highway-v1.8.2") -> gym.Env:
+    env = gym.make(env_id)
+    env.reset()
+    return env
 
+def get_highway_env_observation_space(env: gym.Env) -> gym.spaces.Space:
+    """
+    Return the observation space of Highway-env.
+    """
+    return env.observation_space
+
+def get_highway_env_action_space(env: gym.Env) -> gym.spaces.Space:
+    """
+    Return the action space of Highway-env.
+    """
+    return env.action_space
+    
 def validate_env_config(cfg: DictConfig) -> DictConfig:
     """
     Validate the highway-env Environment config
