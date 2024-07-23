@@ -6,6 +6,20 @@ class Vehicle(HEVehicle):
     """
     Vehicle override for our purposes
     """
+
+    """ Vehicle length [m] """
+    LENGTH = 5.0
+    """ Vehicle width [m] """
+    WIDTH = 2.0
+    """ Range for random initial speeds [m/s] """
+    DEFAULT_INITIAL_SPEEDS = [23, 25]
+    """ Maximum reachable speed [m/s] """
+    MAX_SPEED = 40.
+    """ Minimum reachable speed [m/s] """
+    MIN_SPEED = -40.
+    """ Length of the vehicle state history, for trajectory display"""
+    HISTORY_SIZE = 30
+
     def step(self, dt: float) -> None:
         """
         Propagate the vehicle state given its actions.
