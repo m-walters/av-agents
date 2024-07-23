@@ -376,5 +376,164 @@ class LambdaPlotter(Plotter):
         # Trim the whitespace around the image
         plt.tight_layout()
 
+class HighwayEnvPlotter(Plotter):
+    """
+    Plotting util for Highway Env datasets
+    """
+    def __init__(
+        self,
+        ds_or_path: Union[xr.Dataset, str],
+        sns_context: str = "notebook",
+    ):
+        super().__init__(ds_or_path, sns_context)
+        
+
+    def trajectory_plot(self, fig=None, ax=None, save_path="results/plots/trajectory_plot.png", plot_kwargs: Optional[dict] = None):
+        """
+        Plot the trajectory of vehicles in the highway environment.
+        """
+        plot_kwargs = plot_kwargs or {}
+
+        if ax is None:
+            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6)) # Random Size
+            fig, ax = plt.subplots(**plot_kwargs)
+
+        vehicles = self.ds.vehicles
+        for vehicle in vehicles:
+            x = self.ds.x.sel(vehicle=vehicle)
+            y = self.ds.y.sel(vehicle=vehicle)
+            ax.plot(x, y, label=f'Vehicle {vehicle.item()}')
+
+        ax.set_xlabel('X position')
+        ax.set_ylabel('Y position')
+        ax.set_title('Vehicle Trajectories')
+        ax.legend()
+
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path) # results/plot
+
+        return fig, ax
+
+    
+    def speed_plot(self, fig=None, ax=None, save_path="results/plots/speed_plot.png", plot_kwargs: Optional[dict] = None):
+        """
+        Plot the speed of vehicles over time a specific duration.
+        """
+        plot_kwargs = plot_kwargs or {}
+
+        if ax is None:
+            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6)) # Random Size
+            fig, ax = plt.subplots(**plot_kwargs)
+
+        vehicles = self.ds.vehicles
+        for vehicle in vehicles:
+            speed = self.ds.speed.sel(vehicle=vehicle)
+            time = self.ds.time
+            ax.plot(time, speed, label=f'Vehicle {vehicle.item()}')
+
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Speed')
+        ax.set_title('Vehicle Speeds Over Time')
+        ax.legend()
+
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path)
+
+        return fig, ax
+
+    def lane_occupancy_plot(self, fig=None, ax=None, save_path="results/plots/lane_occupancy_plot.png", plot_kwargs: Optional[dict] = None):
+        """
+        Plot the lane occupancy over time
+        """
+        plot_kwargs = plot_kwargs or {}
+
+        if ax is None:
+            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6)) # Random Size
+            fig, ax = plt.subplots(**plot_kwargs)
+
+        lane_occupancy = self.ds.lane_occupancy
+        time = self.ds.time
+        lanes = self.ds.lanes
+
+        for lane in lanes:
+            occupancy = lane_occupancy.sel(lane=lane)
+            ax.plot(time, occupancy, label=f'Lane {lane.item()}')
+
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Occupancy')
+        ax.set_title('Lane Occupancy Over Time')
+        ax.legend()
+
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path)
+
+        return fig, ax
+
+    def safety_distance_plot(self, fig=None, ax=None, save_path="results/plots/safety_distance_plot.png", plot_kwargs: Optional[dict] = None):
+        """
+        Plot the safety distance between vehicles over time
+        """
+        plot_kwargs = plot_kwargs or {}
+
+        if ax is None:
+            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6)) # Random Size
+            fig, ax = plt.subplots(**plot_kwargs)
+
+        vehicles = self.ds.vehicles
+        time = self.ds.time
+        
+        for i in range(len(vehicles) - 1):
+            vehicle1 = vehicles[i]
+            vehicle2 = vehicles[i + 1]
+            distance = self.ds.distance_between.sel(vehicle1=vehicle1, vehicle2=vehicle2)
+            ax.plot(time, distance, label=f'Between Vehicle {vehicle1.item()} and {vehicle2.item()}')
+
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Safety Distance')
+        ax.set_title('Safety Distance Between Vehicles Over Time')
+        ax.legend()
+
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path)
+
+        return fig, ax
+        
+    def acceleration_heatmap(self, fig=None, ax=None, save_path="results/plots/acceleration_heatmap.png", plot_kwargs: Optional[dict] = None):
+        """
+        Create a heatmap of vehicle accelerations over time
+        """
+        plot_kwargs = plot_kwargs or {}
+
+        if ax is None:
+            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (12, 8))
+            fig, ax = plt.subplots(**plot_kwargs)
+
+        acceleration_data = self.ds.acceleration.values
+        vehicles = self.ds.vehicles.values
+        time = self.ds.time.values
+
+        sns.heatmap(acceleration_data, ax=ax, cmap='coolwarm', center=0)
+
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Vehicle')
+        ax.set_title('Vehicle Acceleration Heatmap')
+        ax.set_yticks(range(len(vehicles)))
+        ax.set_yticklabels(vehicles)
+
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path)
+
+        return fig, ax
+
         if save_path:
             plt.savefig(save_path)
