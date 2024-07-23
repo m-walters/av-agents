@@ -10,6 +10,8 @@ from omegaconf import DictConfig, OmegaConf
 import sim.params as sim_params
 from sim import models, utils, vehicle
 
+import matplotlib.pyplot as plt
+
 if TYPE_CHECKING:
     from gymnasium import Env
 
@@ -57,22 +59,14 @@ def main(cfg: DictConfig):
 
     # For now we just look at a single ego vehicle and use the default policy
     policy = models.DefaultPolicy(seed=cfg.seed)
-    ego = vehicle.Vehicle(
-        policy=policy,
-    )
+    # ego = vehicle.Vehicle(
+    #     policy=policy,
+    # )
 
     risk_model = getattr(models, cfg.risk.model)(
         preference_prior=preference_prior, **cfg.risk, seed=cfg.seed
     )
 
-    # Set render_mode=None to disable rendering
-    # env: "Env" = gym.make(
-    #     'highway-v0',
-    #     render_mode='human',
-    #     max_episode_steps=cfg.env.duration,
-    #     **cfg.env
-    # )
-    # obs, info = env.reset()
 
     # envs = gym.vector.AsyncVectorEnv(
     #     [
@@ -84,34 +78,59 @@ def main(cfg: DictConfig):
     #         ) for _ in range(cfg.world_draws)
     #     ]
     # )
-
-    world_model = models.AsyncWorldModel(
-        env_cfg,
-        param_collection,
-        cfg.world_draws,
-        cfg.n_montecarlo,
-        cfg.env.duration,
-        cfg.plan_duration,
-        ego,
-        loss_model,
-        risk_model,
-        seed=cfg.seed,
-    )
-
-    output = world_model()
+    #
+    # world_model = models.AsyncWorldModel(
+    #     env_cfg,
+    #     param_collection,
+    #     cfg.world_draws,
+    #     cfg.n_montecarlo,
+    #     cfg.env.duration,
+    #     cfg.plan_duration,
+    #     ego,
+    #     loss_model,
+    #     risk_model,
+    #     seed=cfg.seed,
+    # )
+    #
+    # output = world_model()
 
     # Test the display is working etc.
-    # for _ in range(cfg.env.duration):
-    #     action = env.unwrapped.action_type.actions_indexes["IDLE"]
-    #     obs, reward, done, truncated, info = env.step(action)
-    #     if done or truncated:
-    #         break
-    #     env.render()
-    #
-    # plt.imshow(env.render())
-    # plt.show()
+    # Set render_mode=None to disable rendering
+    # env: "Env" = gym.make(
+    #     'AVAgents/highway-v0',
+    #     render_mode='human',
+    #     max_episode_steps=cfg.env.duration,
+    #     # **cfg.env
+    # )
+    # obs, info = env.reset()
 
-    return
+    video = True
+    if video:
+        render_mode = 'human'
+    else:
+        render_mode = 'rhb_array'
+    env = gym.make('AVAgents/highway-v0', render_mode=render_mode)
+    env.unwrapped.config.update(env_cfg)
+    env.reset()
+
+    for _ in range(cfg.env.duration):
+        # action = env.action_space.sample()
+        # action = env.action_space.sample()
+        # spd_reward = env.unwrapped.speed_reward()
+        # coll_reward = env.unwrapped.collision_reward()
+
+        idle = env.unwrapped.action_type.actions_indexes["IDLE"]
+        obs, reward, done, truncated, info = env.step(idle)
+        logger.debug(f"REWARD: {reward}")
+        if done or truncated:
+            break
+        env.render()
+
+    if not video:
+        plt.imshow(env.render())
+    plt.show()
+
+    # return
 
 
 if __name__ == '__main__':

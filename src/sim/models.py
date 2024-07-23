@@ -354,6 +354,7 @@ class AsyncWorldModel(ModelBase):
         # For some reason these two values can't be passed directly into AsyncVectorEnv
         max_steps = int(self.duration)
         n_envs = int(self.world_draws)
+        n_envs = 2
         envs = gym.vector.AsyncVectorEnv(
             [
                 lambda: gym.make(
@@ -367,16 +368,18 @@ class AsyncWorldModel(ModelBase):
 
         # create a wrapper environment to save episode returns and episode lengths
         envs_wrapper = gym.wrappers.RecordEpisodeStatistics(envs, deque_size=self.world_draws)
-        states, info = envs_wrapper.reset(seed=self.seed)
+        observations, info = envs_wrapper.reset(seed=self.seed)
 
         results = {
             "rewards": []
         }
+        print(f"MW TYPE -- {envs_wrapper.unwrapped.action_space}")
         for step in range(self.duration):
             actions = envs.action_space.sample()
             # action = env.unwrapped.action_type.actions_indexes["IDLE"]
-            states, rewards, terminated, truncated, infos = envs_wrapper.step(actions)
-            print(f"MW SHAPES -- {states.shape}, {rewards.shape}, {infos}")
+            # print(f"MW ACTIONS -- {actions}")
+            observations, rewards, terminated, truncated, infos = envs_wrapper.step(actions)
+            # print(f"MW SHAPES -- {observations.shape}, {rewards.shape}, {infos}")
             results['rewards'].append(rewards)
 
             # # select an action A_{t} using S_{t} as input for the agent

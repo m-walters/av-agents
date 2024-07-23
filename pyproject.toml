@@ -41,6 +41,10 @@ cuda = [
   #torch = { url = "https://download.pytorch.org/whl/cu113/torch-1.10.0+cu113-cp38-cp38-linux_x86_64.whl" }
 ]
 
+# Register our custome envs
+[tool.poetry.plugins."gymnasium.envs"]
+"AVAgents" = "sim.envs.highway:register_av_highway"
+
 # Build system configuration
 [build-system]
 requires = ["poetry-core>=1.0.0"]
