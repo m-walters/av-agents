@@ -35,12 +35,21 @@ example:
 poetry shell  # Enter poetry env
 cd scripts
 python basic.py --config-name=highway  # not highway.yaml btw
+# OR
+python basic.py  # this is because we set 'highway' as the default in the basic.py hydra wrapper
 ```
 
 ### Configs
 
 We use `hydra` to manage configs. It's a cool tool. Use them to configure your run, it knows to look in the 
-`configs` directory automatically. 
+`configs` directory automatically.
+
+You can modify existing config arguments directly into the CLI, or add new ones with `+`:
+
+```bash
+python basic.py env.duration=10 +log_level=DEBUG
+```
+Notice how hydra allows you to use dot-notation in the CLI to modify nested config structs.
 
 ### Notebooks
 
