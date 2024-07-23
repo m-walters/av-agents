@@ -475,36 +475,38 @@ class HighwayEnvPlotter(Plotter):
 
         return fig, ax
 
-    def safety_distance_plot(self, fig=None, ax=None, save_path="results/plots/safety_distance_plot.png", plot_kwargs: Optional[dict] = None):
+    def congestion_plot(self, fig=None, ax=None, save_path="results/plots/congestion_plot.png", plot_kwargs: Optional[dict] = None):
+    """
+    Plot the congestion across all lanes in each AV-Road over time
+    """
+    plot_kwargs = plot_kwargs or {}
+    
+    if ax is None:
+        plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6)) # random size
+        fig, ax = plt.subplots( ** plot_kwargs)
+
+    time = self.ds.time
+    roads = self.ds.roads
+
+    for road in roads:
         """
-        Plot the safety distance between vehicles over time
+        Calculate congestion for each road across all its lanes
         """
-        plot_kwargs = plot_kwargs or {}
+        total_vehicles = self.ds.vehicle_count.sel(road=road).sum(dim='lane')
+        total_road_length = self.ds.road_length.sel(road=road).sum(dim='lane')
+        congestion = total_vehicles / total_road_length
 
-        if ax is None:
-            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6)) # Random Size
-            fig, ax = plt.subplots(**plot_kwargs)
+        ax.plot(time, congestion, label=f'Congestion on Road {road.item()}')
 
-        vehicles = self.ds.vehicles
-        time = self.ds.time
-        
-        for i in range(len(vehicles) - 1):
-            vehicle1 = vehicles[i]
-            vehicle2 = vehicles[i + 1]
-            distance = self.ds.distance_between.sel(vehicle1=vehicle1, vehicle2=vehicle2)
-            ax.plot(time, distance, label=f'Between Vehicle {vehicle1.item()} and {vehicle2.item()}')
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Congestion (vehicles/unit length)')
+    ax.set_title('Congestion Over Time Across All Lanes for Each Road')
+    ax.legend()
 
-        ax.set_xlabel('Time')
-        ax.set_ylabel('Safety Distance')
-        ax.set_title('Safety Distance Between Vehicles Over Time')
-        ax.legend()
-
-        plt.tight_layout()
-
-        if save_path:
-            plt.savefig(save_path)
-
-        return fig, ax
+    if save_path:
+        plt.savefig(save_path) 
+    
+    return fig, ax
         
     def acceleration_heatmap(self, fig=None, ax=None, save_path="results/plots/acceleration_heatmap.png", plot_kwargs: Optional[dict] = None):
         """
