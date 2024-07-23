@@ -1,21 +1,32 @@
 from highway_env.vehicle.kinematics import Vehicle as HEVehicle
-
+from scipy.stats import multivariate_normal
 import numpy as np
 
 class Vehicle(HEVehicle):
     """
-    Vehicle override for our purposes
+    Vehicle override with ActInf.
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.belief_state = np.zeros(4)  # [x, y, heading, speed]
+        self.precision = np.eye(4)  # [Precision matrix] 
+        self.generative_model = self._default_generative_model
+        self.free_energy = 0
+
+    
     def step(self, dt: float) -> None:
         """
-        Propagate the vehicle state given its actions.
-
-        Integrate a modified bicycle model with a 1st-order response on the steering wheel dynamics.
-        If the vehicle is crashed, the actions are overridden with erratic steering and braking until complete stop.
-        The vehicle's current lane is updated.
-
-        :param dt: timestep of integration of the model [s]
+        Propagate the current vehicle state using ActInf principles.
         """
+        
+        predicted_state = self.generative_model(self.belief_state, self.action)
+        sensory_input = np.array([self.position[0], self.position[1], self.heading, self.speed])
+        prediction_error = sensory_input - predicted_state # Updates the belief state using prediction error
+        self.belief_state += np.dot(self.precision, prediction_error)
+
+        self.free_energy = self._calculate_free_energy(sensory_input, predicted_state) # Updates Free Energy part
+        self.action = self._active_inference_action_selection()
+        
         # Normalize the current action
         self.clip_actions()
 
@@ -33,6 +44,28 @@ class Vehicle(HEVehicle):
         self.heading += self.speed * np.sin(beta) / (self.LENGTH / 2) * dt
         self.speed += self.action['acceleration'] * dt
         self.on_state_update()
+
+    def _simple_generative_model(self, state, action):
+        """
+        Simple generative model for state transition
+        """
+        new_state = state.copy()
+        new_state[0] += np.cos(state[2]) * state[3] * 0.1  # x
+        new_state[1] += np.sin(state[2]) * state[3] * 0.1  # y
+        new_state[2] += action['steering'] * 0.1  # heading
+        new_state[3] += action['acceleration'] * 0.1  # speed
+        return new_state
+
+    def _calculate_free_energy(self, sensory_input, predicted_state):
+        """
+        Calculate Free Energy
+        """
+        prediction_error = sensory_input - predicted_state
+        return 0.5 * np.dot(prediction_error.T, np.dot(self.precision, prediction_error))
+
+    """
+    To Add : Action Selection for minimizing the expected free energy, State Update for updating lane, history & belief state ( For Belief State: array with position(0) & position(1)
+    """
 
     def on_state_update(self) -> None:
         """
