@@ -375,6 +375,47 @@ class LambdaPlotter(Plotter):
 
         # Trim the whitespace around the image
         plt.tight_layout()
+        
+class HighwayEnvPlotter(Plotter):
+    """
+    Plotting util for Highway Environment datasets
+    """
+    def __init__(
+        self,
+        ds_or_path: Union[xr.Dataset, str],
+        sns_context: str = "notebook",
+    ):
+        super().__init__(ds_or_path, sns_context)
 
+    def trajectory_plot(self, fig=None, ax=None, save_path=None, plot_kwargs: Optional[dict] = None):
+        """
+        Plot the trajectory of vehicles in the highway environment
+        """
+        plot_kwargs = plot_kwargs or {}
+
+        if ax is None:
+            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6))
+            fig, ax = plt.subplots(**plot_kwargs)
+
+        vehicles = self.ds.vehicles
+        for vehicle in vehicles:
+            x = self.ds.x.sel(vehicle=vehicle)
+            y = self.ds.y.sel(vehicle=vehicle)
+            ax.plot(x, y, label=f'Vehicle {vehicle.item()}')
+
+        ax.set_xlabel('X position')
+        ax.set_ylabel('Y position')
+        ax.set_title('Vehicle Trajectories')
+        ax.legend()
+
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path)
+
+        return fig, ax #trajectory_plot, to add speed & lane occupancy
+
+
+        
         if save_path:
             plt.savefig(save_path)
