@@ -395,41 +395,6 @@ class HighwayEnvPlotter(Plotter):
 
         return fig, ax
 
-    def congestion_plot(
-        self, fig=None, ax=None, save_path="results/plots/congestion_plot.png", plot_kwargs: Optional[dict] = None
-    ):
-        """
-        Plot the congestion across all lanes in each AV-Road over time
-        """
-        plot_kwargs = plot_kwargs or {}
-
-        if ax is None:
-            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6))  # random size
-            fig, ax = plt.subplots(**plot_kwargs)
-
-        time = self.ds.time
-        roads = self.ds.roads
-
-        for road in roads:
-            """
-            Calculate congestion for each road across all its lanes
-            """
-            total_vehicles = self.ds.vehicle_count.sel(road=road).sum(dim='lane')
-            total_road_length = self.ds.road_length.sel(road=road).sum(dim='lane')
-            congestion = total_vehicles / total_road_length
-
-            ax.plot(time, congestion, label=f'Congestion on Road {road.item()}')
-
-        ax.set_xlabel('Time')
-        ax.set_ylabel('Congestion (vehicles/unit length)')
-        ax.set_title('Congestion Over Time Across All Lanes for Each Road')
-        ax.legend()
-
-        if save_path:
-            plt.savefig(save_path)
-
-        return fig, ax
-
     def safety_distance_plot(
         self, fig=None, ax=None, save_path="results/plots/safety_distance_plot.png", plot_kwargs: Optional[dict] = None
     ):
