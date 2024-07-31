@@ -15,6 +15,7 @@ class Plotter:
     """
     Plotting util for xArray Datasets
     """
+
     def __init__(
         self,
         ds_or_path: Union[xr.Dataset, str],
@@ -322,80 +323,28 @@ class Plotter:
         return fig, axs
 
 
-class LambdaPlotter(Plotter):
-    """
-    Plotting util for xArray Datasets
-    """
-
-    def __init__(
-        self,
-        ds_or_path: Union[xr.Dataset, str],
-        sns_context: str = "notebook",  # or "paper", "talk", "poster"
-    ):
-        # if isinstance(ds_or_path, xr.Dataset):
-        #     self.ds = ds_or_path
-        # else:
-        #     self.ds = xr.open_dataset(ds_or_path)
-
-        # Initialize seaborn
-        sns.set()
-        sns.set_context(sns_context)
-        sns.set_palette("colorblind")
-
-    def risk_plot(self, qE_sums, rts, save_path):
-        """
-        For an OmegaResults dataset
-        Generate a 2x2 plot with Biomass, Profit, Risk, and E*
-        In each plot, we reduce across the batch axis, and color by omega
-        """
-
-        plt.plot(qE_sums, rts)
-        plt.ylabel('Risk')
-        plt.xlabel('Sum of E')
-
-        # Trim the whitespace around the image
-        plt.tight_layout()
-
-        if save_path:
-            plt.savefig(save_path)
-
-    def policy_plot(self, qEs, risks, save_path=None):
-        time = np.arange(qEs.shape[1])
-
-        colors = self.get_color_wheel(n_colors=len(risks))
-        for idx, (qE, risk) in enumerate(zip(qEs, risks)):
-            if idx % 5 == 0:
-                c = next(colors)
-                plt.plot(time, qE, label='{:.1f}'.format(risk), color=c)
-
-        plt.ylabel('Et')
-        plt.xlabel('time')
-        plt.xlim(0., 5.)
-        plt.legend()
-
-        # Trim the whitespace around the image
-        plt.tight_layout()
-
 class HighwayEnvPlotter(Plotter):
     """
     Plotting util for Highway Env datasets
     """
+
     def __init__(
         self,
         ds_or_path: Union[xr.Dataset, str],
         sns_context: str = "notebook",
     ):
         super().__init__(ds_or_path, sns_context)
-        
 
-    def trajectory_plot(self, fig=None, ax=None, save_path="results/plots/trajectory_plot.png", plot_kwargs: Optional[dict] = None):
+    def trajectory_plot(
+        self, fig=None, ax=None, save_path="results/plots/trajectory_plot.png", plot_kwargs: Optional[dict] = None
+    ):
         """
         Plot the trajectory of vehicles in the highway environment.
         """
         plot_kwargs = plot_kwargs or {}
 
         if ax is None:
-            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6)) # Random Size
+            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6))  # Random Size
             fig, ax = plt.subplots(**plot_kwargs)
 
         vehicles = self.ds.vehicles
@@ -412,19 +361,20 @@ class HighwayEnvPlotter(Plotter):
         plt.tight_layout()
 
         if save_path:
-            plt.savefig(save_path) # results/plot
+            plt.savefig(save_path)  # results/plot
 
         return fig, ax
 
-    
-    def speed_plot(self, fig=None, ax=None, save_path="results/plots/speed_plot.png", plot_kwargs: Optional[dict] = None):
+    def speed_plot(
+        self, fig=None, ax=None, save_path="results/plots/speed_plot.png", plot_kwargs: Optional[dict] = None
+    ):
         """
         Plot the speed of vehicles over time a specific duration.
         """
         plot_kwargs = plot_kwargs or {}
 
         if ax is None:
-            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6)) # Random Size
+            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6))  # Random Size
             fig, ax = plt.subplots(**plot_kwargs)
 
         vehicles = self.ds.vehicles
@@ -445,52 +395,56 @@ class HighwayEnvPlotter(Plotter):
 
         return fig, ax
 
-    def congestion_plot(self, fig=None, ax=None, save_path="results/plots/congestion_plot.png", plot_kwargs: Optional[dict] = None):
-    """
-    Plot the congestion across all lanes in each AV-Road over time
-    """
-    plot_kwargs = plot_kwargs or {}
-    
-    if ax is None:
-        plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6)) # random size
-        fig, ax = plt.subplots( ** plot_kwargs)
-        
-    time = self.ds.time
-    roads = self.ds.roads
-
-    for road in roads:
+    def congestion_plot(
+        self, fig=None, ax=None, save_path="results/plots/congestion_plot.png", plot_kwargs: Optional[dict] = None
+    ):
         """
-        Calculate congestion for each road across all its lanes
+        Plot the congestion across all lanes in each AV-Road over time
         """
-        total_vehicles = self.ds.vehicle_count.sel(road=road).sum(dim='lane')
-        total_road_length = self.ds.road_length.sel(road=road).sum(dim='lane')
-        congestion = total_vehicles / total_road_length
-        
-        ax.plot(time, congestion, label=f'Congestion on Road {road.item()}')
-        
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Congestion (vehicles/unit length)')
-    ax.set_title('Congestion Over Time Across All Lanes for Each Road')
-    ax.legend()
+        plot_kwargs = plot_kwargs or {}
 
-    if save_path:
-        plt.savefig(save_path) 
+        if ax is None:
+            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6))  # random size
+            fig, ax = plt.subplots(**plot_kwargs)
 
-    return fig, ax
-    
-    def safety_distance_plot(self, fig=None, ax=None, save_path="results/plots/safety_distance_plot.png", plot_kwargs: Optional[dict] = None):
+        time = self.ds.time
+        roads = self.ds.roads
+
+        for road in roads:
+            """
+            Calculate congestion for each road across all its lanes
+            """
+            total_vehicles = self.ds.vehicle_count.sel(road=road).sum(dim='lane')
+            total_road_length = self.ds.road_length.sel(road=road).sum(dim='lane')
+            congestion = total_vehicles / total_road_length
+
+            ax.plot(time, congestion, label=f'Congestion on Road {road.item()}')
+
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Congestion (vehicles/unit length)')
+        ax.set_title('Congestion Over Time Across All Lanes for Each Road')
+        ax.legend()
+
+        if save_path:
+            plt.savefig(save_path)
+
+        return fig, ax
+
+    def safety_distance_plot(
+        self, fig=None, ax=None, save_path="results/plots/safety_distance_plot.png", plot_kwargs: Optional[dict] = None
+    ):
         """
         Plot the safety distance between vehicles over time
         """
         plot_kwargs = plot_kwargs or {}
 
         if ax is None:
-            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6)) # Random Size
+            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (10, 6))  # Random Size
             fig, ax = plt.subplots(**plot_kwargs)
 
         vehicles = self.ds.vehicles
         time = self.ds.time
-        
+
         for i in range(len(vehicles) - 1):
             vehicle1 = vehicles[i]
             vehicle2 = vehicles[i + 1]
@@ -508,8 +462,10 @@ class HighwayEnvPlotter(Plotter):
             plt.savefig(save_path)
 
         return fig, ax
-        
-    def acceleration_heatmap(self, fig=None, ax=None, save_path="results/plots/acceleration_heatmap.png", plot_kwargs: Optional[dict] = None):
+
+    def acceleration_heatmap(
+        self, fig=None, ax=None, save_path="results/plots/acceleration_heatmap.png", plot_kwargs: Optional[dict] = None
+    ):
         """
         Create a heatmap of vehicle accelerations over time
         """
@@ -537,6 +493,3 @@ class HighwayEnvPlotter(Plotter):
             plt.savefig(save_path)
 
         return fig, ax
-
-        if save_path:
-            plt.savefig(save_path)
