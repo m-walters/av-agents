@@ -3,17 +3,16 @@ from typing import TYPE_CHECKING
 
 import gymnasium as gym
 import hydra
+import matplotlib.pyplot as plt
 import numpy as np
 import pymc as pm
 from omegaconf import DictConfig, OmegaConf
 
 import sim.params as sim_params
-from sim import models, utils, vehicle
-
-import matplotlib.pyplot as plt
+from sim import models, utils
 
 if TYPE_CHECKING:
-    from gymnasium import Env
+    from sim.envs.highway import AVHighway
 
 RESULTS_DIR = "../results"
 
@@ -38,6 +37,12 @@ def main(cfg: DictConfig):
     logger.info(f"CONFIG\n{OmegaConf.to_yaml(cfg)}")
 
     # Get and validate the highway-env environment config
+    OmegaConf.set_struct(cfg, False)
+    # env_cfg = OmegaConf.to_container(cfg.env, resolve=True)
+    overrides = cfg.get("env_overrides", {})
+    cfg.env.update(overrides)
+    # env_cfg.update(overrides)
+    OmegaConf.set_struct(cfg, True)
     env_cfg = cfg.env = utils.validate_env_config(cfg.env)
 
     # Initiate the pymc model and load the parameters
@@ -49,24 +54,19 @@ def main(cfg: DictConfig):
         param_collection = sim_params.ParamCollection(params)
         param_collection.draw(cfg.world_draws)
 
-    v_r = cfg.v_r
+    target_speed = env_cfg['target_speed']
     alpha, beta = cfg.loss.alpha, cfg.loss.beta
     p_star = cfg.preference_prior.p_star
-    l_star = - alpha * np.exp(-(0.1 * v_r) ** 2 / alpha)
+    l_star = - alpha * np.exp(-(0.1 * target_speed) ** 2 / alpha)
 
-    loss_model = models.LossModel(alpha=alpha, beta=beta, v_r=v_r, seed=cfg.seed)
+    loss_model = models.LossModel(alpha=alpha, beta=beta, target_speed=target_speed, seed=cfg.seed)
     preference_prior = models.ExponentialPreferencePrior(p_star=p_star, l_star=l_star, seed=cfg.seed)
 
     # For now we just look at a single ego vehicle and use the default policy
     policy = models.DefaultPolicy(seed=cfg.seed)
-    # ego = vehicle.Vehicle(
-    #     policy=policy,
-    # )
-
     risk_model = getattr(models, cfg.risk.model)(
         preference_prior=preference_prior, **cfg.risk, seed=cfg.seed
     )
-
 
     # envs = gym.vector.AsyncVectorEnv(
     #     [
@@ -104,23 +104,57 @@ def main(cfg: DictConfig):
     # )
     # obs, info = env.reset()
 
-    video = True
+    video = cfg.get("video", False)
     if video:
         render_mode = 'human'
     else:
-        render_mode = 'rhb_array'
+        render_mode = 'rgb_array'
     env = gym.make('AVAgents/highway-v0', render_mode=render_mode)
-    env.unwrapped.config.update(env_cfg)
-    env.reset()
+    uenv: "AVHighway" = env.unwrapped
+    uenv.update_config(env_cfg)
 
-    for _ in range(cfg.env.duration):
+    obs, info = env.reset()
+
+    preference_prior = models.SoftmaxPreferencePrior(kappa=1.0)
+    risk_model = models.DifferentialEntropyRiskModel(preference_prior=preference_prior)
+
+    # Data collection
+    mc_losses = np.zeros((env_cfg['duration'], cfg['n_montecarlo']))
+    # Real-world values
+    # TODO -- Clean this up as a collected data set
+    rewards = np.zeros((env_cfg['duration'],))
+    risks = np.zeros((env_cfg['duration'],))
+    entropies = np.zeros((env_cfg['duration'],))
+    energies = np.zeros((env_cfg['duration'],))
+
+    # Run a single world simulation
+    for step in range(env_cfg['duration']):
         # action = env.action_space.sample()
         # action = env.action_space.sample()
         # spd_reward = env.unwrapped.speed_reward()
         # coll_reward = env.unwrapped.collision_reward()
 
-        idle = env.unwrapped.action_type.actions_indexes["IDLE"]
-        obs, reward, done, truncated, info = env.step(idle)
+        # Run the montecarlo simulation, capturing the risks, losses
+        _losses, _loss_log_probs, collisions = uenv.simulate_mc()
+
+        risk, entropy, energy = risk_model(_losses, _loss_log_probs)
+
+        # Select vehicles policy action
+        # idle = env.unwrapped.action_type.actions_indexes["IDLE"]
+        # action = uenv.vehicle.sample_action(obs)
+
+        # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
+        action = env.action_space.sample()
+
+        obs, reward, done, truncated, info = env.step(action)
+
+        # Record data
+        mc_losses[step, :] = _losses
+        rewards[step] = reward
+        risks[step] = risk
+        entropies[step] = entropy
+        energies[step] = energy
+
         logger.debug(f"REWARD: {reward}")
         if done or truncated:
             break
