@@ -7,16 +7,17 @@ defaults:
 env_overrides:
   controlled_vehicles: 1
   duration: 40
-  high_speed_reward: 0.4
-  vehicles_count: 50
+  vehicles_count: 10
+  lanes_count: 6
   vehicles_density: 1
   other_vehicles_type: highway_env.vehicle.behavior.IDMVehicle
+  target_speed: &target_speed 12
 #==============
 seed: 8675309
 world_draws: 8
-plan_duration: 20
-n_montecarlo: 10
-v_r: &v_r 30 # Target velocity
+#plan_duration: 20
+#mc_horizon: 10
+#n_montecarlo: 10
 
 # Params for world sampling
 params:
@@ -35,7 +36,7 @@ policy:
 loss:
   model: "LossModel"
   alpha: 10
-  v_r: *v_r
+  target_speed: *target_speed
   beta: 1
   scale: 0.1
 preference_prior:

@@ -1,3 +1,4 @@
+import copy
 import logging
 from typing import Dict, Optional, Text, Tuple
 
@@ -11,6 +12,7 @@ from highway_env.vehicle.controller import ControlledVehicle
 from omegaconf import DictConfig
 
 from sim.road import AVRoad
+from sim.utils import Array
 from sim.vehicle import Vehicle
 
 logger = logging.getLogger("av-sim")
@@ -22,6 +24,7 @@ class AVHighway(HighwayEnv):
     """
     Override the HighwayEnv class for our purposes
     """
+    ACC_MAX = Vehicle.ACC_MAX
 
     @classmethod
     def default_config(cls) -> dict:
@@ -32,7 +35,8 @@ class AVHighway(HighwayEnv):
                     "type": "Kinematics"
                 },
                 "action": {
-                    "type": "DiscreteMetaAction",
+                    # ContinuousAction required for IDMVehicle
+                    "type": "ContinuousAction",
                 },
                 "lanes_count": 4,
                 "vehicles_count": 50,
@@ -52,17 +56,25 @@ class AVHighway(HighwayEnv):
             }
         )
         # Update with our homebrew config defaults
-        config.update(
-            {
-                "target_speed": 30,
-                "simulation_frequency": 15,
-                "policy_frequency": 5,
-                "alpha": 10.,
-                "beta": 0.25,
-            }
-        )
+        config.update(cls.av_default_config())
 
         return config
+
+    @staticmethod
+    def av_default_config() -> dict:
+        """
+        Our default config
+        """
+        return {
+            "target_speed": 30,
+            "simulation_frequency": 15,
+            "policy_frequency": 5,
+            # MonteCarlo horizon; Note that a given step is sim_freq // policy_freq frames (see self._simulate)
+            "mc_horizon": 5,
+            "n_montecarlo": 10,
+            "alpha": 10.,
+            "beta": 0.25,
+        }
 
     def update_config(self, cfg: DictConfig):
         """
@@ -71,7 +83,6 @@ class AVHighway(HighwayEnv):
         """
         self.config.update(cfg)
         logger.info("Resetting env with new config")
-        super().reset()
 
     def _reset(self) -> None:
         """
@@ -107,7 +118,10 @@ class AVHighway(HighwayEnv):
                 lane_id=self.config["initial_lane_id"],
                 spacing=self.config["ego_spacing"]
             )
-            vehicle = self.action_type.vehicle_class(self.road, vehicle.position, vehicle.heading, vehicle.speed)
+            # vehicle = self.action_type.vehicle_class(self.road, vehicle.position, vehicle.heading, vehicle.speed)
+            # Randomize its behavior
+            vehicle.randomize_behavior()
+
             self.controlled_vehicles.append(vehicle)
             self.road.vehicles.append(vehicle)
 
@@ -158,42 +172,48 @@ class AVHighway(HighwayEnv):
         self._simulate(action)
 
         obs = self.observation_type.observe()
-        reward = self._reward(action)
+        info = self._info(obs, action)
+        reward = self._reward(action, rewards=info.get('rewards', None))
         terminated = self._is_terminated()
         truncated = self._is_truncated()
-        info = self._info(obs, action)
         if self.render_mode == 'human':
             self.render()
 
         return obs, reward, terminated, truncated, info
 
-    def _reward(self, action: Action) -> float:
+    def _info(self, obs: Observation, action: Optional[Action] = None) -> dict:
         """
-        :param action: the last action performed
-        :return: the corresponding reward
+        Return a dictionary of additional information
+
+        :param obs: current observation
+        :param action: current action
+        :return: info dict
         """
-        rewards = self._rewards(action)
-        reward = sum(self.config.get(name, 0) * reward for name, reward in rewards.items())
-        if self.config["normalize_reward"]:
-            reward = utils.lmap(
-                reward,
-                [self.config["collision_reward"], self.config["right_lane_reward"]],
-                [0, 1]
-            )
-        reward *= rewards['on_road_reward']
-        return reward
+        info = {
+            "speed": self.vehicle.speed,
+            "crashed": self.vehicle.crashed,
+            "action": action,
+            "rewards": self._rewards(action),
+        }
+        return info
 
     def speed_reward(self) -> float:
         """
-        Reward for being near the target speed v_r
+        Reward for being near the target speed target_speed
 
         :return: speed reward
         """
         # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
         forward_speed = self.vehicle.speed * np.cos(self.vehicle.heading)
         score = self.config['alpha'] * np.exp(
-            - (forward_speed - self.config['target_speed']) ** 2 / self.config['alpha']
+            - (forward_speed - self.config['target_speed']) ** 2 / (self.config['alpha'] ** 2)
         )
+        logger.debug(f">>> SPEED REWARD: v_forward {forward_speed:0.4f} | score {score:0.4f}")
+
+        if self.config['normalize_reward']:
+            max_score = self.config['alpha']
+            return score / max_score
+
         return score
 
     def collision_reward(self) -> float:
@@ -205,8 +225,13 @@ class AVHighway(HighwayEnv):
         v_x = self.vehicle.speed * np.cos(self.vehicle.heading)
 
         # Grab the front and behind cars across different lanes and consider their speed deltas from ego
-        logger.debug(f">>> COLLISION REWARD START | EGO [{self.vehicle}] -- {v_x} | {self.vehicle.lane_index}")
-        beta = self.config['beta']
+        logger.debug(
+            f">>> COLLISION REWARD START | EGO [{self.vehicle}]\n\tv_x {v_x:0.4f} | lane {self.vehicle.lane_index}"
+        )
+
+        # See our AV Project, "Vehicle Agent" section for derivation
+        beta = 3 * self.ACC_MAX / 2
+
         n_nbr = 0
         penalty = 0
         for lane in self.road.network.all_side_lanes(self.vehicle.lane_index):
@@ -224,9 +249,11 @@ class AVHighway(HighwayEnv):
                     assert front_distance > 0, f"Front distance <= 0: {front_distance}"
                     front_distance = max(front_distance, self.vehicle.LENGTH / 2)
                     _penalty = beta * front_delta ** 2 / (front_distance * (
-                                2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
+                            2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
                     penalty += _penalty
-                    logger.debug(f">> {front_speed} | {front_delta} | {front_distance} | {_penalty}")
+                    logger.debug(
+                        f">> {front_speed:0.4f} | {front_delta:0.4f} | {front_distance:0.4f} | {_penalty:0.4f}"
+                    )
 
             if rear is not None:
                 logger.debug(f"FOUND REAR [{rear}]")
@@ -239,17 +266,10 @@ class AVHighway(HighwayEnv):
                     assert rear_distance > 0, f"Rear distance <= 0: {rear_distance}"
                     rear_distance = max(rear_distance, rear.LENGTH / 2)
                     _penalty = beta * rear_delta ** 2 / (rear_distance * (
-                                2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
+                            2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
                     penalty += _penalty
-                    logger.debug(f">> {rear_speed} | {rear_delta} | {rear_distance} | {_penalty}")
+                    logger.debug(f">> {rear_speed:0.4f} | {rear_delta:0.4f} | {rear_distance:0.4f} | {_penalty:0.4f}")
 
-        # We can consider taking the mean,
-        # but this might actually be worse than a sum
-        # Having the same risk of collision across many cars is
-        # arguably worse than having it towards a single car.
-        # if n_nbr:
-        #     Take the mean
-        #     penalty /= n_nbr
         logger.debug(f"COLLISION PENALTY: {penalty}\n")
 
         return - penalty
@@ -262,12 +282,33 @@ class AVHighway(HighwayEnv):
         speed_reward = self.speed_reward()
         collision_reward = self.collision_reward()
 
-        return {
+        r = {
             "collision_reward": collision_reward,
-            "right_lane_reward": lane / max(len(neighbours) - 1, 1),
+            # "right_lane_reward": lane / max(len(neighbours) - 1, 1),
             "speed_reward": speed_reward,
-            "on_road_reward": float(self.vehicle.on_road),
+            # "on_road_reward": float(self.vehicle.on_road),
         }
+        logger.debug(f">>>> REWARDS: {r}")
+
+        return r
+
+    def _reward(self, action: Action, rewards: dict | None = None) -> float:
+        """
+        :param action: the last action performed
+        :param rewards: optionally provide the computed rewards if available, for efficiency
+        :return: the corresponding reward
+        """
+        rewards = rewards or self._rewards(action)
+        reward = sum(rewards.values())
+
+        # if self.config["normalize_reward"]:
+        #     reward = utils.lmap(
+        #         reward,
+        #         [self.config["collision_reward"], self.config["right_lane_reward"]],
+        #         [0, 1]
+        #     )
+        # reward *= rewards['on_road_reward']
+        return reward
 
     def _is_terminated(self) -> bool:
         """The episode is over if the ego vehicle crashed."""
@@ -277,6 +318,64 @@ class AVHighway(HighwayEnv):
     def _is_truncated(self) -> bool:
         """The episode is truncated if the time limit is reached."""
         return self.time >= self.config["duration"]
+
+    def simplify(self) -> "AVHighway":
+        """
+        Return a simplified copy of the environment where distant vehicles have been removed from the road.
+
+        This is meant to lower the policy computational load while preserving the optimal actions set.
+
+        :return: a simplified environment state
+        """
+        distance = self.PERCEPTION_DISTANCE * self.config["mc_horizon"]
+        state_copy: "AVHighway" = copy.deepcopy(self)
+        state_copy.road.vehicles = [state_copy.vehicle] + state_copy.road.close_vehicles_to(
+            state_copy.vehicle, distance
+        )
+
+        return state_copy
+
+    def simulate_mc(self) -> tuple[Array, Array, Array]:
+        """
+        MonteCarlo simulation
+        Discount future values by gamma
+        Currently operates only on single ego vehicle
+
+        For now, let's just record the single value at the end of the mc_horizon trajectory
+        So, mc_horizon is how far ahead we are interested in scoring.
+
+        :return: Tuple of risk and loss metrics
+        """
+        n_mc = self.config["n_montecarlo"]
+        losses = np.zeros(n_mc)
+        collisions = np.zeros_like(losses)
+
+        for i in range(n_mc):
+            env = self.simplify()
+            # Randomize the ego vehicle
+            env.vehicle.randomize_behavior()
+            for j in range(self.config["mc_horizon"]):
+                # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
+                action = env.action_space.sample()
+
+                obs, reward, terminated, truncated, info = env.step(action)
+                if terminated or truncated:
+                    if terminated:
+                        collisions[i] = 1
+                    break
+
+            losses[i] = -reward
+
+        # The uncertainty in the loss essentially
+        # For now, we assume no uncertainty though, and set as a low value
+        loss_log_probs = -10 * np.ones_like(losses)
+        # Alternatively we may use
+        # key = self.key.next_seed()
+        # jax_losses = jnp.asarray(losses)
+        # scale = 1.0
+        # rloss, loss_log_probs = JaxGaussian.sample(key, jax_losses, scale)
+
+        return losses, loss_log_probs, collisions
 
 
 class AVHighwayVectorized(AVHighway):

@@ -273,36 +273,6 @@ class OmegaResults(Results):
         return ds
 
 
-class LambdaResults(Results):
-    """
-    Class for saving runs that iterate over lambda
-    Outputs must have dimensions/coordinates [lambda, qE]
-    """
-
-    def __init__(
-        self,
-        qEs: np.array,
-        risks: np.array,
-    ):
-        self.qEs = qEs
-        self.risks = risks
-        self.plan_duration = qEs.shape[1]
-
-    def to_dataset(self) -> xr.Dataset:
-        pass
-        # ds = xr.Dataset(
-        #      {
-        #          "qE": (("risk", "time"), self.qEs),
-        #          "risk": (("risk"), self.risks),
-        #      },
-        #      coords={
-        #          "lmbda": self.risks,
-        #          "time": np.arange(self.plan_duration),
-        #      },
-        # )
-        # return ds
-
-
 class ProjectionResults(Results):
     """
     For risk projection analysis

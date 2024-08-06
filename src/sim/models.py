@@ -48,10 +48,10 @@ class DefaultPolicy(Policy):
 
 
 class LossModel(ModelBase):
-    def __init__(self, alpha: float, v_r: Number, beta: float, *args, **kwargs):
+    def __init__(self, alpha: float, target_speed: Number, beta: float, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.alpha = alpha
-        self.v_r = v_r
+        self.target_speed = target_speed
         self.beta = beta
 
     def __call__(self, v: float, neighbors: Array) -> Tuple[Array, Array]:
@@ -62,7 +62,7 @@ class LossModel(ModelBase):
         :param v: speed of vehicle
         :param neighbors: num_neighbors x 3 array, columns are [distance, speed, lane]
         """
-        speed_loss = - self.alpha * jnp.exp(-(v - self.v_r) ** 2 / self.alpha)
+        speed_loss = - self.alpha * jnp.exp(-(v - self.target_speed) ** 2 / self.alpha)
         collision_loss = self.beta * jnp.mean(
             1 / (2 ** neighbors[:, 2]) * jnp.divide(jnp.max(0, v - neighbors[:, 1]), neighbors[:, 0])
         )
@@ -83,7 +83,7 @@ class NoisyLossModel(LossModel):
         :param v: speed of vehicle
         :param neighbors: num_neighbors x 3 array, columns are [distance, speed, lane]
         """
-        loss, _ = super(NoisyLossModel, self).__call__(t)
+        loss, _ = super(NoisyLossModel, self).__call__(v, neighbors)
         key = self.key.next_seed()
         jax_loss = jnp.asarray(loss)
         rloss, log_probs = JaxGaussian.sample(key, jax_loss, self.scale)
@@ -124,6 +124,31 @@ class PreferencePrior(ModelBase):
         Be sure to also store its last value
         """
         raise NotImplementedError
+
+
+class SoftmaxPreferencePrior(PreferencePrior):
+    """
+    Softmax preference prior weighted by constant kappa
+    """
+
+    def __init__(
+        self,
+        kappa: Number,
+        *args, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+
+        self._param_history = {
+            "kappa": [],
+        }
+        self.kappa = kappa
+
+    def __call__(self, Lt: Array) -> Array:
+        """
+        Compute the softmax preference prior
+        Input and return shape: [m, world_draws] for m montecarlo samples
+        """
+        return jnp.exp(-self.kappa * Lt) / jnp.sum(jnp.exp(-self.kappa * Lt), axis=0)
 
 
 class ExponentialPreferencePrior(PreferencePrior):
@@ -212,24 +237,24 @@ class RiskModel(ModelBase):
         self.preference_prior = preference_prior
         self.min_risk = min_risk
 
-    def compute_entropy(self, Lt, Lt_logprob, Vt):
+    def compute_entropy(self, Lt, Lt_logprob):
         raise NotImplementedError
 
-    def __call__(self, Lt: Array, Lt_logprob: Array, Vt: Array) -> Tuple[Array, Array, Array]:
+    def __call__(self, Lt: Array, Lt_logprob: Array) -> Tuple[Array, Array, Array]:
         """
         Compute an array of risk values at a given timestep
         Arrays have shape [n_montecarlo, world_draws]
         """
         # this printing is important for evolving the preference model
         sample_mean = self.preference_prior(Lt).mean(axis=0)
-        entropy = self.compute_entropy(Lt, Lt_logprob, Vt)
+        entropy = self.compute_entropy(Lt, Lt_logprob)
         Gt = - entropy - sample_mean
         # Gt = - sample_mean
         return Gt, entropy, sample_mean
 
 
 class DifferentialEntropyRiskModel(RiskModel):
-    def compute_entropy(self, Lt: Array, Lt_logprob: Array, Vt: Array) -> Array:
+    def compute_entropy(self, Lt: Array, Lt_logprob: Array) -> Array:
         """
         Compute the differential entropy of the loss distribution
         Input Arrays have shape [n_montecarlo, world_draws] since this isn't called for real timesteps
@@ -238,15 +263,13 @@ class DifferentialEntropyRiskModel(RiskModel):
         ent = entr(Lt, axis=0) if len(Lt) > 1 else 0.
         if np.any(ent == float('-inf')):
             warnings.warn("-inf encountered in entropy")
-            # if Vt is 0, then just set the differential entropy to 0
-            ent = np.where(np.logical_and(ent == -float('inf'), Vt == 0), 0, ent)
             # set arbitrarily to -10
             ent = np.where(ent == -float('inf'), -10, ent)
         return ent
 
 
 class MonteCarloRiskModel(RiskModel):
-    def compute_entropy(self, Lt: Array, Lt_logprob: Array, Vt: Array) -> Array:
+    def compute_entropy(self, Lt: Array, Lt_logprob: Array) -> Array:
         """
         Compute the Monte Carlo estimate of the entropy of the loss distribution
         Input Arrays have shape [n_montecarlo, world_draws] since this isn't called for real timesteps
@@ -256,7 +279,7 @@ class MonteCarloRiskModel(RiskModel):
 
 
 class NullEntropy(RiskModel):
-    def compute_entropy(self, Lt: Array, Lt_logprob: Array, Vt: Array) -> Array:
+    def compute_entropy(self, Lt: Array, Lt_logprob: Array) -> Array:
         """
         Zero out the entropy term
         """
@@ -373,7 +396,6 @@ class AsyncWorldModel(ModelBase):
         results = {
             "rewards": []
         }
-        print(f"MW TYPE -- {envs_wrapper.unwrapped.action_space}")
         for step in range(self.duration):
             actions = envs.action_space.sample()
             # action = env.unwrapped.action_type.actions_indexes["IDLE"]
@@ -399,7 +421,6 @@ class AsyncWorldModel(ModelBase):
             # # add a mask (for the return calculation later);
             # # for each env the mask is 1 if the episode is ongoing and 0 if it is terminated (not by truncation!)
             # masks[step] = torch.tensor([not term for term in terminated])
-
 
         # print(f"MW RESULTS -- {results}")
         # Save the preference params and omega history
