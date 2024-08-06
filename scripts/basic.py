@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pymc as pm
 from omegaconf import DictConfig, OmegaConf
-
+import xarray as xr
 import sim.params as sim_params
 from sim import models, utils
 
@@ -118,17 +118,24 @@ def main(cfg: DictConfig):
     preference_prior = models.SoftmaxPreferencePrior(kappa=1.0)
     risk_model = models.DifferentialEntropyRiskModel(preference_prior=preference_prior)
 
-    # Data collection
-    mc_losses = np.zeros((env_cfg['duration'], cfg['n_montecarlo']))
-    # Real-world values
-    # TODO -- Clean this up as a collected data set
-    rewards = np.zeros((env_cfg['duration'],))
-    risks = np.zeros((env_cfg['duration'],))
-    entropies = np.zeros((env_cfg['duration'],))
-    energies = np.zeros((env_cfg['duration'],))
+    # Create an xarray Dataset
+    duration = env_cfg['duration']
+    ds = xr.Dataset(
+        {
+            "rewards": (("step",), np.zeros((duration,))),
+            "risks": (("step",), np.zeros((duration,))),
+            "entropies": (("step",), np.zeros((duration,))),
+            "energies": (("step",), np.zeros((duration,))),
+            "mc_losses": (("step", "sample"), np.zeros((duration, cfg['n_montecarlo']))),
+        },
+        coords={
+            "step": np.arange(duration),
+            "sample": np.arange(cfg['n_montecarlo']),
+        },
+    )
 
     # Run a single world simulation
-    for step in range(env_cfg['duration']):
+    for step in range(duration):
         # action = env.action_space.sample()
         # action = env.action_space.sample()
         # spd_reward = env.unwrapped.speed_reward()
@@ -149,11 +156,11 @@ def main(cfg: DictConfig):
         obs, reward, done, truncated, info = env.step(action)
 
         # Record data
-        mc_losses[step, :] = _losses
-        rewards[step] = reward
-        risks[step] = risk
-        entropies[step] = entropy
-        energies[step] = energy
+        ds["mc_losses"][step, :] = _losses
+        ds["rewards"][step] = reward
+        ds["risks"][step] = risk
+        ds["entropies"][step] = entropy
+        ds["energies"][step] = energy
 
         logger.debug(f"REWARD: {reward}")
         if done or truncated:
