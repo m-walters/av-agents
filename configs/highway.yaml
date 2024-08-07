@@ -1,23 +1,18 @@
 # Special hydra param, inherit defaults
 defaults:
-  - env: highway
   - _self_
 
-# highway-env overrides
-env_overrides:
-  controlled_vehicles: 1
-  duration: 40
-  vehicles_count: 10
-  lanes_count: 6
-  vehicles_density: 1
-  other_vehicles_type: highway_env.vehicle.behavior.IDMVehicle
-  target_speed: &target_speed 12
+# Overrides for the env config
+env:
+  vehicles_count: 20
+  target_speed: &target_speed 30
+  duration: 6
+  mc_horizon: 5
+  n_montecarlo: 20
+#  mc_period: 5
 #==============
 seed: 8675309
-world_draws: 8
-#plan_duration: 20
-#mc_horizon: 10
-#n_montecarlo: 10
+world_draws: 10
 
 # Params for world sampling
 params:

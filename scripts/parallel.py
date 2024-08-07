@@ -40,14 +40,15 @@ def main(cfg: DictConfig):
     # Get and validate the highway-env environment config
     # env_cfg = OmegaConf.to_container(cfg.env, resolve=True)
     # Order is first the class defaults
-    overrides = AVHighway.av_default_config()
+    # overrides = AVHighway.av_default_config()
     # then the yaml overrides
-    env_overrides = OmegaConf.to_container(cfg.get("env_overrides", {}), resolve=True)
-    overrides.update(env_overrides)
+    if cfg.get("env_overrides", None):
+        overrides = OmegaConf.to_container(cfg.get("env_overrides", {}), resolve=True)
+        OmegaConf.set_struct(cfg, False)
+        cfg.env.update(overrides)
+        OmegaConf.set_struct(cfg, True)
+        # overrides.update(env_overrides)
 
-    OmegaConf.set_struct(cfg, False)
-    cfg.env.update(overrides)
-    OmegaConf.set_struct(cfg, True)
     env_cfg = cfg.env = utils.validate_env_config(cfg.env)
 
     # Initiate the pymc model and load the parameters
@@ -95,15 +96,6 @@ def main(cfg: DictConfig):
     # )
     # obs, info = env.reset()
 
-    video = cfg.get("video", False)
-    if video:
-        render_mode = 'human'
-    else:
-        render_mode = 'rgb_array'
-    env = gym.make('AVAgents/highway-v0', render_mode=render_mode)
-    uenv: "AVHighway" = env.unwrapped
-    uenv.update_config(env_cfg, reset=False)
-
     preference_prior = models.SoftmaxPreferencePrior(kappa=1.0)
     risk_model = models.DifferentialEntropyRiskModel(preference_prior=preference_prior)
 
@@ -130,56 +122,73 @@ def main(cfg: DictConfig):
         },
     )
 
-    for wdraw in range(cfg.world_draws):
-        # logger.info(f"<>< Running world draw {wdraw} ><>")
-        obs, info = env.reset()
+    # Set up async env
+    video = cfg.get("video", False)
+    if video:
+        render_mode = 'human'
+    else:
+        render_mode = 'rgb_array'
+    # env = gym.make('AVAgents/highway-v0', render_mode=render_mode)
+    # uenv: "AVHighway" = env.unwrapped
+    # uenv.update_config(env_cfg, reset=False)
 
-        # Run a world simulation
-        for step in tqdm(range(duration), desc=f"<>< World {wdraw}"):
-            # action = env.action_space.sample()
-            # action = env.action_space.sample()
-            # spd_reward = env.unwrapped.speed_reward()
-            # coll_reward = env.unwrapped.collision_reward()
+    # NOTE that e.g. env_cfg['duration'] was unaccepted by AsyncVectorEnv (though it as a declared var was fine..)
+    # Also, note using `.unwrapped` here. This is so that the `.call(..)` later doesn't raise a warning.
+    # The default wrapper applied to our env is just `OrderEnforcing`, which only raises an error if `step`
+    # is called before `reset`, so...hopefully we're fine.
+    envs = gym.vector.AsyncVectorEnv(
+        [
+            lambda: gym.make(
+                'AVAgents/highway-v0',
+                render_mode=None,
+                max_episode_steps=duration,
+            ).unwrapped for _ in range(world_draws)
+        ],
+        copy=False,
+        # The default, shared_memory=True, describes its use-case as when observations are large, like images, so...
+        shared_memory=False,
+    )
 
-            # Run the montecarlo simulation, capturing the risks, losses
-            # Returned dimensions are [n_montecarlo]
-            losses, loss_log_probs, collisions = uenv.simulate_mc()
-            # Expand dim to [n_montecarlo, 1] since risk_model can vectorize across sims
-            losses = losses[:, None]
-            loss_log_probs = loss_log_probs[:, None]
+    # Update the env configs
+    # For now, all configs are the same
+    envs.call("update_config", env_cfg, reset=False)
 
-            risk, entropy, energy = risk_model(losses, loss_log_probs)
-            # Squeeze losses
-            losses = np.squeeze(losses)
-            
-            
-            
+    # Create a wrapper environment to save episode returns and episode lengths
+    # Note that envs_wrapper.unwrapped is our envs AsyncVectorEnv
+    envs_wrapper = gym.wrappers.RecordEpisodeStatistics(envs, deque_size=world_draws)
+    observations, info = envs_wrapper.reset(seed=cfg.get('seed', 8675309))
 
-            # Select vehicles policy action
-            # idle = env.unwrapped.action_type.actions_indexes["IDLE"]
-            # action = uenv.vehicle.sample_action(obs)
+    results = {
+        "rewards": []
+    }
+    for step in tqdm(range(duration), desc="Step"):
+        # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
+        actions = envs.action_space.sample()
+        observations, rewards, terminated, truncated, infos = envs_wrapper.step(actions)
+        results['rewards'].append(rewards)
 
-            # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
-            action = env.action_space.sample()
+        # Get our vectorized losses
+        # Each item is a tuple of (losses, log_probs, collisions)
+        result = envs_wrapper.unwrapped.call("simulate_mc")
+        # Unzip the results and create arrays, shape=[world_draws, n_montecarlo]
+        losses = np.array([r[0] for r in result])
+        log_probs = np.array([r[1] for r in result])
 
-            obs, reward, done, truncated, info = env.step(action)
+        # Transpose input to let axis=0 be n_montecarlo
+        risk, entropy, energy = risk_model(losses.T, log_probs.T)
 
-            # Record data
-            ds["mc_loss"][wdraw, step, :] = losses
-            ds["loss_mean"][wdraw, step] = np.mean(losses)
-            ds["loss_p5"][wdraw, step] = np.percentile(losses, 5)
-            ds["loss_p95"][wdraw, step] = np.percentile(losses, 95)
-            ds["real_reward"][wdraw, step] = reward
-            ds["risk"][wdraw, step] = risk
-            ds["entropy"][wdraw, step] = entropy
-            ds["energy"][wdraw, step] = energy
+        # Record data
+        ds["mc_loss"][:, step, :] = losses
+        ds["loss_mean"][:, step] = np.mean(losses, axis=1)
+        ds["loss_p5"][:, step] = np.percentile(losses, 5, axis=1)
+        ds["loss_p95"][:, step] = np.percentile(losses, 95, axis=1)
+        ds["real_reward"][:, step] = rewards
+        ds["risk"][:, step] = risk
+        ds["entropy"][:, step] = entropy
+        ds["energy"][:, step] = energy
 
-            logger.debug(f"REWARD: {reward}")
-            if done or truncated:
-                break
-
-            if video:
-                env.render()
+        # if done or truncated:
+        #     break
 
     # Automatically save latest
     logger.info("Saving results")

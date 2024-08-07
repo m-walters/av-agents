@@ -1,5 +1,4 @@
 import logging
-import warnings
 from abc import ABC
 from typing import Tuple, TYPE_CHECKING, Union
 
@@ -125,6 +124,9 @@ class PreferencePrior(ModelBase):
         """
         raise NotImplementedError
 
+    def __call__(self, *args, **kwargs):
+        raise NotImplementedError
+
 
 class SoftmaxPreferencePrior(PreferencePrior):
     """
@@ -143,12 +145,16 @@ class SoftmaxPreferencePrior(PreferencePrior):
         }
         self.kappa = kappa
 
-    def __call__(self, Lt: Array) -> Array:
+    def __call__(self, Lt: Array, take_log: bool = True) -> Array:
         """
         Compute the softmax preference prior
+        By default, we take the logarithm, for use in the risk calculation
         Input and return shape: [m, world_draws] for m montecarlo samples
         """
-        return jnp.exp(-self.kappa * Lt) / jnp.sum(jnp.exp(-self.kappa * Lt), axis=0)
+        if take_log:
+            return -self.kappa * Lt - jnp.log(jnp.sum(jnp.exp(-self.kappa * Lt), axis=0))
+        else:
+            return jnp.exp(-self.kappa * Lt) / jnp.sum(jnp.exp(-self.kappa * Lt), axis=0)
 
 
 class ExponentialPreferencePrior(PreferencePrior):
@@ -192,39 +198,16 @@ class ExponentialPreferencePrior(PreferencePrior):
         self.p_star = self.p_star_iter()
         self.l_star = self.l_star_iter()
 
-    def __call__(self, Lt: Array) -> Array:
+    def __call__(self, Lt: Array, take_log: bool = True) -> Array:
         """
         Compute the exponential preference prior
+        By default, we take the logarithm, for use in the risk calculation
         Returns an array of shape [m, world_draws]
         """
-        return -self.k * Lt
-
-
-class UniformPreferencePrior(PreferencePrior):
-    def __init__(
-        self,
-        l_bar: Union[ParamIterator, ParamIteratorConfig],
-        *args, **kwargs
-    ):
-        super().__init__(*args, **kwargs)
-
-        self._param_history["l_bar"] = []
-
-        l_bar_iter = self._init_param(l_bar)
-        self.l_bar_iter = l_bar_iter
-        # Init value
-        self.l_bar = l_bar_iter()
-
-    def step(self):
-        self._param_history["l_bar"].append(self.l_bar)
-        self.l_bar = self.l_bar_iter()
-
-    def __call__(self, Lt):
-        """
-        Compute the uniform preference prior
-        Returns an array of shape [m, world_draws]
-        """
-        return np.zeros(Lt.shape) - np.log(self.l_bar)
+        if take_log:
+            return -self.k * Lt
+        else:
+            return jnp.exp(-self.k * Lt)
 
 
 class RiskModel(ModelBase):
@@ -245,24 +228,25 @@ class RiskModel(ModelBase):
         Compute an array of risk values at a given timestep
         Arrays have shape [n_montecarlo, world_draws]
         """
-        # this printing is important for evolving the preference model
-        sample_mean = self.preference_prior(Lt).mean(axis=0)
+        # Note that the value computed here, the mean of the log of the preference model,
+        # is also called the 'energy' in a VFE framework
+        log_pref_mean = self.preference_prior(Lt, take_log=True).mean(axis=0)
+
         entropy = self.compute_entropy(Lt, Lt_logprob)
-        Gt = - entropy - sample_mean
-        # Gt = - sample_mean
-        return Gt, entropy, sample_mean
+        Gt = - entropy - log_pref_mean
+        return Gt, entropy, log_pref_mean
 
 
 class DifferentialEntropyRiskModel(RiskModel):
     def compute_entropy(self, Lt: Array, Lt_logprob: Array) -> Array:
         """
         Compute the differential entropy of the loss distribution
-        Input Arrays have shape [n_montecarlo, world_draws] since this isn't called for real timesteps
+        Input Arrays have shape [n_montecarlo[, world_draws]]
         Return Array has shape [world_draws] since we reduce along the montecarlo axis=0
         """
         ent = entr(Lt, axis=0) if len(Lt) > 1 else 0.
         if np.any(ent == float('-inf')):
-            warnings.warn("-inf encountered in entropy")
+            logger.warning("-inf encountered in entropy. You may need more MC samples")
             # set arbitrarily to -10
             ent = np.where(ent == -float('inf'), -10, ent)
         return ent
