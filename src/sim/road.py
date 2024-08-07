@@ -1,4 +1,4 @@
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Tuple
 
 import numpy as np
 from highway_env.road.road import Road
@@ -14,6 +14,7 @@ class AVRoad(Road):
     """
     Road override
     """
+
     def close_vehicles_to(
         self, vehicle: Vehicle, distance: float, count: int | None = None,
         see_behind: bool = True, sort: bool = True

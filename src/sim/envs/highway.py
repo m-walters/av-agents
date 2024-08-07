@@ -76,7 +76,7 @@ class AVHighway(HighwayEnv):
             "beta": 0.25,
         }
 
-    def update_config(self, cfg: DictConfig, reset: bool=True) -> None:
+    def update_config(self, cfg: DictConfig, reset: bool = True) -> None:
         """
         Update this env with our run config
         Requires a reset

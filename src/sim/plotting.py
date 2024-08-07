@@ -327,6 +327,7 @@ class AVPlotter(Plotter):
     """
     Plotter for run results
     """
+
     def __init__(
         self,
         ds_or_path: Union[xr.Dataset, str],
@@ -408,7 +409,6 @@ class AVPlotter(Plotter):
             plt.savefig(save_path)
 
         return fig, axs
-
 
 
 class RoadVisualizer(Plotter):
