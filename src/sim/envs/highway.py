@@ -35,9 +35,9 @@ class AVHighway(HighwayEnv):
                     "type": "Kinematics"
                 },
                 "action": {
-                    # ContinuousAction required for IDMVehicle
                     "type": "ContinuousAction",
                 },
+                "other_vehicles_type": "highway_env.vehicle.behavior.IDMVehicle",
                 "lanes_count": 4,
                 "vehicles_count": 50,
                 "controlled_vehicles": 1,
@@ -63,7 +63,7 @@ class AVHighway(HighwayEnv):
     @staticmethod
     def av_default_config() -> dict:
         """
-        Our default config
+        Our default config overrides and new params
         """
         return {
             "target_speed": 30,
@@ -76,13 +76,15 @@ class AVHighway(HighwayEnv):
             "beta": 0.25,
         }
 
-    def update_config(self, cfg: DictConfig):
+    def update_config(self, cfg: DictConfig, reset: bool = True) -> None:
         """
         Update this env with our run config
         Requires a reset
         """
         self.config.update(cfg)
         logger.info("Resetting env with new config")
+        if reset:
+            self.reset()
 
     def _reset(self) -> None:
         """
@@ -344,7 +346,7 @@ class AVHighway(HighwayEnv):
         For now, let's just record the single value at the end of the mc_horizon trajectory
         So, mc_horizon is how far ahead we are interested in scoring.
 
-        :return: Tuple of risk and loss metrics
+        :return: Tuple of losses, loss_log_probs, collisions. Dimensions [n_mc]
         """
         n_mc = self.config["n_montecarlo"]
         losses = np.zeros(n_mc)
@@ -376,10 +378,6 @@ class AVHighway(HighwayEnv):
         # rloss, loss_log_probs = JaxGaussian.sample(key, jax_losses, scale)
 
         return losses, loss_log_probs, collisions
-
-
-class AVHighwayVectorized(AVHighway):
-    ...
 
 
 def register_av_highway():

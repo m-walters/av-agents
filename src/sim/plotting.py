@@ -323,9 +323,97 @@ class Plotter:
         return fig, axs
 
 
-class HighwayEnvPlotter(Plotter):
+class AVPlotter(Plotter):
     """
-    Plotting util for Highway Env datasets
+    Plotter for run results
+    """
+
+    def __init__(
+        self,
+        ds_or_path: Union[xr.Dataset, str],
+        sns_context: str = "notebook",
+    ):
+        super().__init__(ds_or_path, sns_context)
+
+    def quad_plot(
+        self, fig=None, axs=None, save_path=None, plot_kwargs: dict | None = None,
+        shadow: bool = False
+    ):
+        """
+        Generate a 2x2 plot with Energy, Entropy, Loss, Risk
+        In each plot, we reduce across the world draw axis
+
+        'shadow' param toggles whether the plot does shadow error bars, or individual lines across world draws
+        """
+        plot_kwargs = plot_kwargs or {}
+
+        if axs is None:
+            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (12, 6))
+            fig, axs = self.subplots(2, 2, sharex=True, **plot_kwargs)
+            plt.subplots_adjust(wspace=0.4)
+
+        # Note: match keys the dataset variable names
+        ax_map = {
+            'energy': axs[0, 0],
+            'entropy': axs[0, 1],
+            'loss_mean': axs[1, 0],
+            'risk': axs[1, 1],
+        }
+        labels = {
+            'energy': 'E',
+            'entropy': 'H',
+            'loss_mean': 'Loss',
+            'risk': 'Risk',
+        }
+
+        colors = self.get_color_wheel()
+        color = next(colors)
+        ls = "-"
+        for i, var in enumerate(ax_map):
+            # This produces a pivot table with time as index and batch as columns
+            pivot = self.ds[var].to_pandas()
+            # label = f"w={np.round(omega.values, 2)}"
+
+            if shadow:
+                # Melt it to go from wide to long form, with world as a variable, and our var as value
+                melted = pivot.T.melt(var_name='world', value_name=var, ignore_index=False)
+                sns.lineplot(
+                    x="step", y=var, data=melted, color=color, ls=ls, ax=ax_map[var], legend=False,
+                    label=None,
+                )
+            else:
+                # Plot each world draw as a separate line; same color though
+                data = pivot.T
+                for world in self.ds.world:
+                    # ax_map[var].plot(pivot.index, pivot[world], color=color, alpha=0.3, label=f'World {world}')
+                    sns.lineplot(
+                        x=data.index.values, y=data[int(world)], color=color, alpha=0.3, ls=ls, ax=ax_map[var],
+                        legend=False, label=None,
+                    )
+
+            # Set ax title
+            ax_map[var].set_ylabel(labels[var])
+
+        # Title
+        # fig.suptitle('')
+
+        for i in range(2):
+            lower_ax = axs[1, i]
+            lower_ax.set_xlabel("Step")
+            lower_ax.xaxis.get_major_locator().set_params(integer=True)
+
+        # Trim the whitespace around the image
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path)
+
+        return fig, axs
+
+
+class RoadVisualizer(Plotter):
+    """
+    Plotting utils for visualizing some event data
     """
 
     def __init__(
