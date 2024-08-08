@@ -3,16 +3,20 @@ defaults:
   - _self_
 
 # Overrides for the env config
+# See AVHighway for defaults
 env:
-  vehicles_count: 20
-  target_speed: &target_speed 30
-  duration: 6
+  vehicles_count: 50
+  vehicles_density: 2
+  target_speed: &target_speed 50
+  speed_limit: 50
+  duration: 60
   mc_horizon: 5
-  n_montecarlo: 20
+  n_montecarlo: 100
 #  mc_period: 5
 #==============
 seed: 8675309
-world_draws: 10
+world_draws: 40
+warmup_steps: 20  # included within the duration
 
 # Params for world sampling
 params:

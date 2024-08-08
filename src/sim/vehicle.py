@@ -1,15 +1,68 @@
 from typing import Optional
 
 import numpy as np
-from highway_env import utils
 from highway_env.road.road import Road, Route
 from highway_env.utils import Vector
-from highway_env.vehicle.behavior import LinearVehicle
+from highway_env.vehicle.behavior import AggressiveVehicle
 from highway_env.vehicle.controller import ControlledVehicle
-from highway_env.vehicle.kinematics import Vehicle as HEVehicle
 
 
-class Vehicle(LinearVehicle):
+class AggressiveParams:
+    """
+    From the AggressiveVehicle class
+    """
+    # Longitudinal policy parameters
+    """Maximum acceleration."""
+    ACC_MAX = 6.0  # [m/s2]
+
+    """Desired maximum acceleration."""
+    COMFORT_ACC_MAX = 4.0  # [m/s2]
+
+    """Desired maximum deceleration."""
+    COMFORT_ACC_MIN = -5.0  # [m/s2]
+
+    """Exponent of the velocity term."""
+    DELTA = 4.0  # []
+
+    """Range of delta when chosen randomly."""
+    DELTA_RANGE = [3.5, 4.5]
+
+    """Desired jam distance to the front vehicle."""
+    DISTANCE_WANTED = 5.0 + ControlledVehicle.LENGTH  # [m]
+
+    """Desired time gap to the front vehicle."""
+    TIME_WANTED = 1.5  # [s]
+
+    # Lateral policy parameters
+    POLITENESS = 0.  # in [0, 1]
+    LANE_CHANGE_MIN_ACC_GAIN = 0.2  # [m/s2]; larger means more likely to accept a lane change. Default = 0.2
+    LANE_CHANGE_MAX_BRAKING_IMPOSED = 2.0  # [m/s2]; larger means more likely to accept a lane change. Default = 2.0
+    LANE_CHANGE_DELAY = 1.0  # [s]; lower means more frequent lane checks. Default = 1.0
+
+    MERGE_ACC_GAIN = 0.8
+    MERGE_VEL_RATIO = 0.75
+    MERGE_TARGET_VEL = 30
+
+
+class HotshotParams(AggressiveParams):
+    """
+    Based off the AggressiveVehicle params, but reckless
+    """
+    # Longitudinal policy parameters
+    ACC_MAX = 10.0  # [m/s2]
+    COMFORT_ACC_MAX = ACC_MAX  # [m/s2]
+
+    DISTANCE_WANTED = 2.0 + ControlledVehicle.LENGTH  # [m]
+    TIME_WANTED = 0.01
+
+    # Lateral policy parameters
+    POLITENESS = 0.  # in [0, 1]
+    LANE_CHANGE_MIN_ACC_GAIN = 1.0  # [m/s2]; larger means more likely to accept a lane change. Default = 0.2
+    LANE_CHANGE_MAX_BRAKING_IMPOSED = 10.0  # [m/s2]; larger means more likely to accept a lane change. Default = 2.0
+    LANE_CHANGE_DELAY = 1.0  # [s]; lower means more frequent lane checks. Default = 1.0
+
+
+class Vehicle(HotshotParams, AggressiveVehicle):
     """
     IDMVehicle override for our purposes
 
@@ -21,29 +74,13 @@ class Vehicle(LinearVehicle):
     """ Vehicle width [m] """
     WIDTH = 2.0
     """ Range for random initial speeds [m/s] """
-    DEFAULT_INITIAL_SPEEDS = [40, 50]
+    DEFAULT_INITIAL_SPEEDS = [20, 30]
     """ Maximum reachable speed [m/s] """
-    MAX_SPEED = 100.
+    MAX_SPEED = 40.
     """ Minimum reachable speed [m/s] """
     MIN_SPEED = -20.
     """ Length of the vehicle state history, for trajectory display"""
     HISTORY_SIZE = 30
-
-    # Longitudinal policy parameters
-    """Maximum acceleration."""
-    ACC_MAX = 6.0  # [m/s2]
-
-    """Desired maximum acceleration."""
-    COMFORT_ACC_MAX = 3.0  # [m/s2]
-
-    """Desired maximum deceleration."""
-    COMFORT_ACC_MIN = -5.0  # [m/s2]
-
-    """Exponent of the velocity term."""
-    DELTA = 4.0  # []
-
-    """Range of delta when chosen randomly."""
-    DELTA_RANGE = [3.5, 4.5]
 
     def __init__(
         self,
@@ -70,6 +107,7 @@ class Vehicle(LinearVehicle):
         Call this method to initiate some randomization of behavior
         """
         self.DELTA = np.random.uniform(low=self.DELTA_RANGE[0], high=self.DELTA_RANGE[1])
+        super().randomize_behavior()
 
     def sample_action(self, obs) -> Optional[dict]:
         """
@@ -78,46 +116,6 @@ class Vehicle(LinearVehicle):
         # The IDMVehicle (which LinearVehicle inherits) has actions automated, so we return null
         return None
 
-    def step(self, dt: float) -> None:
-        """
-        Propagate the vehicle state given its actions.
-
-        Integrate a modified bicycle model with a 1st-order response on the steering wheel dynamics.
-        If the vehicle is crashed, the actions are overridden with erratic steering and braking until complete stop.
-        The vehicle's current lane is updated.
-
-        :param dt: timestep of integration of the model [s]
-        """
-        # Normalize the current action
-        self.clip_actions()
-
-        delta_f = self.action['steering']
-        beta = np.arctan(1 / 2 * np.tan(delta_f))
-        v = self.speed * np.array(
-            [np.cos(self.heading + beta),
-                np.sin(self.heading + beta)]
-        )
-
-        # Update its position and compute other logic
-        self.position += v * dt
-        if self.impact is not None:
-            self.position += self.impact
-            self.crashed = True
-            self.impact = None
-        self.heading += self.speed * np.sin(beta) / (self.LENGTH / 2) * dt
-        self.speed += self.action['acceleration'] * dt
-        self.on_state_update()
-
-    def on_state_update(self) -> None:
-        """
-        For now, just updates the lane and history
-        """
-        if self.road:
-            self.lane_index = self.road.network.get_closest_lane_index(self.position, self.heading)
-            self.lane = self.road.network.get_lane(self.lane_index)
-            if self.road.record_history:
-                self.history.appendleft(self.create_from(self))
-
     @classmethod
     def create_random(
         cls, road: Road,
@@ -125,9 +123,9 @@ class Vehicle(LinearVehicle):
         lane_from: Optional[str] = None,
         lane_to: Optional[str] = None,
         lane_id: Optional[int] = None,
-        spacing: float = 1
-    ) \
-            -> "Vehicle":
+        spacing: float = 1,
+        target_speed: Optional[float] = None,
+    ) -> "Vehicle":
         """
         Create a random vehicle on the road.
 
@@ -140,6 +138,7 @@ class Vehicle(LinearVehicle):
         :param lane_to: end node of the lane to spawn in
         :param lane_id: id of the lane to spawn in
         :param spacing: ratio of spacing to the front vehicle, 1 being the default
+        :param target_speed: target speed in [m/s] the vehicle should reach
         :return: A vehicle with random position and/or speed
         """
         _from = lane_from or road.np_random.choice(list(road.network.graph.keys()))
@@ -156,40 +155,5 @@ class Vehicle(LinearVehicle):
         x0 = np.max([lane.local_coordinates(v.position)[0] for v in road.vehicles]) \
             if len(road.vehicles) else 3 * offset
         x0 += offset * road.np_random.uniform(0.9, 1.1)
-        v = cls(road, lane.position(x0, 0), lane.heading_at(x0), speed)
+        v = cls(road, lane.position(x0, 0), heading=lane.heading_at(x0), speed=speed, target_speed=target_speed)
         return v
-
-    def acceleration(
-        self,
-        ego_vehicle: ControlledVehicle,
-        front_vehicle: HEVehicle = None,
-        rear_vehicle: HEVehicle = None
-    ) -> float:
-        """
-        Compute an acceleration command with the Intelligent Driver Model.
-
-        The acceleration is chosen so as to:
-        - reach a target speed;
-        - maintain a minimum safety distance (and safety time) w.r.t the front vehicle.
-
-        :param ego_vehicle: the vehicle whose desired acceleration is to be computed. It does not have to be an
-                            IDM vehicle, which is why this method is a class method. This allows an IDM vehicle to
-                            reason about other vehicles behaviors even though they may not IDMs.
-        :param front_vehicle: the vehicle preceding the ego-vehicle
-        :param rear_vehicle: the vehicle following the ego-vehicle
-        :return: the acceleration command for the ego-vehicle [m/s2]
-        """
-        if not ego_vehicle or not isinstance(ego_vehicle, HEVehicle):
-            return 0
-        ego_target_speed = getattr(ego_vehicle, "target_speed", 0)
-        if ego_vehicle.lane and ego_vehicle.lane.speed_limit is not None:
-            ego_target_speed = np.clip(ego_target_speed, 0, ego_vehicle.lane.speed_limit)
-        acceleration = self.COMFORT_ACC_MAX * (1 - np.power(
-            max(ego_vehicle.speed, 0) / abs(utils.not_zero(ego_target_speed)), self.DELTA
-        ))
-
-        if front_vehicle:
-            d = ego_vehicle.lane_distance_to(front_vehicle)
-            acceleration -= self.COMFORT_ACC_MAX * \
-                            np.power(self.desired_gap(ego_vehicle, front_vehicle) / utils.not_zero(d), 2)
-        return acceleration

@@ -8,7 +8,6 @@ from highway_env import utils
 from highway_env.envs.common.action import Action
 from highway_env.envs.highway_env import HighwayEnv
 from highway_env.road.road import RoadNetwork
-from highway_env.vehicle.controller import ControlledVehicle
 from omegaconf import DictConfig
 
 from sim.road import AVRoad
@@ -25,6 +24,8 @@ class AVHighway(HighwayEnv):
     Override the HighwayEnv class for our purposes
     """
     ACC_MAX = Vehicle.ACC_MAX
+    VEHICLE_MAX_SPEED = Vehicle.MAX_SPEED
+    PERCEPTION_DISTANCE = 5 * Vehicle.MAX_SPEED
 
     @classmethod
     def default_config(cls) -> dict:
@@ -52,7 +53,8 @@ class AVHighway(HighwayEnv):
                 # lower speeds according to config["reward_speed_range"].
                 "lane_change_reward": 0,  # The reward received at each lane change action.
                 "normalize_reward": True,
-                "offroad_terminal": False
+                "offroad_terminal": False,
+                "speed_limit": 30
             }
         )
         # Update with our homebrew config defaults
@@ -66,9 +68,9 @@ class AVHighway(HighwayEnv):
         Our default config overrides and new params
         """
         return {
-            "target_speed": 30,
-            "simulation_frequency": 15,
-            "policy_frequency": 5,
+            "target_speed": 40,
+            "simulation_frequency": 15,  # frames per second
+            "policy_frequency": 5,  # policy checks per second (and how many 'steps' per second)
             # MonteCarlo horizon; Note that a given step is sim_freq // policy_freq frames (see self._simulate)
             "mc_horizon": 5,
             "n_montecarlo": 10,
@@ -98,7 +100,9 @@ class AVHighway(HighwayEnv):
         Create a road composed of straight adjacent lanes
         """
         self.road = AVRoad(
-            network=RoadNetwork.straight_road_network(self.config["lanes_count"], speed_limit=30),
+            network=RoadNetwork.straight_road_network(
+                self.config["lanes_count"], speed_limit=self.config["speed_limit"]
+            ),
             np_random=self.np_random, record_history=self.config["show_trajectories"]
         )
 
@@ -118,7 +122,8 @@ class AVHighway(HighwayEnv):
                 self.road,
                 speed=25,
                 lane_id=self.config["initial_lane_id"],
-                spacing=self.config["ego_spacing"]
+                spacing=self.config["ego_spacing"],
+                target_speed=self.config["target_speed"],
             )
             # vehicle = self.action_type.vehicle_class(self.road, vehicle.position, vehicle.heading, vehicle.speed)
             # Randomize its behavior
@@ -277,9 +282,13 @@ class AVHighway(HighwayEnv):
         return - penalty
 
     def _rewards(self, action: Action) -> Dict[Text, float]:
-        neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
-        lane = self.vehicle.target_lane_index[2] if isinstance(self.vehicle, ControlledVehicle) \
-            else self.vehicle.lane_index[2]
+        """
+        Compute and collect the suite of rewards for our control vehicle.
+        TODO -- Consider a speed-limit penalty (see Vehicle.accelerate)
+        """
+        # neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
+        # lane = self.vehicle.target_lane_index[2] if isinstance(self.vehicle, ControlledVehicle) \
+        #     else self.vehicle.lane_index[2]
 
         speed_reward = self.speed_reward()
         collision_reward = self.collision_reward()
@@ -329,7 +338,12 @@ class AVHighway(HighwayEnv):
 
         :return: a simplified environment state
         """
-        distance = self.PERCEPTION_DISTANCE * self.config["mc_horizon"]
+
+        distance = self.PERCEPTION_DISTANCE
+        # Add to the distance the expected amount traveled by the car after mc_horizon steps at the given car speed
+        # Since policy_frequency is how many calls to step per second and mc_horizon is num steps per mc sim..
+        distance += self.VEHICLE_MAX_SPEED * self.config["mc_horizon"] / self.config["policy_frequency"]
+
         state_copy: "AVHighway" = copy.deepcopy(self)
         state_copy.road.vehicles = [state_copy.vehicle] + state_copy.road.close_vehicles_to(
             state_copy.vehicle, distance
@@ -384,6 +398,6 @@ def register_av_highway():
     register(
         id=f"AVAgents/highway-v0",
         entry_point='sim.envs.highway:AVHighway',
-        vector_entry_point="sim.envs.highway:AVHighwayVectorized",
+        # vector_entry_point="sim.envs.highway:AVHighwayVectorized",
         # max_episode_steps=1000,  # Adjust the configuration as needed
     )
