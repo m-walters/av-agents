@@ -2,7 +2,6 @@ from collections import namedtuple
 from enum import Enum
 from typing import Generator, List, Optional, TypedDict, Union
 
-import gymnasium as gym
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -152,10 +151,14 @@ class JaxRKey:
     def __init__(self, seed):
         self.key = jrandom.PRNGKey(seed)
 
-    def next_seed(self):
+    def next_key(self):
         # Use subkey to seed your functions
         self.key, subkey = jrandom.split(self.key)
         return subkey
+
+    def next_seed(self):
+        # When you want the next int and not next j-key tuple
+        return int(self.next_key()[0])
 
 
 class JaxGaussian:
@@ -358,26 +361,6 @@ class EvolvePreferenceResults(Results):
             },
         )
         return ds
-
-
-def create_highway_env(env_id: str = "highway-v1.8.2") -> gym.Env:
-    env = gym.make(env_id)
-    env.reset()
-    return env
-
-
-def get_highway_env_observation_space(env: gym.Env) -> gym.spaces.Space:
-    """
-    Return the observation space of Highway-env.
-    """
-    return env.observation_space
-
-
-def get_highway_env_action_space(env: gym.Env) -> gym.spaces.Space:
-    """
-    Return the action space of Highway-env.
-    """
-    return env.action_space
 
 
 def validate_env_config(cfg: DictConfig) -> DictConfig:

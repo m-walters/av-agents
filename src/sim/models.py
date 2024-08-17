@@ -83,7 +83,7 @@ class NoisyLossModel(LossModel):
         :param neighbors: num_neighbors x 3 array, columns are [distance, speed, lane]
         """
         loss, _ = super(NoisyLossModel, self).__call__(v, neighbors)
-        key = self.key.next_seed()
+        key = self.key.next_key()
         jax_loss = jnp.asarray(loss)
         rloss, log_probs = JaxGaussian.sample(key, jax_loss, self.scale)
         return rloss, log_probs

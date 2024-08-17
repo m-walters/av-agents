@@ -53,7 +53,7 @@ class HotshotParams(AggressiveParams):
     COMFORT_ACC_MAX = ACC_MAX  # [m/s2]
 
     DISTANCE_WANTED = 2.0 + ControlledVehicle.LENGTH  # [m]
-    TIME_WANTED = 0.01
+    TIME_WANTED = 0.1
 
     # Lateral policy parameters
     POLITENESS = 0.  # in [0, 1]
@@ -106,8 +106,13 @@ class Vehicle(HotshotParams, AggressiveVehicle):
         """
         Call this method to initiate some randomization of behavior
         """
-        self.DELTA = np.random.uniform(low=self.DELTA_RANGE[0], high=self.DELTA_RANGE[1])
-        super().randomize_behavior()
+        self.DELTA = self.road.np_random.uniform(low=self.DELTA_RANGE[0], high=self.DELTA_RANGE[1])
+
+        ua = self.road.np_random.uniform(size=np.shape(self.ACCELERATION_PARAMETERS))
+        self.ACCELERATION_PARAMETERS = self.ACCELERATION_RANGE[0] + ua * (self.ACCELERATION_RANGE[1] -
+                                                                          self.ACCELERATION_RANGE[0])
+        ub = self.road.np_random.uniform(size=np.shape(self.STEERING_PARAMETERS))
+        self.STEERING_PARAMETERS = self.STEERING_RANGE[0] + ub * (self.STEERING_RANGE[1] - self.STEERING_RANGE[0])
 
     def sample_action(self, obs) -> Optional[dict]:
         """

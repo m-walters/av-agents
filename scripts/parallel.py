@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 
 import gymnasium as gym
 import hydra
@@ -48,6 +49,11 @@ def main(cfg: DictConfig):
 
     env_cfg = cfg.env = utils.validate_env_config(cfg.env)
 
+    # Seed RNG
+    seed = cfg.get("seed", 8675309)
+    np.random.seed(seed)
+    random.seed(seed)
+
     # Results save dir
     latest_dir = RESULTS_DIR + "/latest"
     os.makedirs(latest_dir, exist_ok=True)
@@ -79,7 +85,9 @@ def main(cfg: DictConfig):
 
     ds = xr.Dataset(
         {
-            "real_reward": (("world", "step"), np.zeros((world_draws, duration))),
+            "reward": (("world", "step"), np.zeros((world_draws, duration))),
+            "collision_reward": (("world", "step"), np.zeros((world_draws, duration))),
+            "speed_reward": (("world", "step"), np.zeros((world_draws, duration))),
             "risk": (("world", "step"), np.zeros((world_draws, duration))),
             "entropy": (("world", "step"), np.zeros((world_draws, duration))),
             "energy": (("world", "step"), np.zeros((world_draws, duration))),
@@ -88,6 +96,8 @@ def main(cfg: DictConfig):
             "loss_mean": (("world", "step"), np.zeros((world_draws, duration))),
             "loss_p5": (("world", "step"), np.zeros((world_draws, duration))),  # 5% percentile
             "loss_p95": (("world", "step"), np.zeros((world_draws, duration))),  # 95% percentile
+            # Track if a collision occurred
+            "crashed": (("world", "step"), np.zeros((world_draws, duration))),
         },
         coords={
             "world": np.arange(world_draws),
@@ -110,14 +120,20 @@ def main(cfg: DictConfig):
         shared_memory=False,
     )
 
-    # Update the env configs
-    # For now, all configs are the same
-    envs.call("update_config", env_cfg, reset=False)
-
     # Create a wrapper environment to save episode returns and episode lengths
     # Note that envs_wrapper.unwrapped is our envs AsyncVectorEnv
     envs_wrapper = gym.wrappers.RecordEpisodeStatistics(envs, deque_size=world_draws)
-    observations, info = envs_wrapper.reset(seed=cfg.get('seed', 8675309))
+
+    # Update the env configs
+    # For now, all configs are the same
+    envs.call("update_config", env_cfg, reset=False)
+    # Need separate seeds for each environment
+    rkey = utils.JaxRKey(seed)
+    seeds = [rkey.next_seed() for _ in range(world_draws)]
+
+    # Providing a single seed or a list of seeds both produce variable world inits
+    # If you wanted duplicated worlds, provide a list of the same seed [seed]*world_draws
+    observations, infos = envs_wrapper.reset(seed=seeds)
 
     for step in tqdm(range(duration), desc="Step"):
         if step >= warmup_steps:
@@ -141,9 +157,20 @@ def main(cfg: DictConfig):
             ds["energy"][:, step] = energy
 
         # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
-        actions = envs.action_space.sample()
+        # actions = envs_wrapper.action_space.sample()  # Sample with extra dim of vectorized envs
+        # actions = envs_wrapper.call("action_sample")  # Sample from each individually
+        actions = [None] * world_draws
+        # obs = envs_wrapper.observation_type.observe()
+
         observations, rewards, terminated, truncated, infos = envs_wrapper.step(actions)
-        ds["real_reward"][:, step] = rewards
+        ds["reward"][:, step] = rewards
+        # info["rewards"] is a list of {"collision_reward": <float>, "speed_reward": <float>} items
+        ds["collision_reward"][:, step] = [r["collision_reward"] for r in infos["rewards"]]
+        ds["speed_reward"][:, step] = [r["speed_reward"] for r in infos["rewards"]]
+        ds["crashed"][:, step] = infos["crashed"]
+
+    # Close
+    envs_wrapper.close()
 
     # Automatically save latest
     logger.info("Saving results")

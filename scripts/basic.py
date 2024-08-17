@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 
 import gymnasium as gym
 import hydra
@@ -50,6 +51,11 @@ def main(cfg: DictConfig):
         # overrides.update(env_overrides)
 
     env_cfg = cfg.env = utils.validate_env_config(cfg.env)
+
+    # Seed RNG
+    seed = cfg.get("seed", 8675309)
+    np.random.seed(seed)
+    random.seed(seed)
 
     # Results save dir
     latest_dir = RESULTS_DIR + "/latest"
@@ -103,7 +109,7 @@ def main(cfg: DictConfig):
 
     ds = xr.Dataset(
         {
-            "real_reward": (("world", "step"), np.zeros((world_draws, duration))),
+            "reward": (("world", "step"), np.zeros((world_draws, duration))),
             "risk": (("world", "step"), np.zeros((world_draws, duration))),
             "entropy": (("world", "step"), np.zeros((world_draws, duration))),
             "energy": (("world", "step"), np.zeros((world_draws, duration))),
@@ -120,8 +126,12 @@ def main(cfg: DictConfig):
         },
     )
 
+    # We have to get seeds based on global seed
+    rkey = utils.JaxRKey(seed)
+
     for wdraw in range(cfg.world_draws):
-        obs, info = env.reset()
+        # obs, info = env.reset(seed=seed)
+        obs, info = env.reset(seed=rkey.next_seed())
 
         # Run a world simulation
         for step in tqdm(range(duration), desc=f"World {wdraw}"):
@@ -133,7 +143,7 @@ def main(cfg: DictConfig):
             if step >= warmup_steps:
                 # Run the montecarlo simulation, capturing the risks, losses
                 # Returned dimensions are [n_montecarlo]
-                losses, loss_log_probs, collisions = uenv.simulate_mc()
+                losses, loss_log_probs, collisions, mc_rewards = uenv.simulate_mc()
 
                 risk, entropy, energy = risk_model(losses, loss_log_probs)
 
@@ -148,8 +158,10 @@ def main(cfg: DictConfig):
 
             # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
             action = env.action_space.sample()
+            action = None
+
             obs, reward, terminated, truncated, info = env.step(action)
-            ds["real_reward"][wdraw, step] = reward
+            ds["reward"][wdraw, step] = reward
 
             logger.debug(f"REWARD: {reward}")
             if terminated or truncated:
