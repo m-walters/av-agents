@@ -4,6 +4,7 @@ from typing import Dict, Optional, Text, Tuple
 
 import numpy as np
 from gymnasium.envs.registration import register
+from gymnasium.utils import seeding
 from highway_env import utils
 from highway_env.envs.common.action import Action
 from highway_env.envs.highway_env import HighwayEnv
@@ -26,6 +27,9 @@ class AVHighway(HighwayEnv):
     ACC_MAX = Vehicle.ACC_MAX
     VEHICLE_MAX_SPEED = Vehicle.MAX_SPEED
     PERCEPTION_DISTANCE = 5 * Vehicle.MAX_SPEED
+
+    def __init__(self, config: dict = None, render_mode: Optional[str] = None) -> None:
+        super().__init__(config, render_mode)
 
     @classmethod
     def default_config(cls) -> dict:
@@ -95,6 +99,44 @@ class AVHighway(HighwayEnv):
         self._create_road()
         self._create_vehicles()
 
+    def reset(
+        self,
+        *,
+        seed: Optional[int] = None,
+        options: Optional[dict] = None,
+    ) -> Tuple[Observation, dict]:
+        """
+        Reset the environment to it's initial configuration
+
+        :param seed: The seed that is used to initialize the environment's PRNG
+        :param options: Allows the environment configuration to specified through `options["config"]`
+        :return: the observation of the reset state
+        """
+        if seed is not None:
+            self._np_random, seed = seeding.np_random(seed)
+
+        # We need to seed our RNG here again so that it works with async parallel runs
+        np.random.seed(seed)
+        # seeding.np_random(seed)
+
+        if options and "config" in options:
+            self.configure(options["config"])
+        self.update_metadata()
+        self.define_spaces()  # First, to set the controlled vehicle class depending on action space
+        self.time = self.steps = 0
+        self.done = False
+        self._reset()
+        self.define_spaces()  # Second, to link the obs and actions to the vehicles once the scene is created
+
+        obs, info = super().reset(seed=seed, options=options)
+        self.action_space.seed(seed)
+
+        obs = self.observation_type.observe()
+        info = self._info(obs, action=self.action_space.sample())
+        if self.render_mode == 'human':
+            self.render()
+        return obs, info
+
     def _create_road(self) -> None:
         """
         Create a road composed of straight adjacent lanes
@@ -103,7 +145,8 @@ class AVHighway(HighwayEnv):
             network=RoadNetwork.straight_road_network(
                 self.config["lanes_count"], speed_limit=self.config["speed_limit"]
             ),
-            np_random=self.np_random, record_history=self.config["show_trajectories"]
+            np_random=self.np_random,
+            record_history=self.config["show_trajectories"]
         )
 
     def _create_vehicles(self) -> None:
@@ -237,7 +280,10 @@ class AVHighway(HighwayEnv):
         )
 
         # See our AV Project, "Vehicle Agent" section for derivation
-        beta = 3 * self.ACC_MAX / 2
+        # TODO -- f"MW With 8675309 seed, we get collision penalties exceeding 500 with this scaling
+        # beta = 3 * self.ACC_MAX / 2
+        beta = 3 * self.ACC_MAX / 2 * 0.01
+        logger.debug(f">> BETA: {beta}")
 
         n_nbr = 0
         penalty = 0
@@ -254,9 +300,9 @@ class AVHighway(HighwayEnv):
                     # Note, lane_distance_to: <argument>.x - self.x
                     front_distance = self.vehicle.lane_distance_to(front)
                     assert front_distance > 0, f"Front distance <= 0: {front_distance}"
-                    front_distance = max(front_distance, self.vehicle.LENGTH / 2)
-                    _penalty = beta * front_delta ** 2 / (front_distance * (
-                            2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
+                    front_distance = max(front_distance, self.vehicle.LENGTH)
+                    _penalty = beta * front_delta ** 2 / (
+                            front_distance * (2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
                     penalty += _penalty
                     logger.debug(
                         f">> {front_speed:0.4f} | {front_delta:0.4f} | {front_distance:0.4f} | {_penalty:0.4f}"
@@ -271,15 +317,17 @@ class AVHighway(HighwayEnv):
                     # Rear car approaching
                     rear_distance = rear.lane_distance_to(self.vehicle)
                     assert rear_distance > 0, f"Rear distance <= 0: {rear_distance}"
-                    rear_distance = max(rear_distance, rear.LENGTH / 2)
-                    _penalty = beta * rear_delta ** 2 / (rear_distance * (
-                            2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
+                    rear_distance = max(rear_distance, rear.LENGTH)
+                    _penalty = beta * rear_delta ** 2 / (
+                            rear_distance * (2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
                     penalty += _penalty
                     logger.debug(f">> {rear_speed:0.4f} | {rear_delta:0.4f} | {rear_distance:0.4f} | {_penalty:0.4f}")
 
         logger.debug(f"COLLISION PENALTY: {penalty}\n")
+        # Average over the neighbors
+        penalty /= n_nbr if n_nbr > 0 else 1
 
-        return - penalty
+        return -penalty
 
     def _rewards(self, action: Action) -> Dict[Text, float]:
         """
@@ -351,6 +399,16 @@ class AVHighway(HighwayEnv):
 
         return state_copy
 
+    def reseed(self, seed):
+        """
+        Reseed this environment for RNG
+        Call this for the MC copies
+        """
+        self.road.np_random = np.random.RandomState(seed)
+        self.np_random = np.random.RandomState(seed)
+        self.action_space.seed(seed)
+        self.observation_space.seed(seed)
+
     def simulate_mc(self) -> tuple[Array, Array, Array]:
         """
         MonteCarlo simulation
@@ -365,11 +423,18 @@ class AVHighway(HighwayEnv):
         n_mc = self.config["n_montecarlo"]
         losses = np.zeros(n_mc)
         collisions = np.zeros_like(losses)
+        # We have to at least do one action sample before an MC loop
+        # otherwise, if the action sample isn't properly called in the world sim loop,
+        # the MC action sampling will always start from the same point
+        # self.action_space.sample()
+        # ..or mb its ok
 
         for i in range(n_mc):
             env = self.simplify()
-            # Randomize the ego vehicle
+            # Add randomness for different MC sims
+            env.reseed(int(self.np_random.integers(0, 1_000)))
             env.vehicle.randomize_behavior()
+
             for j in range(self.config["mc_horizon"]):
                 # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
                 action = env.action_space.sample()
@@ -393,11 +458,23 @@ class AVHighway(HighwayEnv):
 
         return losses, loss_log_probs, collisions
 
+    def action_sample(self):
+        """
+        Shorthand method for action sampling that can be called from async env
+        """
+        return self.action_space.sample()
+
+    def observation_sample(self):
+        """
+        Shorthand method for observation sampling that can be called from async env
+        """
+        return self.observation_space.sample()
+
 
 def register_av_highway():
     register(
         id=f"AVAgents/highway-v0",
         entry_point='sim.envs.highway:AVHighway',
-        # vector_entry_point="sim.envs.highway:AVHighwayVectorized",
+        # vector_entry_point="sim.envs.highway:AVHighway",
         # max_episode_steps=1000,  # Adjust the configuration as needed
     )

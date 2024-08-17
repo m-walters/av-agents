@@ -8,6 +8,8 @@ import pymc
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
+from sim.utils import JaxRKey
+
 # For typing -- It's often hard to say if an object is one or the other
 Array = Union[jnp.ndarray, np.ndarray]
 # Shortcut

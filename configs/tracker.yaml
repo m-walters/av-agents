@@ -1,0 +1,45 @@
+# Special hydra param, inherit defaults
+defaults:
+  - _self_
+
+# Overrides for the env config
+# See AVHighway for defaults
+env:
+  vehicles_count: 50
+  vehicles_density: 2
+  target_speed: &target_speed 50
+  speed_limit: 50
+  duration: 23
+  mc_horizon: 15
+  n_montecarlo: 10
+#  mc_period: 5
+#==============
+seed: 8675309
+world_draws: 1
+warmup_steps: 20  # included within the duration
+
+# Params for world sampling
+params:
+  - name: vehicles_density
+    sampler:
+      _target_: pymc.Uniform
+      _args_:
+        - vehicles_density
+        - 0.5
+        - 2.0
+  - name: duration  # Just for testing
+    fixed_value: 40
+
+policy:
+  model: "ProfitMaximizingPolicy"
+loss:
+  model: "LossModel"
+  alpha: 10
+  target_speed: *target_speed
+  beta: 1
+  scale: 0.1
+preference_prior:
+  model: "SoftmaxPreferencePrior"
+  kappa: 1.0
+risk:
+  model: "DifferentialEntropyRiskModel"
