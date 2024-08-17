@@ -160,7 +160,6 @@ def main(cfg: DictConfig):
         # actions = envs_wrapper.action_space.sample()  # Sample with extra dim of vectorized envs
         # actions = envs_wrapper.call("action_sample")  # Sample from each individually
         actions = [None] * world_draws
-        # obs = envs_wrapper.observation_type.observe()
 
         observations, rewards, terminated, truncated, infos = envs_wrapper.step(actions)
         ds["reward"][:, step] = rewards
