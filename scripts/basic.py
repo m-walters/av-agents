@@ -143,7 +143,7 @@ def main(cfg: DictConfig):
             if step >= warmup_steps:
                 # Run the montecarlo simulation, capturing the risks, losses
                 # Returned dimensions are [n_montecarlo]
-                losses, loss_log_probs, collisions, mc_rewards = uenv.simulate_mc()
+                losses, loss_log_probs, collisions = uenv.simulate_mc()
 
                 risk, entropy, energy = risk_model(losses, loss_log_probs)
 

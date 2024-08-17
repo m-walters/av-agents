@@ -221,12 +221,12 @@ class TrackerPlotter:
             sim_img.set_data(frames[0])
             return axs
 
-        def f_animate(i):
-            x = steps[:i + 1]
+        def f_animate(frame_idx):
+            x = steps[:frame_idx + 1]
             for j, ln in enumerate(lines):
-                ln.set_data(x, y_values[j][:i + 1])
+                ln.set_data(x, y_values[j][:frame_idx + 1])
 
-            sim_img.set_data(frames[i])
+            sim_img.set_data(frames[frame_idx])
             # sim_ax.imshow(frames[i], animated=True)
             return axs
 
