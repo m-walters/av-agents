@@ -1,12 +1,14 @@
 import numpy as np
 import xarray as xr
+import matplotlib.pyplot as plt
+import timeit
 
 from sim import plotting
 
 # Create the video with the saved frames and data
 # Load the data
 RESULTS_DIR = "../results"
-run_dir = RESULTS_DIR + "/latest"
+run_dir = RESULTS_DIR + "/hotshot-120"
 
 frames = np.load(f"{run_dir}/frames.npy")
 dataset = xr.open_dataset(f"{run_dir}/results.nc")
@@ -35,12 +37,18 @@ ds_label_map = {
 
 avplot = plotting.TrackerPlotter()
 
-avplot.create_animation(
-    f"{run_dir}/tracker.mp4",
-    dataset,
-    ds_label_map,
-    frames,
-    fps=10,
+# Also time the animation creation
+t = timeit.timeit(
+    lambda: avplot.create_animation(
+        f"{run_dir}/recordings/tracker.gif",
+        dataset,
+        ds_label_map,
+        frames,
+        fps=10,
+    ),
+    number=1,
+
 )
+print(f"Time to create animation: {t:.2f} s")
 
 # plt.show()

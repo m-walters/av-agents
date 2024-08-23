@@ -3,7 +3,7 @@ Similar to basic.py, but designed for a single run that also creates a video
 of the run, and a video of the evolution of the data during the sim.
 """
 import logging
-import os
+import os, shutil
 import random
 
 import gymnasium as gym
@@ -53,7 +53,18 @@ def main(cfg: DictConfig):
 
     # Results save dir
     latest_dir = RESULTS_DIR + "/latest"
-    os.makedirs(latest_dir, exist_ok=True)
+    if os.path.exists(latest_dir):
+        # Clear and write over the latest dir
+        for f in os.listdir(latest_dir):
+            file_path = os.path.join(latest_dir, f)
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+    else:
+        # Create dir
+        os.makedirs(latest_dir)
+
     OmegaConf.save(config=cfg, f=f"{latest_dir}/config.yaml")
 
     # If a name is provided, save there too
@@ -66,7 +77,7 @@ def main(cfg: DictConfig):
     # Initiate the pymc model and load the parameters
     params = []
     with pm.Model() as pm_model:
-        for p in cfg.params:
+        for p in cfg.get('params', []):
             params.append(sim_params.load_param(p))
 
         param_collection = sim_params.ParamCollection(params)
@@ -83,19 +94,19 @@ def main(cfg: DictConfig):
     ds = xr.Dataset(
         {
             # Rewards
-            "reward": (("world", "step"), np.zeros((world_draws, duration))),
-            "collision_reward": (("world", "step"), np.zeros((world_draws, duration))),
-            "speed_reward": (("world", "step"), np.zeros((world_draws, duration))),
-            "risk": (("world", "step"), np.zeros((world_draws, duration))),
-            "entropy": (("world", "step"), np.zeros((world_draws, duration))),
-            "energy": (("world", "step"), np.zeros((world_draws, duration))),
+            "reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "collision_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "speed_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "risk": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "entropy": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "energy": (("world", "step"), np.full((world_draws, duration), np.nan)),
             # Tracking the MC losses
-            "mc_loss": (("world", "step", "sample"), np.zeros((world_draws, duration, env_cfg['n_montecarlo']))),
-            "loss_mean": (("world", "step"), np.zeros((world_draws, duration))),
-            "loss_p5": (("world", "step"), np.zeros((world_draws, duration))),  # 5% percentile
-            "loss_p95": (("world", "step"), np.zeros((world_draws, duration))),  # 95% percentile
+            "mc_loss": (("world", "step", "sample"), np.full((world_draws, duration, env_cfg['n_montecarlo']), np.nan)),
+            "loss_mean": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "loss_p5": (("world", "step"), np.full((world_draws, duration), np.nan)),  # 5% percentile
+            "loss_p95": (("world", "step"), np.full((world_draws, duration), np.nan)),  # 95% percentile
             # Track if a collision occurred
-            "crashed": (("world", "step"), np.zeros((world_draws, duration))),
+            "crashed": (("world", "step"), np.full((world_draws, duration), np.nan)),
         },
         coords={
             "world": np.arange(world_draws),
@@ -118,7 +129,7 @@ def main(cfg: DictConfig):
     rkey = utils.JaxRKey(seed)
     obs, info = env.reset(seed=rkey.next_seed())
 
-    for step in tqdm(range(duration), desc=f"Steps"):
+    for step in tqdm(range(duration), desc="Steps"):
         if step >= warmup_steps:
             # Run the montecarlo simulation, capturing the risks, losses
             # Returned dimensions are [n_montecarlo]
@@ -178,7 +189,7 @@ def main(cfg: DictConfig):
     }
     plotter = plotting.TrackerPlotter()
     plotter.create_animation(
-        f"{latest_dir}/tracker.mp4",
+        f"{video_dir}/tracker.mp4",
         ds,
         ds_label_map,
         env.video_recorder.recorded_frames,

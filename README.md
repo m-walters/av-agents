@@ -1,6 +1,10 @@
 # av-agents
 
-Modelling stakeholder-agent risk response, in the context of autonomous vehicles.
+Modeling agentic autonomous vehicles and safety metrics under an Active Inference framework.
+
+
+![blah](media/hotshot-500-sample.gif)
+
 
 ## Setup
 

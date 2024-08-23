@@ -47,13 +47,14 @@ class AggressiveParams:
 class HotshotParams(AggressiveParams):
     """
     Based off the AggressiveVehicle params, but reckless
+    TODO -- f"MW Let's make these parameters variable from the config files, since these dictate policy
     """
     # Longitudinal policy parameters
     ACC_MAX = 10.0  # [m/s2]
     COMFORT_ACC_MAX = ACC_MAX  # [m/s2]
 
     DISTANCE_WANTED = 2.0 + ControlledVehicle.LENGTH  # [m]
-    TIME_WANTED = 0.1
+    TIME_WANTED = 0.3
 
     # Lateral policy parameters
     POLITENESS = 0.  # in [0, 1]
