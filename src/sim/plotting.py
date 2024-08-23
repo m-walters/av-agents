@@ -177,8 +177,6 @@ class TrackerPlotter:
         # fig, axs = self.subplots(nrow, 1)
         sim_ax, data_axes = axs[0], axs[1:]
         sim_ax.axis('off')
-        # Tighten height spacing
-        plt.subplots_adjust(hspace=0.1)
 
         steps = np.arange(0, nframe)
         # Make ticks nice
@@ -190,12 +188,8 @@ class TrackerPlotter:
             # Let's just make 20 marks
             xticks = np.linspace(0, nframe, 21, dtype=int)
 
-        data_axes[-1].set_xlabel("Step")
-        data_axes[-1].set_xticks(xticks)
-
-        # Share x axis with bottom plot
-        for ax in data_axes[:-1]:
-            ax.sharex(data_axes[-1])
+        # Tighten up
+        plt.subplots_adjust(hspace=0.1, bottom=0.05, right=0.95, top=0.98)
 
         # We initialize our plots to get limits etc.
         color = next(self.get_color_wheel())
@@ -219,11 +213,23 @@ class TrackerPlotter:
                 legend=False, label=None,
             )
 
-            data_axes[i].set_ylim(-1, 1)
+            # data_axes[i].set_ylim(-1.5, 1.5)
+            # data_axes[i].set_yticks(np.linspace(-1, 1, 3))
             data_axes[i].set_autoscaley_on(True)
 
             # Append the Line2D object
             lines.append(data_axes[i].lines[0])
+
+            # All have the tick lines
+            data_axes[i].set_xticks(xticks)
+
+            if i < len(y_labels) - 1:
+                # Remove x-label
+                data_axes[i].set_xticklabels([])
+                data_axes[i].set_xlabel('')
+            else:
+                # Set the final plot's label
+                data_axes[i].set_xlabel("Step")
 
         # Init the frames ax
         sim_img = sim_ax.imshow(frames[0])
