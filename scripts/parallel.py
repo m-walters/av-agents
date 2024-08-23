@@ -1,5 +1,5 @@
 import logging
-import os
+import os, shutil
 import random
 
 import gymnasium as gym
@@ -56,7 +56,18 @@ def main(cfg: DictConfig):
 
     # Results save dir
     latest_dir = RESULTS_DIR + "/latest"
-    os.makedirs(latest_dir, exist_ok=True)
+    if os.path.exists(latest_dir):
+        # Clear and write over the latest dir
+        for f in os.listdir(latest_dir):
+            file_path = os.path.join(latest_dir, f)
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+    else:
+        # Create dir
+        os.makedirs(latest_dir)
+
     OmegaConf.save(config=cfg, f=f"{latest_dir}/config.yaml")
 
     # If a name is provided, save there too
@@ -69,7 +80,7 @@ def main(cfg: DictConfig):
     # Initiate the pymc model and load the parameters
     params = []
     with pm.Model() as pm_model:
-        for p in cfg.params:
+        for p in cfg.get('params', []):
             params.append(sim_params.load_param(p))
 
         param_collection = sim_params.ParamCollection(params)

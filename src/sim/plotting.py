@@ -181,7 +181,15 @@ class TrackerPlotter:
         plt.subplots_adjust(hspace=0.1)
 
         steps = np.arange(0, nframe)
-        xticks = np.arange(0, nframe + 1, 5)
+        # Make ticks nice
+        if nframe < 20:
+            xticks = np.arange(0, nframe + 1)
+        elif nframe < 100:
+            xticks = np.arange(0, nframe + 1, 5)
+        else:
+            # Let's just make 20 marks
+            xticks = np.linspace(0, nframe, 21, dtype=int)
+
         data_axes[-1].set_xlabel("Step")
         data_axes[-1].set_xticks(xticks)
 
@@ -205,10 +213,15 @@ class TrackerPlotter:
             data = pivot.T
             world = 0  # We should only have one world
             y_values.append(data[world].to_numpy())
+            # Plot the whole line
             sns.lineplot(
                 x=steps, y=y_values[-1], color=color, ax=data_axes[i],
                 legend=False, label=None,
             )
+
+            data_axes[i].set_ylim(-1, 1)
+            data_axes[i].set_autoscaley_on(True)
+
             # Append the Line2D object
             lines.append(data_axes[i].lines[0])
 
@@ -225,6 +238,9 @@ class TrackerPlotter:
             x = steps[:frame_idx + 1]
             for j, ln in enumerate(lines):
                 ln.set_data(x, y_values[j][:frame_idx + 1])
+                # Re-lim y-axis
+                data_axes[j].relim()
+                data_axes[j].autoscale_view(scalex=False)
 
             sim_img.set_data(frames[frame_idx])
             # sim_ax.imshow(frames[i], animated=True)

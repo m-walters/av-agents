@@ -281,8 +281,9 @@ class AVHighway(HighwayEnv):
 
         # See our AV Project, "Vehicle Agent" section for derivation
         # TODO -- f"MW With 8675309 seed, we get collision penalties exceeding 500 with this scaling
+        # In IDMVehicle.act you can see acceleration getting clipped by [-ACC_MAX, ACC_MAX]
         # beta = 3 * self.ACC_MAX / 2
-        beta = 3 * self.ACC_MAX / 2 * 0.01
+        beta = 1 / (2 * self.ACC_MAX)
         logger.debug(f">> BETA: {beta}")
 
         n_nbr = 0
