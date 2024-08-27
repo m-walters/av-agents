@@ -400,15 +400,20 @@ class AVHighway(HighwayEnv):
 
         return state_copy
 
-    def reseed(self, seed):
+    @staticmethod
+    def seed_montecarlo(mc_env: "AVHighway", seed):
         """
-        Reseed this environment for RNG
-        Call this for the MC copies
+        Seed a montecarlo environment
         """
-        self.road.np_random = np.random.RandomState(seed)
-        self.np_random = np.random.RandomState(seed)
-        self.action_space.seed(seed)
-        self.observation_space.seed(seed)
+        mc_env.road.np_random = np.random.RandomState(seed)
+        mc_env.np_random = np.random.RandomState(seed)
+        mc_env.action_space.seed(seed)
+        mc_env.observation_space.seed(seed)
+        
+        # Randomize the behavior of all the alter vehicles on the road
+        for vehicle in mc_env.road.vehicles:
+            if vehicle is not mc_env.vehicle:
+                vehicle.randomize_behavior()
 
     def simulate_mc(self) -> tuple[Array, Array, Array]:
         """
@@ -422,6 +427,7 @@ class AVHighway(HighwayEnv):
         :return: Tuple of losses, loss_log_probs, collisions. Dimensions [n_mc]
         """
         n_mc = self.config["n_montecarlo"]
+        horizon = self.config["mc_horizon"]
         losses = np.zeros(n_mc)
         collisions = np.zeros_like(losses)
         # We have to at least do one action sample before an MC loop
@@ -430,13 +436,14 @@ class AVHighway(HighwayEnv):
         # self.action_space.sample()
         # ..or mb its ok
 
-        for i in range(n_mc):
+        # Very sensitive that these seeds are python integers...
+        seeds = [int(s) for s in self.np_random.integers(0, 1_000, size=n_mc)]
+        for i, i_seed in zip(range(n_mc), seeds):
             env = self.simplify()
             # Add randomness for different MC sims
-            env.reseed(int(self.np_random.integers(0, 1_000)))
-            env.vehicle.randomize_behavior()
+            self.seed_montecarlo(env, i_seed)
 
-            for j in range(self.config["mc_horizon"]):
+            for j in range(horizon):
                 # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
                 action = env.action_space.sample()
 
