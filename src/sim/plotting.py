@@ -184,9 +184,19 @@ class TrackerPlotter:
             xticks = np.arange(0, nframe + 1)
         elif nframe < 100:
             xticks = np.arange(0, nframe + 1, 5)
+        elif nframe <= 200:
+            # Round to nearest 10
+            r = 10 - nframe % 10
+            xticks = np.arange(0, nframe + r + 1, 10, dtype=int)
         else:
-            # Let's just make 20 marks
-            xticks = np.linspace(0, nframe, 21, dtype=int)
+            # Do at most 20 of some multiple of 10
+            size = nframe // 20
+            # We want our size to be the next multiple of 10
+            size = size + (-size%10)
+            # Remainder to final bin
+            r = size - nframe % size
+            # Tick to the next bin above nframe
+            xticks = np.arange(0, nframe + r + 1, size, dtype=int)
 
         # Tighten up
         plt.subplots_adjust(hspace=0.1, bottom=0.05, right=0.95, top=0.98)
@@ -222,6 +232,7 @@ class TrackerPlotter:
 
             # All have the tick lines
             data_axes[i].set_xticks(xticks)
+            data_axes[i].set_xlim(-0.95, nframe + 0.95)
 
             if i < len(y_labels) - 1:
                 # Remove x-label
