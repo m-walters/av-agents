@@ -139,30 +139,33 @@ def main(cfg: DictConfig):
     # For now, all configs are the same
     envs.call("update_config", env_cfg, reset=False)
     # Need separate seeds for each environment
-    rkey = utils.JaxRKey(seed)
-    seeds = [rkey.next_seed() for _ in range(world_draws)]
-
+    seeds = [seed] * world_draws
+    observations, infos = envs_wrapper.reset(seed=seeds)
+    
+    mc_seeds = [random.randint(0, 2**32 - 1) for _ in range(world_draws)]
     # Providing a single seed or a list of seeds both produce variable world inits
     # If you wanted duplicated worlds, provide a list of the same seed [seed]*world_draws
     observations, infos = envs_wrapper.reset(seed=seeds)
 
     for step in tqdm(range(duration), desc="Step"):
         if step >= warmup_steps:
+            envs.call("set_mc_seeds", mc_seeds)
             # Get our vectorized losses
             # Each item is a tuple of (losses, log_probs, collisions)
-            result = envs_wrapper.unwrapped.call("simulate_mc")
+            result = envs_wrapper.unwrapped.call("simulate_mc", n_sims=env_cfg['n_montecarlo'] // world_draws)
             # Unzip the results and create arrays, shape=[world_draws, n_montecarlo]
-            losses = np.array([r[0] for r in result])
-            log_probs = np.array([r[1] for r in result])
-
-            # Transpose input to let axis=0 be n_montecarlo
-            risk, entropy, energy = risk_model(losses.T, log_probs.T)
+            # Concatenating the main results instead of using separate arrays-
+            all_losses = np.concatenate([r[0] for r in result])
+            all_log_probs = np.concatenate([r[1] for r in result])
+        
+        # Apply the risk model
+        risk, entropy, energy = risk_model(all_losses, all_log_probs)
 
             # Record data
-            ds["mc_loss"][:, step, :] = losses
-            ds["loss_mean"][:, step] = np.mean(losses, axis=1)
-            ds["loss_p5"][:, step] = np.percentile(losses, 5, axis=1)
-            ds["loss_p95"][:, step] = np.percentile(losses, 95, axis=1)
+            ds["mc_loss"][:, step, :] = all_losses
+            ds["loss_mean"][:, step] = np.mean(all_losses, axis=1)
+            ds["loss_p5"][:, step] = np.percentile(all_losses, 5, axis=1)
+            ds["loss_p95"][:, step] = np.percentile(all_losses, 95, axis=1)
             ds["risk"][:, step] = risk
             ds["entropy"][:, step] = entropy
             ds["energy"][:, step] = energy
