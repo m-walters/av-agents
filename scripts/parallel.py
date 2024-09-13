@@ -182,6 +182,9 @@ def main(cfg: DictConfig):
     # Close
     envs_wrapper.close()
 
+    # Append an extra data array "real_loss" to our dataset that is the negative of reward
+    ds["real_loss"] = -ds["reward"]
+
     # Automatically save latest
     logger.info("Saving results")
     utils.Results.save_ds(ds, f"{latest_dir}/results.nc")

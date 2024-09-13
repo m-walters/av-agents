@@ -8,7 +8,7 @@ from sim import plotting
 # Create the video with the saved frames and data
 # Load the data
 RESULTS_DIR = "../results"
-run_dir = RESULTS_DIR + "/kappa-10"
+run_dir = RESULTS_DIR + "/expon-lrg"
 
 frames = np.load(f"{run_dir}/frames.npy")
 dataset = xr.open_dataset(f"{run_dir}/results.nc")
@@ -16,7 +16,8 @@ dataset = xr.open_dataset(f"{run_dir}/results.nc")
 ds_label_map = {
     "R_Coll": "collision_reward",
     "R_Spd": "speed_reward",
-    "Loss": "loss_mean",
+    "Actual Loss": "real_loss",
+    "Future Loss": "loss_mean",
     "Energy": "energy",
     "Entropy": "entropy",
     "Risk": "risk",

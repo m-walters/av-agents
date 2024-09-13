@@ -109,8 +109,8 @@ def main(cfg: DictConfig):
     uenv: "AVHighway" = env.unwrapped
     uenv.update_config(env_cfg, reset=False)
 
-    preference_prior = models.SoftmaxPreferencePrior(kappa=1.0)
-    risk_model = models.DifferentialEntropyRiskModel(preference_prior=preference_prior)
+    preference_prior = getattr(models, cfg.preference_prior.model)(**cfg.preference_prior, seed=cfg.seed)
+    risk_model = getattr(models, cfg.risk.model)(preference_prior=preference_prior, **cfg.risk, seed=cfg.seed)
 
     # Create an xarray Dataset
     duration = env_cfg['duration']
@@ -182,6 +182,9 @@ def main(cfg: DictConfig):
     if record:
         env.render()
         env.close()
+
+    # Append an extra data array "real_loss" to our dataset that is the negative of reward
+    ds["real_loss"] = -ds["reward"]
 
     # Automatically save latest
     logger.info("Saving results")

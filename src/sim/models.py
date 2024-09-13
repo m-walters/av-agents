@@ -164,7 +164,7 @@ class ExponentialPreferencePrior(PreferencePrior):
     def __init__(
         self,
         p_star: Number,
-        l_star: Union[ParamIterator, ParamIteratorConfig],
+        l_star: Union[ParamIterator, ParamIteratorConfig, Number],
         *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
