@@ -17,9 +17,9 @@ ds_label_map = {
     "R_Coll": "collision_reward",
     "R_Spd": "speed_reward",
     "Actual Loss": "real_loss",
-    "Future Loss": "loss_mean",
-    "Energy": "energy",
-    "Entropy": "entropy",
+    "E[Loss]": "loss_mean",
+    "E[Energy]": "energy",
+    "E[Entropy]": "entropy",
     "Risk": "risk",
 }
 

@@ -185,9 +185,10 @@ def main(cfg: DictConfig):
     ds_label_map = {
         "R_Coll": "collision_reward",
         "R_Spd": "speed_reward",
-        "Loss (Actual)": "real_loss",
-        "Energy": "energy",
-        "Entropy": "entropy",
+        "Actual Loss": "real_loss",
+        "E[Loss]": "loss_mean",
+        "E[Energy]": "energy",
+        "E[Entropy]": "entropy",
         "Risk": "risk",
     }
     plotter = plotting.TrackerPlotter()
