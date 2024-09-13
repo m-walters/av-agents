@@ -100,7 +100,7 @@ def main(cfg: DictConfig):
             "risk": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "entropy": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "energy": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            # Tracking the MC losses
+            # Tracking the MC losses -- These are predicted losses
             "mc_loss": (("world", "step", "sample"), np.full((world_draws, duration, env_cfg['n_montecarlo']), np.nan)),
             "loss_mean": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "loss_p5": (("world", "step"), np.full((world_draws, duration), np.nan)),  # 5% percentile
@@ -167,6 +167,9 @@ def main(cfg: DictConfig):
     # Conclude the video
     env.close()
 
+    # Append an extra data array "real_loss" to our dataset that is the negative of reward
+    ds["real_loss"] = -ds["reward"]
+
     # Automatically save latest
     logger.info("Saving results")
     utils.Results.save_ds(ds, f"{latest_dir}/results.nc")
@@ -180,11 +183,12 @@ def main(cfg: DictConfig):
 
     # Create the video with the saved frames and data
     ds_label_map = {
-        "Loss": "loss_mean",
         "R_Coll": "collision_reward",
         "R_Spd": "speed_reward",
-        "Energy": "energy",
-        "Entropy": "entropy",
+        "Actual Loss": "real_loss",
+        "E[Loss]": "loss_mean",
+        "E[Energy]": "energy",
+        "E[Entropy]": "entropy",
         "Risk": "risk",
     }
     plotter = plotting.TrackerPlotter()

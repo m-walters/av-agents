@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 from omegaconf import DictConfig
 from scipy.stats import differential_entropy as entr
+from scipy.special import logsumexp
 
 from sim.params import ParamCollection
 from sim.utils import (
@@ -148,7 +149,8 @@ class SoftmaxPreferencePrior(PreferencePrior):
         Input and return shape: [m, world_draws] for m montecarlo samples
         """
         if take_log:
-            return -self.kappa * Lt - jnp.log(jnp.sum(jnp.exp(-self.kappa * Lt), axis=0))
+            # Get fancy with scipy
+            return -self.kappa * Lt - logsumexp(-self.kappa * Lt, axis=0)
         else:
             return jnp.exp(-self.kappa * Lt) / jnp.sum(jnp.exp(-self.kappa * Lt), axis=0)
 
@@ -162,7 +164,7 @@ class ExponentialPreferencePrior(PreferencePrior):
     def __init__(
         self,
         p_star: Number,
-        l_star: Union[ParamIterator, ParamIteratorConfig],
+        l_star: Union[ParamIterator, ParamIteratorConfig, Number],
         *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
