@@ -75,9 +75,9 @@ class AVHighway(HighwayEnv):
             "target_speed": 40,
             "simulation_frequency": 15,  # frames per second
             "policy_frequency": 5,  # policy checks per second (and how many 'steps' per second)
+            "n_montecarlo": 10,
             # MonteCarlo horizon; Note that a given step is sim_freq // policy_freq frames (see self._simulate)
             "mc_horizon": 5,
-            "n_montecarlo": 10,
             "alpha": 10.,
             "beta": 0.25,
         }
