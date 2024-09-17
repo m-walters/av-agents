@@ -1,14 +1,14 @@
+import timeit
+
 import numpy as np
 import xarray as xr
-import matplotlib.pyplot as plt
-import timeit
 
 from sim import plotting
 
 # Create the video with the saved frames and data
 # Load the data
 RESULTS_DIR = "../results"
-run_dir = RESULTS_DIR + "/expon-lrg"
+run_dir = RESULTS_DIR + "/mc-10period"
 
 frames = np.load(f"{run_dir}/frames.npy")
 dataset = xr.open_dataset(f"{run_dir}/results.nc")
@@ -41,7 +41,7 @@ avplot = plotting.TrackerPlotter()
 # Also time the animation creation
 t = timeit.timeit(
     lambda: avplot.create_animation(
-        f"{run_dir}/recordings/tracker.mp4",
+        f"{run_dir}/tracker.mp4",
         dataset,
         ds_label_map,
         frames,

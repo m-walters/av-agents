@@ -3,8 +3,9 @@ Similar to basic.py, but designed for a single run that also creates a video
 of the run, and a video of the evolution of the data during the sim.
 """
 import logging
-import os, shutil
+import os
 import random
+import shutil
 
 import gymnasium as gym
 import hydra
@@ -91,26 +92,34 @@ def main(cfg: DictConfig):
     world_draws = int(cfg.world_draws)
     warmup_steps = cfg.get("warmup_steps", 0)
 
+    # Monte Carlo logistics
+    mc_period = env_cfg.get("mc_period", 5)
+    num_mc_sweeps = (duration - warmup_steps) // mc_period
+    mc_steps = np.arange(warmup_steps, duration, mc_period)
+
     ds = xr.Dataset(
         {
+            ### Data recorded every world step
             # Rewards
             "reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "collision_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "speed_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            "risk": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            "entropy": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            "energy": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            # Tracking the MC losses -- These are predicted losses
-            "mc_loss": (("world", "step", "sample"), np.full((world_draws, duration, env_cfg['n_montecarlo']), np.nan)),
-            "loss_mean": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            "loss_p5": (("world", "step"), np.full((world_draws, duration), np.nan)),  # 5% percentile
-            "loss_p95": (("world", "step"), np.full((world_draws, duration), np.nan)),  # 95% percentile
-            # Track if a collision occurred
             "crashed": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            ### Data recorded from MC Sweeps
+            "risk": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            "entropy": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            "energy": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            # Tracking the MC losses -- These are predicted losses
+            "mc_loss": (
+            ("world", "mc_step", "sample"), np.full((world_draws, num_mc_sweeps, env_cfg['n_montecarlo']), np.nan)),
+            "loss_mean": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            "loss_p5": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),  # 5% percentile
+            "loss_p95": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),  # 95% percentile
         },
         coords={
             "world": np.arange(world_draws),
             "step": np.arange(duration),
+            "mc_step": mc_steps,
             "sample": np.arange(env_cfg['n_montecarlo']),
         },
     )
@@ -128,23 +137,27 @@ def main(cfg: DictConfig):
     # Run a world simulation
     rkey = utils.JaxRKey(seed)
     obs, info = env.reset(seed=rkey.next_seed())
+    i_mc = 0  # Tracking MC steps
 
     for step in tqdm(range(duration), desc="Steps"):
         if step >= warmup_steps:
-            # Run the montecarlo simulation, capturing the risks, losses
-            # Returned dimensions are [n_montecarlo]
-            losses, loss_log_probs, collisions = uenv.simulate_mc()
+            if step % mc_period == 0:
+                # Run the montecarlo simulation, capturing the risks, losses
+                # Returned dimensions are [n_montecarlo]
+                losses, loss_log_probs, collisions = uenv.simulate_mc()
 
-            risk, entropy, energy = risk_model(losses, loss_log_probs)
+                risk, entropy, energy = risk_model(losses, loss_log_probs)
 
-            # Record data
-            ds["mc_loss"][0, step, :] = losses
-            ds["loss_mean"][0, step] = np.mean(losses)
-            ds["loss_p5"][0, step] = np.percentile(losses, 5)
-            ds["loss_p95"][0, step] = np.percentile(losses, 95)
-            ds["risk"][0, step] = risk
-            ds["entropy"][0, step] = entropy
-            ds["energy"][0, step] = energy
+                # Record data
+                ds["mc_loss"][0, i_mc, :] = losses
+                ds["loss_mean"][0, i_mc] = np.mean(losses)
+                ds["loss_p5"][0, i_mc] = np.percentile(losses, 5)
+                ds["loss_p95"][0, i_mc] = np.percentile(losses, 95)
+                ds["risk"][0, i_mc] = risk
+                ds["entropy"][0, i_mc] = entropy
+                ds["energy"][0, i_mc] = energy
+
+                i_mc += 1
 
         # We do action after MC sim in case it informs actions
         # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
@@ -193,7 +206,7 @@ def main(cfg: DictConfig):
     }
     plotter = plotting.TrackerPlotter()
     plotter.create_animation(
-        f"{video_dir}/tracker.mp4",
+        f"{run_dir}/tracker.mp4",
         ds,
         ds_label_map,
         env.video_recorder.recorded_frames,

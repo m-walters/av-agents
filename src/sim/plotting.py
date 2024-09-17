@@ -172,13 +172,18 @@ class TrackerPlotter:
         nframe = len(frames)
         nrow = len(ds_label_map) + 1
         y_labels = list(ds_label_map)
+        try:
+            mc_steps = ds.coords['mc_step'].values
+        except AttributeError:
+            # Older data may not have the mc-steps
+            mc_steps = np.arange(0, nframe)
 
         fig, axs = self.subplots(nrow, 1, figsize=(6.4, nrow * 1.6))
         # fig, axs = self.subplots(nrow, 1)
         sim_ax, data_axes = axs[0], axs[1:]
         sim_ax.axis('off')
 
-        steps = np.arange(0, nframe)
+        steps = ds.coords['step'].values
         # Make ticks nice
         if nframe < 20:
             xticks = np.arange(0, nframe + 1)
@@ -192,7 +197,7 @@ class TrackerPlotter:
             # Do at most 20 of some multiple of 10
             size = nframe // 20
             # We want our size to be the next multiple of 10
-            size = size + (-size%10)
+            size = size + (-size % 10)
             # Remainder to final bin
             r = size - nframe % size
             # Tick to the next bin above nframe
@@ -205,6 +210,8 @@ class TrackerPlotter:
         color = next(self.get_color_wheel())
         lines = []  # Line2D objects
         y_values = []
+        x_values = []
+        mc_axes = []  # Mask for MC graphs
 
         for i, label in enumerate(y_labels):
             data_axes[i].set_ylabel(label)
@@ -217,9 +224,18 @@ class TrackerPlotter:
             data = pivot.T
             world = 0  # We should only have one world
             y_values.append(data[world].to_numpy())
+
+            # Some plots use world steps, others mc-steps
+            if 'mc_step' in ds[var].dims:
+                mc_axes.append(True)
+                x_values.append(mc_steps.copy())
+            else:
+                mc_axes.append(False)
+                x_values.append(steps.copy())
+
             # Plot the whole line
             sns.lineplot(
-                x=steps, y=y_values[-1], color=color, ax=data_axes[i],
+                x=x_values[-1], y=y_values[-1], color=color, ax=data_axes[i],
                 legend=False, label=None,
             )
 
@@ -252,12 +268,26 @@ class TrackerPlotter:
             return axs
 
         def f_animate(frame_idx):
-            x = steps[:frame_idx + 1]
+            i_step = steps[frame_idx]
+            world_xs = steps[:frame_idx + 1]
+            do_mc = i_step in mc_steps
+            if do_mc:
+                # Get mc xs
+                i_mc = np.argwhere(mc_steps == i_step).flatten()[0]
+                mc_xs = mc_steps[:i_mc + 1]
+
             for j, ln in enumerate(lines):
-                ln.set_data(x, y_values[j][:frame_idx + 1])
-                # Re-lim y-axis
-                data_axes[j].relim()
-                data_axes[j].autoscale_view(scalex=False)
+                ax_is_mc = mc_axes[j]
+                if ax_is_mc and do_mc:
+                    ln.set_data(mc_xs, y_values[j][:i_mc + 1])
+                    # Re-lim y-axis
+                    data_axes[j].relim()
+                    data_axes[j].autoscale_view(scalex=False)
+                elif not ax_is_mc:
+                    ln.set_data(world_xs, y_values[j][:frame_idx + 1])
+                    # Re-lim y-axis
+                    data_axes[j].relim()
+                    data_axes[j].autoscale_view(scalex=False)
 
             sim_img.set_data(frames[frame_idx])
             # sim_ax.imshow(frames[i], animated=True)

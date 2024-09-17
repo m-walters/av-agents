@@ -117,27 +117,41 @@ def main(cfg: DictConfig):
     world_draws = cfg.world_draws
     warmup_steps = cfg.get("warmup_steps", 0)
 
+    # Monte Carlo logistics
+    mc_period = env_cfg.get("mc_period", 5)
+    num_mc_sweeps = (duration - warmup_steps) // mc_period
+    mc_steps = np.arange(warmup_steps, duration, mc_period)
+
     ds = xr.Dataset(
         {
-            "reward": (("world", "step"), np.zeros((world_draws, duration))),
-            "risk": (("world", "step"), np.zeros((world_draws, duration))),
-            "entropy": (("world", "step"), np.zeros((world_draws, duration))),
-            "energy": (("world", "step"), np.zeros((world_draws, duration))),
-            # Tracking the MC losses
-            "mc_loss": (("world", "step", "sample"), np.zeros((world_draws, duration, env_cfg['n_montecarlo']))),
-            "loss_mean": (("world", "step"), np.zeros((world_draws, duration))),
-            "loss_p5": (("world", "step"), np.zeros((world_draws, duration))),  # 5% percentile
-            "loss_p95": (("world", "step"), np.zeros((world_draws, duration))),  # 95% percentile
+            ### Data recorded every world step
+            # Rewards
+            "reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "collision_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "speed_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "crashed": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            ### Data recorded from MC Sweeps
+            "risk": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            "entropy": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            "energy": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            # Tracking the MC losses -- These are predicted losses
+            "mc_loss": (
+            ("world", "mc_step", "sample"), np.full((world_draws, num_mc_sweeps, env_cfg['n_montecarlo']), np.nan)),
+            "loss_mean": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            "loss_p5": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),  # 5% percentile
+            "loss_p95": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),  # 95% percentile
         },
         coords={
             "world": np.arange(world_draws),
             "step": np.arange(duration),
+            "mc_step": mc_steps,
             "sample": np.arange(env_cfg['n_montecarlo']),
         },
     )
 
     # We have to get seeds based on global seed
     rkey = utils.JaxRKey(seed)
+    i_mc = 0
 
     for wdraw in range(cfg.world_draws):
         # obs, info = env.reset(seed=seed)
@@ -151,20 +165,21 @@ def main(cfg: DictConfig):
             # coll_reward = env.unwrapped.collision_reward()
 
             if step >= warmup_steps:
-                # Run the montecarlo simulation, capturing the risks, losses
-                # Returned dimensions are [n_montecarlo]
-                losses, loss_log_probs, collisions = uenv.simulate_mc()
-
-                risk, entropy, energy = risk_model(losses, loss_log_probs)
-
-                # Record data
-                ds["mc_loss"][wdraw, step, :] = losses
-                ds["loss_mean"][wdraw, step] = np.mean(losses)
-                ds["loss_p5"][wdraw, step] = np.percentile(losses, 5)
-                ds["loss_p95"][wdraw, step] = np.percentile(losses, 95)
-                ds["risk"][wdraw, step] = risk
-                ds["entropy"][wdraw, step] = entropy
-                ds["energy"][wdraw, step] = energy
+                if step % mc_period == 0:
+                    # Run the montecarlo simulation, capturing the risks, losses
+                    # Returned dimensions are [n_montecarlo]
+                    losses, loss_log_probs, collisions = uenv.simulate_mc()
+    
+                    risk, entropy, energy = risk_model(losses, loss_log_probs)
+    
+                    # Record data
+                    ds["mc_loss"][wdraw, i_mc, :] = losses
+                    ds["loss_mean"][wdraw, i_mc] = np.mean(losses)
+                    ds["loss_p5"][wdraw, i_mc] = np.percentile(losses, 5)
+                    ds["loss_p95"][wdraw, i_mc] = np.percentile(losses, 95)
+                    ds["risk"][wdraw, i_mc] = risk
+                    ds["entropy"][wdraw, i_mc] = entropy
+                    ds["energy"][wdraw, i_mc] = energy
 
             # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
             action = env.action_space.sample()
@@ -172,6 +187,8 @@ def main(cfg: DictConfig):
 
             obs, reward, terminated, truncated, info = env.step(action)
             ds["reward"][wdraw, step] = reward
+            ds["collision_reward"][wdraw, step] = info["rewards"]["collision_reward"]
+            ds["speed_reward"][wdraw, step] = info["rewards"]["speed_reward"]
 
             logger.debug(f"REWARD: {reward}")
             if terminated or truncated:

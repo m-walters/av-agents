@@ -94,25 +94,34 @@ def main(cfg: DictConfig):
     world_draws = cfg.world_draws
     warmup_steps = cfg.get("warmup_steps", 0)
 
+    # Monte Carlo logistics
+    mc_period = env_cfg.get("mc_period", 5)
+    num_mc_sweeps = (duration - warmup_steps) // mc_period
+    mc_steps = np.arange(warmup_steps, duration, mc_period)
+
     ds = xr.Dataset(
         {
-            "reward": (("world", "step"), np.zeros((world_draws, duration))),
-            "collision_reward": (("world", "step"), np.zeros((world_draws, duration))),
-            "speed_reward": (("world", "step"), np.zeros((world_draws, duration))),
-            "risk": (("world", "step"), np.zeros((world_draws, duration))),
-            "entropy": (("world", "step"), np.zeros((world_draws, duration))),
-            "energy": (("world", "step"), np.zeros((world_draws, duration))),
-            # Tracking the MC losses
-            "mc_loss": (("world", "step", "sample"), np.zeros((world_draws, duration, env_cfg['n_montecarlo']))),
-            "loss_mean": (("world", "step"), np.zeros((world_draws, duration))),
-            "loss_p5": (("world", "step"), np.zeros((world_draws, duration))),  # 5% percentile
-            "loss_p95": (("world", "step"), np.zeros((world_draws, duration))),  # 95% percentile
-            # Track if a collision occurred
-            "crashed": (("world", "step"), np.zeros((world_draws, duration))),
+            ### Data recorded every world step
+            # Rewards
+            "reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "collision_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "speed_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "crashed": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            ### Data recorded from MC Sweeps
+            "risk": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            "entropy": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            "energy": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            # Tracking the MC losses -- These are predicted losses
+            "mc_loss": (
+            ("world", "mc_step", "sample"), np.full((world_draws, num_mc_sweeps, env_cfg['n_montecarlo']), np.nan)),
+            "loss_mean": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
+            "loss_p5": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),  # 5% percentile
+            "loss_p95": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),  # 95% percentile
         },
         coords={
             "world": np.arange(world_draws),
             "step": np.arange(duration),
+            "mc_step": mc_steps,
             "sample": np.arange(env_cfg['n_montecarlo']),
         },
     )
@@ -141,6 +150,7 @@ def main(cfg: DictConfig):
     # Need separate seeds for each environment
     rkey = utils.JaxRKey(seed)
     seeds = [rkey.next_seed() for _ in range(world_draws)]
+    i_mc = 0
 
     # Providing a single seed or a list of seeds both produce variable world inits
     # If you wanted duplicated worlds, provide a list of the same seed [seed]*world_draws
@@ -148,24 +158,27 @@ def main(cfg: DictConfig):
 
     for step in tqdm(range(duration), desc="Step"):
         if step >= warmup_steps:
-            # Get our vectorized losses
-            # Each item is a tuple of (losses, log_probs, collisions)
-            result = envs_wrapper.unwrapped.call("simulate_mc")
-            # Unzip the results and create arrays, shape=[world_draws, n_montecarlo]
-            losses = np.array([r[0] for r in result])
-            log_probs = np.array([r[1] for r in result])
-
-            # Transpose input to let axis=0 be n_montecarlo
-            risk, entropy, energy = risk_model(losses.T, log_probs.T)
-
-            # Record data
-            ds["mc_loss"][:, step, :] = losses
-            ds["loss_mean"][:, step] = np.mean(losses, axis=1)
-            ds["loss_p5"][:, step] = np.percentile(losses, 5, axis=1)
-            ds["loss_p95"][:, step] = np.percentile(losses, 95, axis=1)
-            ds["risk"][:, step] = risk
-            ds["entropy"][:, step] = entropy
-            ds["energy"][:, step] = energy
+            if step % mc_period == 0:
+                # Get our vectorized losses
+                # Each item is a tuple of (losses, log_probs, collisions)
+                result = envs_wrapper.unwrapped.call("simulate_mc")
+                # Unzip the results and create arrays, shape=[world_draws, n_montecarlo]
+                losses = np.array([r[0] for r in result])
+                log_probs = np.array([r[1] for r in result])
+    
+                # Transpose input to let axis=0 be n_montecarlo
+                risk, entropy, energy = risk_model(losses.T, log_probs.T)
+    
+                # Record data
+                ds["mc_loss"][:, i_mc, :] = losses
+                ds["loss_mean"][:, i_mc] = np.mean(losses, axis=1)
+                ds["loss_p5"][:, i_mc] = np.percentile(losses, 5, axis=1)
+                ds["loss_p95"][:, i_mc] = np.percentile(losses, 95, axis=1)
+                ds["risk"][:, i_mc] = risk
+                ds["entropy"][:, i_mc] = entropy
+                ds["energy"][:, i_mc] = energy
+                
+                i_mc += 1
 
         # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
         # actions = envs_wrapper.action_space.sample()  # Sample with extra dim of vectorized envs
