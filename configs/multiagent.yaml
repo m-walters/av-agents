@@ -1,0 +1,29 @@
+# Special hydra param, inherit defaults
+defaults:
+  - _self_
+
+# Overrides for the env config
+# See AVHighway for defaults
+highway_env:
+  controlled_vehicles: 2  # Number of ego vehicles
+  vehicles_count: 20  # Number of alters
+  vehicles_density: 2
+  target_speed: 40
+  speed_limit: 40
+  mc_horizon: 3
+  n_montecarlo: 5
+  duration: 16
+#  mc_period: 5
+#==============
+name: tmp
+seed: 867
+world_draws: 2
+warmup_steps: 10  # included within the duration
+mc_period: 2  # real-world steps between MC issuances
+
+preference_prior:
+  model: "ExponentialPreferencePrior"
+  p_star: 0.5
+  l_star: 0.1
+risk:
+  model: "DifferentialEntropyRiskModel"
