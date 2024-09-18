@@ -1,3 +1,6 @@
+"""
+Intersection environment
+"""
 import copy
 import logging
 from typing import Dict, Optional, Text, Tuple
@@ -7,7 +10,7 @@ from gymnasium.envs.registration import register
 from gymnasium.utils import seeding
 from highway_env import utils
 from highway_env.envs.common.action import Action
-from highway_env.envs.highway_env import HighwayEnv
+from highway_env.envs.intersection_env import IntersectionEnv
 from highway_env.road.road import RoadNetwork
 from omegaconf import DictConfig
 
@@ -20,13 +23,20 @@ logger = logging.getLogger("av-sim")
 Observation = np.ndarray
 
 
-class AVHighway(HighwayEnv):
+class AVIntersection(IntersectionEnv):
     """
-    Override the HighwayEnv class for our purposes
+    Override the IntersectionEnv class for our purposes
     """
     ACC_MAX = Vehicle.ACC_MAX
     VEHICLE_MAX_SPEED = Vehicle.MAX_SPEED
     PERCEPTION_DISTANCE = 5 * Vehicle.MAX_SPEED
+
+    ACTIONS: Dict[int, str] = {
+        0: 'SLOWER',
+        1: 'IDLE',
+        2: 'FASTER'
+    }
+    ACTIONS_INDEXES = {v: k for k, v in ACTIONS.items()}
 
     def __init__(self, config: dict = None, render_mode: Optional[str] = None) -> None:
         super().__init__(config, render_mode)
@@ -34,33 +44,43 @@ class AVHighway(HighwayEnv):
     @classmethod
     def default_config(cls) -> dict:
         config = super().default_config()
-        config.update(
-            {
-                "observation": {
-                    "type": "Kinematics"
+        config.update({
+            "observation": {
+                "type": "Kinematics",
+                "vehicles_count": 15,
+                "features": ["presence", "x", "y", "vx", "vy", "cos_h", "sin_h"],
+                "features_range": {
+                    "x": [-100, 100],
+                    "y": [-100, 100],
+                    "vx": [-20, 20],
+                    "vy": [-20, 20],
                 },
-                "action": {
-                    "type": "ContinuousAction",
-                },
-                "other_vehicles_type": "highway_env.vehicle.behavior.IDMVehicle",
-                "lanes_count": 4,
-                "vehicles_count": 50,
-                "controlled_vehicles": 1,
-                "initial_lane_id": None,
-                "duration": 40,  # [s]
-                "ego_spacing": 2,
-                "vehicles_density": 1,
-                "collision_reward": -1,  # The reward received when colliding with a vehicle.
-                # The reward received when driving on the right-most lanes, linearly mapped to
-                # zero for other lanes.
-                "right_lane_reward": 0.1,
-                # lower speeds according to config["reward_speed_range"].
-                "lane_change_reward": 0,  # The reward received at each lane change action.
-                "normalize_reward": True,
-                "offroad_terminal": False,
-                "speed_limit": 30
-            }
-        )
+                "absolute": True,
+                "flatten": False,
+                "observe_intentions": False
+            },
+            "action": {
+                "type": "DiscreteMetaAction",
+                "longitudinal": True,
+                "lateral": False,
+                "target_speeds": [0, 4.5, 9]
+            },
+            "duration": 13,  # [s]
+            "destination": "o1",
+            "controlled_vehicles": 1,
+            "initial_vehicle_count": 10,
+            "spawn_probability": 0.6,
+            "screen_width": 600,
+            "screen_height": 600,
+            "centering_position": [0.5, 0.6],
+            "scaling": 5.5 * 1.3,
+            "collision_reward": -5,
+            "high_speed_reward": 1,
+            "arrived_reward": 1,
+            "reward_speed_range": [7.0, 9.0],
+            "normalize_reward": False,
+            "offroad_terminal": False
+        })
         # Update with our homebrew config defaults
         config.update(cls.av_default_config())
 
@@ -72,6 +92,7 @@ class AVHighway(HighwayEnv):
         Our custom config params used in this class
         """
         return {
+            "show_trajectories": False,
             "target_speed": 40,
             "simulation_frequency": 15,  # frames per second
             "policy_frequency": 5,  # policy checks per second (and how many 'steps' per second)

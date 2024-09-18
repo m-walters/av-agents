@@ -19,7 +19,7 @@ from sim import models, plotting, run, utils
 from sim.envs.highway import AVHighway
 
 # Name of file in configs, set this to your liking
-DEFAULT_CONFIG = "tmp"
+DEFAULT_CONFIG = "multiagent"
 
 RESULTS_DIR = "../results"
 
@@ -35,9 +35,6 @@ def main(cfg: DictConfig):
     seed = run_params['seed']
     env_cfg = cfg.highway_env
     latest_dir = f"{RESULTS_DIR}/latest"
-
-    if cfg.world_draws > 1:
-        raise ValueError("world_draws > 1 not allowed for tracker.py")
 
     # Initiate the pymc model and load the parameters
     params = []
@@ -56,11 +53,15 @@ def main(cfg: DictConfig):
     video_dir = f"{latest_dir}/recordings"
     video_prefix = "sim"
     env = RecordVideo(
-        gym.make('AVAgents/highway-v0', render_mode=render_mode), video_dir, name_prefix=video_prefix
+        gym.make(
+            'AVAgents/highway-v0',
+            render_mode=render_mode,
+            # config=env_cfg,
+        ), video_dir, name_prefix=video_prefix
     )
 
     uenv: "AVHighway" = env.unwrapped
-    uenv.update_config(env_cfg, reset=False)
+    uenv.update_config(env_cfg, reset=True)
 
     # Run a world simulation
     rkey = utils.JaxRKey(seed)
@@ -90,7 +91,10 @@ def main(cfg: DictConfig):
         # We do action after MC sim in case it informs actions
         # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
         action = env.action_space.sample()
+        print(f"MW ACTION SAMP -- {action}")
         obs, reward, terminated, truncated, info = env.step(action)
+
+        print(f"MW DEBUG -- REWARD {reward}\nINFO {info}")
 
         # Record the actuals
         ds["reward"][0, step] = reward
