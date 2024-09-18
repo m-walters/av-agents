@@ -1,83 +1,36 @@
 import logging
-import os, shutil
-import random
+import os
+import shutil
 
 import gymnasium as gym
 import hydra
 import numpy as np
 import pymc as pm
-import xarray as xr
 from gymnasium.wrappers import RecordVideo
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 from tqdm import tqdm
 
 import sim.params as sim_params
-from sim import models, utils
+from sim import models, run, utils
 from sim.envs.highway import AVHighway
+
+# Name of file in configs, set this to your liking
+DEFAULT_CONFIG = "tmp"
 
 RESULTS_DIR = "../results"
 
 logger = logging.getLogger("av-sim")
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="highway")
+@hydra.main(version_base=None, config_path="../configs", config_name=DEFAULT_CONFIG)
 def main(cfg: DictConfig):
     """
     Set the parameters and run the sim
     """
-    log_level = cfg.get("log_level", "INFO")
-    # Get logger *after* setting the level
-    if log_level == "DEBUG":
-        logger.setLevel(logging.DEBUG)
-    elif log_level == "INFO":
-        logger.setLevel(logging.INFO)
-    elif log_level == "WARNING":
-        logger.setLevel(logging.WARNING)
-
-    # Print our config
-    logger.debug(f"CONFIG\n{OmegaConf.to_yaml(cfg)}")
-
-    # Get and validate the highway-env environment config
-    # env_cfg = OmegaConf.to_container(cfg.env, resolve=True)
-    # Order is first the class defaults
-    # overrides = AVHighway.av_default_config()
-    # then the yaml overrides
-    if cfg.get("env_overrides", None):
-        # DEPRECATED
-        overrides = OmegaConf.to_container(cfg.get("env_overrides", {}), resolve=True)
-        OmegaConf.set_struct(cfg, False)
-        cfg.env.update(overrides)
-        OmegaConf.set_struct(cfg, True)
-        # overrides.update(env_overrides)
-
-    env_cfg = cfg.env = utils.validate_env_config(cfg.env)
-
-    # Seed RNG
-    seed = cfg.get("seed", 8675309)
-    np.random.seed(seed)
-    random.seed(seed)
-
-    latest_dir = RESULTS_DIR + "/latest"
-    if os.path.exists(latest_dir):
-        # Clear and write over the latest dir
-        for f in os.listdir(latest_dir):
-            file_path = os.path.join(latest_dir, f)
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.unlink(file_path)
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)
-    else:
-        # Create dir
-        os.makedirs(latest_dir)
-
-    OmegaConf.save(config=cfg, f=f"{latest_dir}/config.yaml")
-
-    # If a name is provided, save there too
-    if "name" in cfg:
-        save_dir: str = cfg.get("save_dir", RESULTS_DIR)
-        run_dir: str = os.path.join(save_dir, cfg.name)
-        os.makedirs(run_dir, exist_ok=True)
-        OmegaConf.save(config=cfg, f=f"{run_dir}/config.yaml")
+    cfg, run_params, ds = run.init(cfg)
+    seed = run_params['seed']
+    env_cfg = cfg.highway_env
+    latest_dir = f"{RESULTS_DIR}/latest"
 
     # Initiate the pymc model and load the parameters
     params = []
@@ -112,66 +65,29 @@ def main(cfg: DictConfig):
     preference_prior = getattr(models, cfg.preference_prior.model)(**cfg.preference_prior, seed=cfg.seed)
     risk_model = getattr(models, cfg.risk.model)(preference_prior=preference_prior, **cfg.risk, seed=cfg.seed)
 
-    # Create an xarray Dataset
-    duration = env_cfg['duration']
-    world_draws = cfg.world_draws
-    warmup_steps = cfg.get("warmup_steps", 0)
-
-    # Monte Carlo logistics
-    mc_period = env_cfg.get("mc_period", 5)
-    num_mc_sweeps = (duration - warmup_steps) // mc_period
-    mc_steps = np.arange(warmup_steps, duration, mc_period)
-
-    ds = xr.Dataset(
-        {
-            ### Data recorded every world step
-            # Rewards
-            "reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            "collision_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            "speed_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            "crashed": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            ### Data recorded from MC Sweeps
-            "risk": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
-            "entropy": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
-            "energy": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
-            # Tracking the MC losses -- These are predicted losses
-            "mc_loss": (
-            ("world", "mc_step", "sample"), np.full((world_draws, num_mc_sweeps, env_cfg['n_montecarlo']), np.nan)),
-            "loss_mean": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
-            "loss_p5": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),  # 5% percentile
-            "loss_p95": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),  # 95% percentile
-        },
-        coords={
-            "world": np.arange(world_draws),
-            "step": np.arange(duration),
-            "mc_step": mc_steps,
-            "sample": np.arange(env_cfg['n_montecarlo']),
-        },
-    )
-
     # We have to get seeds based on global seed
     rkey = utils.JaxRKey(seed)
     i_mc = 0
 
-    for wdraw in range(cfg.world_draws):
+    for wdraw in range(run_params['world_draws']):
         # obs, info = env.reset(seed=seed)
         obs, info = env.reset(seed=rkey.next_seed())
 
         # Run a world simulation
-        for step in tqdm(range(duration), desc=f"World {wdraw}"):
+        for step in tqdm(range(run_params['duration']), desc=f"World {wdraw}"):
             # action = env.action_space.sample()
             # action = env.action_space.sample()
             # spd_reward = env.unwrapped.speed_reward()
             # coll_reward = env.unwrapped.collision_reward()
 
-            if step >= warmup_steps:
-                if step % mc_period == 0:
+            if step >= run_params['warmup_steps']:
+                if step % run_params['mc_period'] == 0:
                     # Run the montecarlo simulation, capturing the risks, losses
                     # Returned dimensions are [n_montecarlo]
                     losses, loss_log_probs, collisions = uenv.simulate_mc()
-    
+
                     risk, entropy, energy = risk_model(losses, loss_log_probs)
-    
+
                     # Record data
                     ds["mc_loss"][wdraw, i_mc, :] = losses
                     ds["loss_mean"][wdraw, i_mc] = np.mean(losses)
@@ -207,9 +123,14 @@ def main(cfg: DictConfig):
     logger.info("Saving results")
     utils.Results.save_ds(ds, f"{latest_dir}/results.nc")
 
-    # If a name is provided, save there too
+    # If a name is provided, copy results over
     if "name" in cfg:
-        utils.Results.save_ds(ds, f"{run_dir}/results.nc")
+        save_dir: str = cfg.get("save_dir", RESULTS_DIR)
+        run_dir: str = os.path.join(save_dir, cfg.name)
+        logger.info(f"Copying run results to {run_dir}")
+        if os.path.exists(run_dir):
+            shutil.rmtree(run_dir)
+        shutil.copytree(latest_dir, run_dir)
 
 
 if __name__ == '__main__':

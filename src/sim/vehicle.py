@@ -68,7 +68,7 @@ class Vehicle(HotshotParams, AggressiveVehicle):
     IDMVehicle override for our purposes
 
     Since technically every vehicle is "autonomous" and operated by some policy, we don't need to
-    to distinguish classes between AVs and human drivers -- we simply give human drivers a human policy etc.
+    distinguish classes between AVs and human drivers -- we simply give human drivers a human policy etc.
     """
     """ Vehicle length [m] """
     LENGTH = 5.0

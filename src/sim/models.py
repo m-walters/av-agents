@@ -5,8 +5,8 @@ from typing import Tuple, Union
 import jax.numpy as jnp
 import numpy as np
 from omegaconf import DictConfig
-from scipy.stats import differential_entropy as entr
 from scipy.special import logsumexp
+from scipy.stats import differential_entropy as entr
 
 from sim.params import ParamCollection
 from sim.utils import (

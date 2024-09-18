@@ -69,7 +69,7 @@ class AVHighway(HighwayEnv):
     @staticmethod
     def av_default_config() -> dict:
         """
-        Our default config overrides and new params
+        Our custom config params used in this class
         """
         return {
             "target_speed": 40,
@@ -409,7 +409,7 @@ class AVHighway(HighwayEnv):
         mc_env.np_random = np.random.RandomState(seed)
         mc_env.action_space.seed(seed)
         mc_env.observation_space.seed(seed)
-        
+
         # Randomize the behavior of all the alter vehicles on the road
         for vehicle in mc_env.road.vehicles:
             if vehicle is not mc_env.vehicle:
