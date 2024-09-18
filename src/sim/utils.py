@@ -7,7 +7,6 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
 import xarray as xr
-from omegaconf import DictConfig
 
 Params = namedtuple('Params', 'B, w, r, k, qE')
 FishParams = namedtuple('Params', 'B, r, k, qE')  # Remove 'w'
@@ -361,10 +360,3 @@ class EvolvePreferenceResults(Results):
             },
         )
         return ds
-
-
-def validate_env_config(cfg: DictConfig) -> DictConfig:
-    """
-    Validate the highway-env Environment config
-    """
-    return cfg
