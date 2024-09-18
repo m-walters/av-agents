@@ -54,7 +54,7 @@ def main(cfg: DictConfig):
     video_prefix = "sim"
     env = RecordVideo(
         gym.make(
-            'AVAgents/highway-v0',
+            'AVAgents/intersection-v0',
             render_mode=render_mode,
             # config=env_cfg,
         ), video_dir, name_prefix=video_prefix

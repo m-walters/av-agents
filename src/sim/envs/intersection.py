@@ -6,17 +6,15 @@ import logging
 from typing import Dict, Optional, Text, Tuple
 
 import numpy as np
-from gymnasium.envs.registration import register
 from gymnasium.utils import seeding
 from highway_env import utils
 from highway_env.envs.common.action import Action
 from highway_env.envs.intersection_env import IntersectionEnv
-from highway_env.road.road import RoadNetwork
+from highway_env.vehicle.kinematics import Vehicle
 from omegaconf import DictConfig
 
-from sim.road import AVRoad
 from sim.utils import Array
-from sim.vehicle import Vehicle
+from sim.vehicles.intersection import Vehicle as AVVehicle
 
 logger = logging.getLogger("av-sim")
 
@@ -27,9 +25,9 @@ class AVIntersection(IntersectionEnv):
     """
     Override the IntersectionEnv class for our purposes
     """
-    ACC_MAX = Vehicle.ACC_MAX
-    VEHICLE_MAX_SPEED = Vehicle.MAX_SPEED
-    PERCEPTION_DISTANCE = 5 * Vehicle.MAX_SPEED
+    ACC_MAX = AVVehicle.ACC_MAX
+    VEHICLE_MAX_SPEED = AVVehicle.MAX_SPEED
+    PERCEPTION_DISTANCE = 5 * AVVehicle.MAX_SPEED
 
     ACTIONS: Dict[int, str] = {
         0: 'SLOWER',
@@ -44,43 +42,45 @@ class AVIntersection(IntersectionEnv):
     @classmethod
     def default_config(cls) -> dict:
         config = super().default_config()
-        config.update({
-            "observation": {
-                "type": "Kinematics",
-                "vehicles_count": 15,
-                "features": ["presence", "x", "y", "vx", "vy", "cos_h", "sin_h"],
-                "features_range": {
-                    "x": [-100, 100],
-                    "y": [-100, 100],
-                    "vx": [-20, 20],
-                    "vy": [-20, 20],
+        config.update(
+            {
+                "observation": {
+                    "type": "Kinematics",
+                    "vehicles_count": 15,
+                    "features": ["presence", "x", "y", "vx", "vy", "cos_h", "sin_h"],
+                    "features_range": {
+                        "x": [-100, 100],
+                        "y": [-100, 100],
+                        "vx": [-20, 20],
+                        "vy": [-20, 20],
+                    },
+                    "absolute": True,
+                    "flatten": False,
+                    "observe_intentions": False
                 },
-                "absolute": True,
-                "flatten": False,
-                "observe_intentions": False
-            },
-            "action": {
-                "type": "DiscreteMetaAction",
-                "longitudinal": True,
-                "lateral": False,
-                "target_speeds": [0, 4.5, 9]
-            },
-            "duration": 13,  # [s]
-            "destination": "o1",
-            "controlled_vehicles": 1,
-            "initial_vehicle_count": 10,
-            "spawn_probability": 0.6,
-            "screen_width": 600,
-            "screen_height": 600,
-            "centering_position": [0.5, 0.6],
-            "scaling": 5.5 * 1.3,
-            "collision_reward": -5,
-            "high_speed_reward": 1,
-            "arrived_reward": 1,
-            "reward_speed_range": [7.0, 9.0],
-            "normalize_reward": False,
-            "offroad_terminal": False
-        })
+                "action": {
+                    "type": "DiscreteMetaAction",
+                    "longitudinal": True,
+                    "lateral": False,
+                    "target_speeds": [0, 4.5, 9]
+                },
+                "duration": 13,  # [s]
+                "destination": "o1",
+                "controlled_vehicles": 1,
+                "initial_vehicle_count": 10,
+                "spawn_probability": 0.6,
+                "screen_width": 600,
+                "screen_height": 600,
+                "centering_position": [0.5, 0.6],
+                "scaling": 5.5 * 1.3,
+                "collision_reward": -5,
+                # "high_speed_reward": 1,
+                "arrived_reward": 1,
+                "reward_speed_range": [7.0, 9.0],
+                "normalize_reward": False,
+                "offroad_terminal": False
+            }
+        )
         # Update with our homebrew config defaults
         config.update(cls.av_default_config())
 
@@ -93,7 +93,6 @@ class AVIntersection(IntersectionEnv):
         """
         return {
             "show_trajectories": False,
-            "target_speed": 40,
             "simulation_frequency": 15,  # frames per second
             "policy_frequency": 5,  # policy checks per second (and how many 'steps' per second)
             "n_montecarlo": 10,
@@ -117,8 +116,8 @@ class AVIntersection(IntersectionEnv):
         """
         Init road and vehicles
         """
-        self._create_road()
-        self._create_vehicles()
+        self._make_road()
+        self._make_vehicles(self.config["initial_vehicle_count"])
 
     def reset(
         self,
@@ -158,48 +157,62 @@ class AVIntersection(IntersectionEnv):
             self.render()
         return obs, info
 
-    def _create_road(self) -> None:
+    def _make_vehicles(self, n_vehicles: int = 10) -> None:
         """
-        Create a road composed of straight adjacent lanes
-        """
-        self.road = AVRoad(
-            network=RoadNetwork.straight_road_network(
-                self.config["lanes_count"], speed_limit=self.config["speed_limit"]
-            ),
-            np_random=self.np_random,
-            record_history=self.config["show_trajectories"]
-        )
+        Populate a road with several vehicles on the highway and on the merging lane
 
-    def _create_vehicles(self) -> None:
+        :return: the ego-vehicle
         """
-        Create some new random vehicles of a given type, and add them on the road.
-        """
-        other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
-        other_per_controlled = utils.near_split(
-            self.config["vehicles_count"], num_bins=self.config[
-                "controlled_vehicles"]
-        )
+        # Configure vehicles
+        vehicle_type = utils.class_from_path(self.config["other_vehicles_type"])
+        vehicle_type.DISTANCE_WANTED = 7  # Low jam distance
+        vehicle_type.COMFORT_ACC_MAX = 6
+        vehicle_type.COMFORT_ACC_MIN = -3
 
+        # Random vehicles
+        simulation_steps = 3
+        longitudes = np.linspace(0, 80, n_vehicles)
+        for t in range(n_vehicles - 1):
+            self._spawn_vehicle(float(longitudes[t]))
+        for _ in range(simulation_steps):
+            [(self.road.act(), self.road.step(1 / self.config["simulation_frequency"])) for _ in
+                range(self.config["simulation_frequency"])]
+
+        # Challenger vehicle
+        self._spawn_vehicle(60, spawn_probability=1, go_straight=True, position_deviation=0.1, speed_deviation=0)
+
+        # Controlled vehicles
         self.controlled_vehicles = []
-        for others in other_per_controlled:
-            vehicle = Vehicle.create_random(
+        for ego_id in range(0, self.config["controlled_vehicles"]):
+            ego_lane = self.road.network.get_lane(("o{}".format(ego_id % 4), "ir{}".format(ego_id % 4), 0))
+            destination = self.config["destination"] or "o" + str(self.np_random.randint(1, 4))
+            # f"MW TODO -- Consider the 'create_random' and 'randomize_vehicle' approach use in
+            #  `AVHighway._create_vehicles`
+            ego_vehicle = AVVehicle(
                 self.road,
-                speed=25,
-                lane_id=self.config["initial_lane_id"],
-                spacing=self.config["ego_spacing"],
-                target_speed=self.config["target_speed"],
+                ego_lane.position(60 + 5 * self.np_random.normal(1), 0),
+                speed=ego_lane.speed_limit,
+                heading=ego_lane.heading_at(60)
             )
-            # vehicle = self.action_type.vehicle_class(self.road, vehicle.position, vehicle.heading, vehicle.speed)
-            # Randomize its behavior
-            vehicle.randomize_behavior()
+            # ego_vehicle = self.action_type.vehicle_class(
+            #                  self.road,
+            #                  ego_lane.position(60 + 5*self.np_random.normal(1), 0),
+            #                  speed=ego_lane.speed_limit,
+            #                  heading=ego_lane.heading_at(60))
+            try:
+                # f"MW TODO -- This indicates the function may be expecting/requiring an MDPVehicle class,
+                #  yet the silent exception suggests otherwise
+                ego_vehicle.plan_route_to(destination)
+                ego_vehicle.speed_index = ego_vehicle.speed_to_index(ego_lane.speed_limit)
+                ego_vehicle.target_speed = ego_vehicle.index_to_speed(ego_vehicle.speed_index)
+            except AttributeError:
+                pass
 
-            self.controlled_vehicles.append(vehicle)
-            self.road.vehicles.append(vehicle)
-
-            for _ in range(others):
-                vehicle = other_vehicles_type.create_random(self.road, spacing=1 / self.config["vehicles_density"])
-                vehicle.randomize_behavior()
-                self.road.vehicles.append(vehicle)
+            self.road.vehicles.append(ego_vehicle)
+            self.controlled_vehicles.append(ego_vehicle)
+            for v in self.road.vehicles:  # Prevent early collisions
+                if v is not ego_vehicle and np.linalg.norm(v.position - ego_vehicle.position) < 20:
+                    self.road.vehicles.remove(v)
 
     def step(self, action: Action) -> Tuple[Observation, float, bool, bool, dict]:
         """
@@ -207,6 +220,9 @@ class AVIntersection(IntersectionEnv):
 
         The action is executed by the ego-vehicle, and all other vehicles on the road performs their default behaviour
         for several simulation timesteps until the next decision making step.
+
+        We override the super-method because self._info calculates rewards, so we don't need to
+        do it again with the self._reward call.
 
         :param action: the action performed by the ego-vehicle
         :return: a tuple (observation, reward, terminated, truncated, info)
@@ -224,6 +240,10 @@ class AVIntersection(IntersectionEnv):
         truncated = self._is_truncated()
         if self.render_mode == 'human':
             self.render()
+
+        # Functionality for IntersectionEnv
+        self._clear_vehicles()
+        self._spawn_vehicle(spawn_probability=self.config["spawn_probability"])
 
         return obs, reward, terminated, truncated, info
 
@@ -243,50 +263,73 @@ class AVIntersection(IntersectionEnv):
         }
         return info
 
-    def speed_reward(self) -> float:
+    def _reward(self, action: int, rewards: dict | None = None) -> float:
         """
-        Reward for being near the target speed target_speed
-
-        :return: speed reward
+        Aggregated average of rewards across controlled vehicles
         """
-        # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
-        forward_speed = self.vehicle.speed * np.cos(self.vehicle.heading)
-        score = self.config['alpha'] * np.exp(
-            - (forward_speed - self.config['target_speed']) ** 2 / (self.config['alpha'] ** 2)
-        )
-        logger.debug(f">>> SPEED REWARD: v_forward {forward_speed:0.4f} | score {score:0.4f}")
+        return sum(
+            self._agent_reward(action, vehicle) for vehicle in self.controlled_vehicles
+        ) / len(self.controlled_vehicles)
 
-        if self.config['normalize_reward']:
-            max_score = self.config['alpha']
-            return score / max_score
+    def _rewards(self, action: int) -> Dict[Text, float]:
+        """
+        Multi-objective rewards, for cooperative agents
+        """
+        agents_rewards = [self._agent_rewards(action, vehicle) for vehicle in self.controlled_vehicles]
+        return {
+            name: sum(agent_rewards[name] for agent_rewards in agents_rewards) / len(agents_rewards)
+            for name in agents_rewards[0].keys()
+        }
 
-        return score
+    def _agent_reward(self, action: int, vehicle: Vehicle) -> float:
+        """
+        Per-agent reward signal
+        """
+        rewards = self._agent_rewards(action, vehicle)
+        reward = sum(self.config.get(name, 0) * reward for name, reward in rewards.items())
+        reward = self.config["arrived_reward"] if rewards["arrived_reward"] else reward
+        reward *= rewards["on_road_reward"]
+        if self.config["normalize_reward"]:
+            reward = utils.lmap(reward, [self.config["collision_reward"], self.config["arrived_reward"]], [0, 1])
+        return reward
 
-    def collision_reward(self) -> float:
+    def _agent_rewards(self, action: int, vehicle: Vehicle) -> Dict[Text, float]:
+        """
+        Per-agent per-objective reward signal
+        """
+        scaled_speed = utils.lmap(vehicle.speed, self.config["reward_speed_range"], [0, 1])
+        return {
+            # "collision_reward": vehicle.crashed,
+            "speed_reward": np.clip(scaled_speed, 0, 1),
+            "arrived_reward": self.has_arrived(vehicle),
+            "on_road_reward": vehicle.on_road,
+            ### Custom
+            "collision_reward": self.collision_reward(vehicle),
+        }
+
+    def collision_reward(self, vehicle: Vehicle) -> float:
         """
         Reward based on collision-related factors, like braking distance, and proximity
 
         :return: collision reward
         """
-        v_x = self.vehicle.speed * np.cos(self.vehicle.heading)
+        v_x = vehicle.speed * np.cos(vehicle.heading)
 
         # Grab the front and behind cars across different lanes and consider their speed deltas from ego
         logger.debug(
-            f">>> COLLISION REWARD START | EGO [{self.vehicle}]\n\tv_x {v_x:0.4f} | lane {self.vehicle.lane_index}"
+            f">>> COLLISION REWARD START | EGO [{vehicle}]\n\tv_x {v_x:0.4f} | lane {vehicle.lane_index}"
         )
 
         # See our AV Project, "Vehicle Agent" section for derivation
-        # TODO -- f"MW With 8675309 seed, we get collision penalties exceeding 500 with this scaling
-        # In IDMVehicle.act you can see acceleration getting clipped by [-ACC_MAX, ACC_MAX]
         # beta = 3 * self.ACC_MAX / 2
         beta = 1 / (2 * self.ACC_MAX)
         logger.debug(f">> BETA: {beta}")
 
         n_nbr = 0
         penalty = 0
-        for lane in self.road.network.all_side_lanes(self.vehicle.lane_index):
+        for lane in self.road.network.all_side_lanes(vehicle.lane_index):
             logger.debug(f"CHECKING LANE {lane}")
-            front, rear = self.road.neighbour_vehicles(self.vehicle, lane)
+            front, rear = self.road.neighbour_vehicles(vehicle, lane)
             if front is not None:
                 logger.debug(f"FOUND FRONT [{front}]")
                 n_nbr += 1
@@ -295,11 +338,11 @@ class AVIntersection(IntersectionEnv):
                 if front_delta < 0:
                     # Front car is slower
                     # Note, lane_distance_to: <argument>.x - self.x
-                    front_distance = self.vehicle.lane_distance_to(front)
+                    front_distance = vehicle.lane_distance_to(front)
                     assert front_distance > 0, f"Front distance <= 0: {front_distance}"
-                    front_distance = max(front_distance, self.vehicle.LENGTH)
+                    front_distance = max(front_distance, vehicle.LENGTH)
                     _penalty = beta * front_delta ** 2 / (
-                            front_distance * (2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
+                            front_distance * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
                     penalty += _penalty
                     logger.debug(
                         f">> {front_speed:0.4f} | {front_delta:0.4f} | {front_distance:0.4f} | {_penalty:0.4f}"
@@ -312,11 +355,11 @@ class AVIntersection(IntersectionEnv):
                 rear_delta = v_x - rear_speed
                 if rear_delta < 0:
                     # Rear car approaching
-                    rear_distance = rear.lane_distance_to(self.vehicle)
+                    rear_distance = rear.lane_distance_to(vehicle)
                     assert rear_distance > 0, f"Rear distance <= 0: {rear_distance}"
                     rear_distance = max(rear_distance, rear.LENGTH)
                     _penalty = beta * rear_delta ** 2 / (
-                            rear_distance * (2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
+                            rear_distance * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
                     penalty += _penalty
                     logger.debug(f">> {rear_speed:0.4f} | {rear_delta:0.4f} | {rear_distance:0.4f} | {_penalty:0.4f}")
 
@@ -326,56 +369,7 @@ class AVIntersection(IntersectionEnv):
 
         return -penalty
 
-    def _rewards(self, action: Action) -> Dict[Text, float]:
-        """
-        Compute and collect the suite of rewards for our control vehicle.
-        TODO -- Consider a speed-limit penalty (see Vehicle.accelerate)
-        """
-        # neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
-        # lane = self.vehicle.target_lane_index[2] if isinstance(self.vehicle, ControlledVehicle) \
-        #     else self.vehicle.lane_index[2]
-
-        speed_reward = self.speed_reward()
-        collision_reward = self.collision_reward()
-
-        r = {
-            "collision_reward": collision_reward,
-            # "right_lane_reward": lane / max(len(neighbours) - 1, 1),
-            "speed_reward": speed_reward,
-            # "on_road_reward": float(self.vehicle.on_road),
-        }
-        logger.debug(f">>>> REWARDS: {r}")
-
-        return r
-
-    def _reward(self, action: Action, rewards: dict | None = None) -> float:
-        """
-        :param action: the last action performed
-        :param rewards: optionally provide the computed rewards if available, for efficiency
-        :return: the corresponding reward
-        """
-        rewards = rewards or self._rewards(action)
-        reward = sum(rewards.values())
-
-        # if self.config["normalize_reward"]:
-        #     reward = utils.lmap(
-        #         reward,
-        #         [self.config["collision_reward"], self.config["right_lane_reward"]],
-        #         [0, 1]
-        #     )
-        # reward *= rewards['on_road_reward']
-        return reward
-
-    def _is_terminated(self) -> bool:
-        """The episode is over if the ego vehicle crashed."""
-        return (self.vehicle.crashed or
-                self.config["offroad_terminal"] and not self.vehicle.on_road)
-
-    def _is_truncated(self) -> bool:
-        """The episode is truncated if the time limit is reached."""
-        return self.time >= self.config["duration"]
-
-    def simplify(self) -> "AVHighway":
+    def simplify(self) -> "AVIntersection":
         """
         Return a simplified copy of the environment where distant vehicles have been removed from the road.
 
@@ -389,7 +383,7 @@ class AVIntersection(IntersectionEnv):
         # Since policy_frequency is how many calls to step per second and mc_horizon is num steps per mc sim..
         distance += self.VEHICLE_MAX_SPEED * self.config["mc_horizon"] / self.config["policy_frequency"]
 
-        state_copy: "AVHighway" = copy.deepcopy(self)
+        state_copy: "AVIntersection" = copy.deepcopy(self)
         state_copy.road.vehicles = [state_copy.vehicle] + state_copy.road.close_vehicles_to(
             state_copy.vehicle, distance
         )
@@ -397,7 +391,7 @@ class AVIntersection(IntersectionEnv):
         return state_copy
 
     @staticmethod
-    def seed_montecarlo(mc_env: "AVHighway", seed):
+    def seed_montecarlo(mc_env: "AVIntersection", seed):
         """
         Seed a montecarlo environment
         """
@@ -422,6 +416,7 @@ class AVIntersection(IntersectionEnv):
 
         :return: Tuple of losses, loss_log_probs, collisions. Dimensions [n_mc]
         """
+        # f"MW TODO -- Review for multiagent setting
         n_mc = self.config["n_montecarlo"]
         horizon = self.config["mc_horizon"]
         losses = np.zeros(n_mc)
@@ -473,12 +468,3 @@ class AVIntersection(IntersectionEnv):
         Shorthand method for observation sampling that can be called from async env
         """
         return self.observation_space.sample()
-
-
-def register_av_highway():
-    register(
-        id=f"AVAgents/highway-v0",
-        entry_point='sim.envs.highway:AVHighway',
-        # vector_entry_point="sim.envs.highway:AVHighway",
-        # max_episode_steps=1000,  # Adjust the configuration as needed
-    )

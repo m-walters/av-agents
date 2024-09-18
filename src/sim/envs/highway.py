@@ -13,7 +13,7 @@ from omegaconf import DictConfig
 
 from sim.road import AVRoad
 from sim.utils import Array
-from sim.vehicle import Vehicle
+from sim.vehicles.highway import Vehicle
 
 logger = logging.getLogger("av-sim")
 
@@ -140,6 +140,7 @@ class AVHighway(HighwayEnv):
     def _create_road(self) -> None:
         """
         Create a road composed of straight adjacent lanes
+        Super-method forces speed_limit=30
         """
         self.road = AVRoad(
             network=RoadNetwork.straight_road_network(

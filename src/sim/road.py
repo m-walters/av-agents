@@ -4,7 +4,7 @@ import numpy as np
 from highway_env.road.road import Road
 from highway_env.vehicle.objects import Landmark
 
-from sim.vehicle import Vehicle
+from sim.vehicles.highway import Vehicle
 
 LaneIndex = Tuple[str, str, int]
 Route = List[LaneIndex]

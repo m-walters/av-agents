@@ -10,24 +10,26 @@ highway_env:
   vehicles_density: 2
   target_speed: 40
   speed_limit: 40
-  mc_horizon: 3
-  n_montecarlo: 5
-  duration: 16
   action:
     type: "MultiAgentAction"
     action_config:
       type: "DiscreteMetaAction"
+      lateral: false
+      longitudinal: true
 #      meta_actions: ["LANE_LEFT", "IDLE", "LANE_RIGHT", "FASTER", "SLOWER"]
   observation:
     type: "MultiAgentObservation"
     observation_config:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
+  mc_horizon: 3
+  n_montecarlo: 5
+  duration: 100
 #==============
 name: multiagent
 seed: 867
 world_draws: 1
-warmup_steps: 10  # included within the duration
+warmup_steps: 10000  # included within the duration
 mc_period: 2  # real-world steps between MC issuances
 
 preference_prior:
