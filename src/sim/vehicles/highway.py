@@ -89,12 +89,13 @@ class Vehicle(HotshotParams, AggressiveVehicle):
         position: Vector,
         heading: float = 0,
         speed: float = 0,
-        target_lane_index: int = None,
-        target_speed: float = None,
-        route: Route = None,
+        target_lane_index: int | None = None,
+        target_speed: float | None = None,
+        route: Route | None = None,
         enable_lane_change: bool = True,
-        timer: float = None,
-        data: dict = None
+        timer: float | None = None,
+        data: dict | None = None,
+        av_id: int = -1,
     ):
         super().__init__(
             road, position, heading, speed, target_lane_index, target_speed, route,
@@ -102,6 +103,8 @@ class Vehicle(HotshotParams, AggressiveVehicle):
         )
         self.data = data if data is not None else {}
         self.collecting_data = True
+        # Our internal tracking ID
+        self.av_id = av_id
 
     def randomize_behavior(self):
         """
@@ -131,6 +134,7 @@ class Vehicle(HotshotParams, AggressiveVehicle):
         lane_id: Optional[int] = None,
         spacing: float = 1,
         target_speed: Optional[float] = None,
+        av_id: int = -1,
     ) -> "Vehicle":
         """
         Create a random vehicle on the road.
@@ -145,6 +149,7 @@ class Vehicle(HotshotParams, AggressiveVehicle):
         :param lane_id: id of the lane to spawn in
         :param spacing: ratio of spacing to the front vehicle, 1 being the default
         :param target_speed: target speed in [m/s] the vehicle should reach
+        :param av_id: the ID of the new vehicle
         :return: A vehicle with random position and/or speed
         """
         _from = lane_from or road.np_random.choice(list(road.network.graph.keys()))
@@ -161,5 +166,8 @@ class Vehicle(HotshotParams, AggressiveVehicle):
         x0 = np.max([lane.local_coordinates(v.position)[0] for v in road.vehicles]) \
             if len(road.vehicles) else 3 * offset
         x0 += offset * road.np_random.uniform(0.9, 1.1)
-        v = cls(road, lane.position(x0, 0), heading=lane.heading_at(x0), speed=speed, target_speed=target_speed)
+        v = cls(
+            road, lane.position(x0, 0), heading=lane.heading_at(x0), speed=speed,
+            target_speed=target_speed, av_id=av_id
+        )
         return v

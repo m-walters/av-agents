@@ -29,6 +29,7 @@ class AVHighway(HighwayEnv):
     PERCEPTION_DISTANCE = 5 * Vehicle.MAX_SPEED
 
     def __init__(self, config: dict = None, render_mode: Optional[str] = None) -> None:
+        self.vehicle_lookup = {}  # Get vehicle by its ID
         super().__init__(config, render_mode)
 
     @classmethod
@@ -96,6 +97,9 @@ class AVHighway(HighwayEnv):
         """
         Init road and vehicles
         """
+        # Clear the vehicle lookup
+        self.vehicle_lookup = {}
+
         self._create_road()
         self._create_vehicles()
 
@@ -161,6 +165,7 @@ class AVHighway(HighwayEnv):
         )
 
         self.controlled_vehicles = []
+        av_id = 1
         for others in other_per_controlled:
             vehicle = Vehicle.create_random(
                 self.road,
@@ -168,7 +173,10 @@ class AVHighway(HighwayEnv):
                 lane_id=self.config["initial_lane_id"],
                 spacing=self.config["ego_spacing"],
                 target_speed=self.config["target_speed"],
+                av_id=av_id
             )
+            self.vehicle_lookup[vehicle.av_id] = vehicle
+            av_id += 1
             # vehicle = self.action_type.vehicle_class(self.road, vehicle.position, vehicle.heading, vehicle.speed)
             # Randomize its behavior
             vehicle.randomize_behavior()
@@ -178,6 +186,10 @@ class AVHighway(HighwayEnv):
 
             for _ in range(others):
                 vehicle = other_vehicles_type.create_random(self.road, spacing=1 / self.config["vehicles_density"])
+                # Since this may be an external class..
+                setattr(vehicle, "av_id", av_id)
+                self.vehicle_lookup[vehicle.av_id] = vehicle
+                av_id += 1
                 vehicle.randomize_behavior()
                 self.road.vehicles.append(vehicle)
 
@@ -223,14 +235,16 @@ class AVHighway(HighwayEnv):
         }
         return info
 
-    def speed_reward(self) -> float:
+    def speed_reward(self, vehicle: Vehicle | None = None) -> float:
         """
         Reward for being near the target speed target_speed
 
+        :param vehicle: Optional select vehicle. Defaults to self.vehicle
         :return: speed reward
         """
+        vehicle = vehicle or self.vehicle
         # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
-        forward_speed = self.vehicle.speed * np.cos(self.vehicle.heading)
+        forward_speed = vehicle.speed * np.cos(vehicle.heading)
         score = self.config['alpha'] * np.exp(
             - (forward_speed - self.config['target_speed']) ** 2 / (self.config['alpha'] ** 2)
         )
@@ -242,17 +256,19 @@ class AVHighway(HighwayEnv):
 
         return score
 
-    def collision_reward(self) -> float:
+    def collision_reward(self, vehicle: Vehicle | None = None) -> float:
         """
         Reward based on collision-related factors, like braking distance, and proximity
 
+        :param vehicle: Optional select vehicle. Defaults to self.vehicle
         :return: collision reward
         """
-        v_x = self.vehicle.speed * np.cos(self.vehicle.heading)
+        vehicle = vehicle or self.vehicle
+        v_x = vehicle.speed * np.cos(vehicle.heading)
 
         # Grab the front and behind cars across different lanes and consider their speed deltas from ego
         logger.debug(
-            f">>> COLLISION REWARD START | EGO [{self.vehicle}]\n\tv_x {v_x:0.4f} | lane {self.vehicle.lane_index}"
+            f">>> COLLISION REWARD START | EGO [{vehicle}]\n\tv_x {v_x:0.4f} | lane {vehicle.lane_index}"
         )
 
         # See our AV Project, "Vehicle Agent" section for derivation
@@ -264,9 +280,9 @@ class AVHighway(HighwayEnv):
 
         n_nbr = 0
         penalty = 0
-        for lane in self.road.network.all_side_lanes(self.vehicle.lane_index):
+        for lane in self.road.network.all_side_lanes(vehicle.lane_index):
             logger.debug(f"CHECKING LANE {lane}")
-            front, rear = self.road.neighbour_vehicles(self.vehicle, lane)
+            front, rear = self.road.neighbour_vehicles(vehicle, lane)
             if front is not None:
                 logger.debug(f"FOUND FRONT [{front}]")
                 n_nbr += 1
@@ -275,11 +291,11 @@ class AVHighway(HighwayEnv):
                 if front_delta < 0:
                     # Front car is slower
                     # Note, lane_distance_to: <argument>.x - self.x
-                    front_distance = self.vehicle.lane_distance_to(front)
+                    front_distance = vehicle.lane_distance_to(front)
                     assert front_distance > 0, f"Front distance <= 0: {front_distance}"
-                    front_distance = max(front_distance, self.vehicle.LENGTH)
+                    front_distance = max(front_distance, vehicle.LENGTH)
                     _penalty = beta * front_delta ** 2 / (
-                            front_distance * (2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
+                            front_distance * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
                     penalty += _penalty
                     logger.debug(
                         f">> {front_speed:0.4f} | {front_delta:0.4f} | {front_distance:0.4f} | {_penalty:0.4f}"
@@ -292,11 +308,11 @@ class AVHighway(HighwayEnv):
                 rear_delta = v_x - rear_speed
                 if rear_delta < 0:
                     # Rear car approaching
-                    rear_distance = rear.lane_distance_to(self.vehicle)
+                    rear_distance = rear.lane_distance_to(vehicle)
                     assert rear_distance > 0, f"Rear distance <= 0: {rear_distance}"
                     rear_distance = max(rear_distance, rear.LENGTH)
                     _penalty = beta * rear_delta ** 2 / (
-                            rear_distance * (2 ** np.abs(lane[2] - self.vehicle.lane_index[2])))
+                            rear_distance * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
                     penalty += _penalty
                     logger.debug(f">> {rear_speed:0.4f} | {rear_delta:0.4f} | {rear_distance:0.4f} | {_penalty:0.4f}")
 

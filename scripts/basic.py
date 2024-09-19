@@ -27,7 +27,10 @@ def main(cfg: DictConfig):
     """
     Set the parameters and run the sim
     """
-    cfg, run_params, ds = run.init(cfg)
+    cfg, run_params = run.init(cfg)
+    ds = run.init_results_dataset(
+        run_params['world_draws'], run_params['duration'], run_params['mc_steps'], run_params['n_montecarlo']
+    )
     seed = run_params['seed']
     env_cfg = cfg.highway_env
     latest_dir = f"{RESULTS_DIR}/latest"

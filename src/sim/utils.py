@@ -159,6 +159,10 @@ class JaxRKey:
         # When you want the next int and not next j-key tuple
         return int(self.next_key()[0])
 
+    def next_seeds(self, n):
+        self.key, *subkeys = jrandom.split(self.key, n + 1)
+        return [int(k[0]) for k in subkeys]
+
 
 class JaxGaussian:
     @staticmethod
