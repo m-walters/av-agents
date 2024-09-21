@@ -44,10 +44,10 @@ class DefaultPolicy(Policy):
 
 
 class LossModel(ModelBase):
-    def __init__(self, alpha: float, target_speed: Number, beta: float, *args, **kwargs):
+    def __init__(self, alpha: float, reward_speed: Number, beta: float, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.alpha = alpha
-        self.target_speed = target_speed
+        self.reward_speed = reward_speed
         self.beta = beta
 
     def __call__(self, v: float, neighbors: Array) -> Tuple[Array, Array]:
@@ -58,7 +58,7 @@ class LossModel(ModelBase):
         :param v: speed of vehicle
         :param neighbors: num_neighbors x 3 array, columns are [distance, speed, lane]
         """
-        speed_loss = - self.alpha * jnp.exp(-(v - self.target_speed) ** 2 / self.alpha)
+        speed_loss = - self.alpha * jnp.exp(-(v - self.reward_speed) ** 2 / self.alpha)
         collision_loss = self.beta * jnp.mean(
             1 / (2 ** neighbors[:, 2]) * jnp.divide(jnp.max(0, v - neighbors[:, 1]), neighbors[:, 0])
         )

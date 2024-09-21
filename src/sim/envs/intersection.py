@@ -17,11 +17,12 @@ from highway_env.vehicle.kinematics import Vehicle
 from omegaconf import DictConfig
 
 from sim.utils import Array
-from sim.vehicles.intersection import Vehicle as AVVehicle
+from sim.vehicles.highway import IDMVehicle, MetaActionVehicle
 
 logger = logging.getLogger("av-sim")
 
 Observation = np.ndarray
+AVVehicle = IDMVehicle | MetaActionVehicle
 
 
 def make_road(env: "AVIntersection") -> None:
@@ -139,9 +140,9 @@ class AVIntersection(IntersectionEnv):
     """
     Override the IntersectionEnv class for our purposes
     """
-    ACC_MAX = AVVehicle.ACC_MAX
-    VEHICLE_MAX_SPEED = AVVehicle.MAX_SPEED
-    PERCEPTION_DISTANCE = 5 * AVVehicle.MAX_SPEED
+    ACC_MAX = IDMVehicle.ACC_MAX
+    VEHICLE_MAX_SPEED = IDMVehicle.MAX_SPEED
+    PERCEPTION_DISTANCE = 5 * IDMVehicle.MAX_SPEED
 
     ACTIONS: Dict[int, str] = {
         0: 'SLOWER',
@@ -207,6 +208,7 @@ class AVIntersection(IntersectionEnv):
         """
         return {
             "show_trajectories": False,
+            "control_vehicle_type": "sim.vehicles.highway.IDMVehicle",
             "simulation_frequency": 15,  # frames per second
             "policy_frequency": 5,  # policy checks per second (and how many 'steps' per second)
             "n_montecarlo": 10,
@@ -302,13 +304,14 @@ class AVIntersection(IntersectionEnv):
         self._spawn_vehicle(60, spawn_probability=1, go_straight=True, position_deviation=0.1, speed_deviation=0)
 
         # Controlled vehicles
+        control_vehicle_class = utils.class_from_path(self.config["control_vehicle_type"])
         self.controlled_vehicles = []
         for ego_id in range(0, self.config["controlled_vehicles"]):
             ego_lane = self.road.network.get_lane(("o{}".format(ego_id % 4), "ir{}".format(ego_id % 4), 0))
             destination = self.config["destination"] or "o" + str(self.np_random.randint(1, 4))
             # f"MW TODO -- Consider the 'create_random' and 'randomize_vehicle' approach use in
             #  `AVHighway._create_vehicles`
-            ego_vehicle = AVVehicle(
+            ego_vehicle = control_vehicle_class(
                 self.road,
                 ego_lane.position(60 + 5 * self.np_random.normal(1), 0),
                 speed=ego_lane.speed_limit,
@@ -401,7 +404,7 @@ class AVIntersection(IntersectionEnv):
             for name in agents_rewards[0].keys()
         }
 
-    def _agent_reward(self, action: int, vehicle: Vehicle) -> float:
+    def _agent_reward(self, action: int, vehicle: AVVehicle) -> float:
         """
         Per-agent reward signal
         """
@@ -413,7 +416,7 @@ class AVIntersection(IntersectionEnv):
             reward = utils.lmap(reward, [self.config["collision_reward"], self.config["arrived_reward"]], [0, 1])
         return reward
 
-    def _agent_rewards(self, action: int, vehicle: Vehicle) -> Dict[Text, float]:
+    def _agent_rewards(self, action: int, vehicle: AVVehicle) -> Dict[Text, float]:
         """
         Per-agent per-objective reward signal
         """
@@ -427,7 +430,7 @@ class AVIntersection(IntersectionEnv):
             "collision_reward": self.collision_reward(vehicle),
         }
 
-    def collision_reward(self, vehicle: Vehicle) -> float:
+    def collision_reward(self, vehicle: AVVehicle) -> float:
         """
         Reward based on collision-related factors, like braking distance, and proximity
 
@@ -440,7 +443,7 @@ class AVIntersection(IntersectionEnv):
             f">>> COLLISION REWARD START | EGO [{vehicle}]\n\tv_x {v_x:0.4f} | lane {vehicle.lane_index}"
         )
 
-        # See our AV Project, "Vehicle Agent" section for derivation
+        # See our AV Project, "AVVehicle Agent" section for derivation
         # beta = 3 * self.ACC_MAX / 2
         beta = 1 / (2 * self.ACC_MAX)
         logger.debug(f">> BETA: {beta}")

@@ -5,16 +5,17 @@ defaults:
 # Overrides for the env config
 # See AVHighway for defaults
 highway_env:
-  controlled_vehicles: &n_controlled 10  # Number of ego vehicles
+  controlled_vehicles: &n_controlled 5  # Number of ego vehicles
+  control_vehicle_type: "sim.vehicles.highway.MetaActionVehicle"
   vehicles_count: 20  # Number of alters
   vehicles_density: 2
-  target_speed: 40
+  reward_speed: 40
   speed_limit: 40
   action:
     type: "MultiAgentAction"
     action_config:
       type: "DiscreteMetaAction"
-      lateral: false
+      lateral: true
       longitudinal: true
 #      meta_actions: ["LANE_LEFT", "IDLE", "LANE_RIGHT", "FASTER", "SLOWER"]
   observation:
@@ -29,7 +30,7 @@ highway_env:
 name: multiagent
 seed: 867
 world_draws: 1
-warmup_steps: 20  # included within the duration
+warmup_steps: 1e5  # included within the duration
 mc_period: &mc_period 5  # real-world steps between MC issuances
 multiprocessing_cpus: 8
 

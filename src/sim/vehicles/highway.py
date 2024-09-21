@@ -1,10 +1,10 @@
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 from highway_env.road.road import Road, Route
 from highway_env.utils import Vector
-from highway_env.vehicle.behavior import AggressiveVehicle
 from highway_env.vehicle.controller import ControlledVehicle
+from highway_env.vehicle.behavior import AggressiveVehicle
 
 
 class AggressiveParams:
@@ -47,7 +47,6 @@ class AggressiveParams:
 class HotshotParams(AggressiveParams):
     """
     Based off the AggressiveVehicle params, but reckless
-    TODO -- f"MW Let's make these parameters variable from the config files, since these dictate policy
     """
     # Longitudinal policy parameters
     ACC_MAX = 10.0  # [m/s2]
@@ -63,12 +62,11 @@ class HotshotParams(AggressiveParams):
     LANE_CHANGE_DELAY = 1.0  # [s]; lower means more frequent lane checks. Default = 1.0
 
 
-class Vehicle(HotshotParams, AggressiveVehicle):
+class IDMVehicle(HotshotParams, AggressiveVehicle):
     """
-    IDMVehicle override for our purposes
-
-    Since technically every vehicle is "autonomous" and operated by some policy, we don't need to
-    distinguish classes between AVs and human drivers -- we simply give human drivers a human policy etc.
+    IDM Vehicle override.
+    IDMVehicles don't respond to action inputs, but instead operate
+    intelligently from their surroundings.
     """
     """ Vehicle length [m] """
     LENGTH = 5.0
@@ -118,13 +116,6 @@ class Vehicle(HotshotParams, AggressiveVehicle):
         ub = self.road.np_random.uniform(size=np.shape(self.STEERING_PARAMETERS))
         self.STEERING_PARAMETERS = self.STEERING_RANGE[0] + ub * (self.STEERING_RANGE[1] - self.STEERING_RANGE[0])
 
-    def sample_action(self, obs) -> Optional[dict]:
-        """
-        Sample an action given an observation
-        """
-        # The IDMVehicle (which LinearVehicle inherits) has actions automated, so we return null
-        return None
-
     @classmethod
     def create_random(
         cls, road: Road,
@@ -171,3 +162,103 @@ class Vehicle(HotshotParams, AggressiveVehicle):
             target_speed=target_speed, av_id=av_id
         )
         return v
+
+
+class MetaActionVehicle(ControlledVehicle):
+    """
+    Vehicle controlled by a discrete set of meta actions (see DiscreteMetaAction)
+    """
+    """ Vehicle length [m] """
+    LENGTH = 5.0
+    """ Vehicle width [m] """
+    WIDTH = 2.0
+    """ Range for random initial speeds [m/s] """
+    DEFAULT_INITIAL_SPEEDS = [20, 30]
+    """ Maximum reachable speed [m/s] """
+    MAX_SPEED = 40.
+    """ Minimum reachable speed [m/s] """
+    MIN_SPEED = -20.
+    """ Length of the vehicle state history, for trajectory display"""
+    HISTORY_SIZE = 30
+
+    def __init__(
+        self,
+        road: Road,
+        position: Vector,
+        heading: float = 0,
+        speed: float = 0,
+        target_lane_index: int | None = None,
+        target_speed: float | None = None,
+        route: Route | None = None,
+        av_id: int = -1,
+    ):
+        super().__init__(
+            road, position, heading, speed, target_lane_index, target_speed, route,
+        )
+        # Our internal tracking ID
+        self.av_id = av_id
+
+    @classmethod
+    def create_random(
+        cls,
+        road: Road,
+        speed: float = None,
+        lane_from: Optional[str] = None,
+        lane_to: Optional[str] = None,
+        lane_id: Optional[int] = None,
+        spacing: float = 1,
+        target_speed: float = None,
+        av_id: int = -1,
+    ) -> "Vehicle":
+        """
+        Create a random vehicle on the road.
+
+        The lane and /or speed are chosen randomly, while longitudinal position is chosen behind the last
+        vehicle in the road with density based on the number of lanes.
+
+        :param road: the road where the vehicle is driving
+        :param speed: initial speed in [m/s]. If None, will be chosen randomly
+        :param lane_from: start node of the lane to spawn in
+        :param lane_to: end node of the lane to spawn in
+        :param lane_id: id of the lane to spawn in
+        :param spacing: ratio of spacing to the front vehicle, 1 being the default
+        :param target_speed: target speed in [m/s]. If None, will be set to 'speed'
+        :param av_id: Vehicle ID
+        :return: A vehicle with random position and/or speed
+        """
+        _from = lane_from or road.np_random.choice(list(road.network.graph.keys()))
+        _to = lane_to or road.np_random.choice(list(road.network.graph[_from].keys()))
+        _id = (
+            lane_id
+            if lane_id is not None
+            else road.np_random.choice(len(road.network.graph[_from][_to]))
+        )
+        lane = road.network.get_lane((_from, _to, _id))
+        if speed is None:
+            if lane.speed_limit is not None:
+                speed = road.np_random.uniform(
+                    0.7 * lane.speed_limit, 0.8 * lane.speed_limit
+                )
+            else:
+                speed = road.np_random.uniform(
+                    Vehicle.DEFAULT_INITIAL_SPEEDS[0], Vehicle.DEFAULT_INITIAL_SPEEDS[1]
+                )
+        default_spacing = 12 + 1.0 * speed
+        offset = (
+            spacing
+            * default_spacing
+            * np.exp(-5 / 40 * len(road.network.graph[_from][_to]))
+        )
+        x0 = (
+            np.max([lane.local_coordinates(v.position)[0] for v in road.vehicles])
+            if len(road.vehicles)
+            else 3 * offset
+        )
+        x0 += offset * road.np_random.uniform(0.9, 1.1)
+        v = cls(
+            road, lane.position(x0, 0), lane.heading_at(x0), speed, target_speed=target_speed, av_id=av_id
+        )
+        return v
+
+
+AVVehicleType = IDMVehicle | MetaActionVehicle

@@ -12,6 +12,8 @@ import numpy as np
 import pymc as pm
 from omegaconf import DictConfig
 from tqdm import tqdm
+from gymnasium.wrappers import RecordVideo
+
 
 import sim.params as sim_params
 from sim import gatekeeper, models, run, utils
@@ -57,10 +59,11 @@ def main(cfg: DictConfig):
     # Create our gym Env
     # render_mode = 'rgb_array'
     render_mode = None  # No visuals because of multiprocessing
-    env = gym.make(
-        'AVAgents/highway-v0',
-        render_mode=render_mode,
-        # config=env_cfg,
+    render_mode = 'rgb_array'
+    video_dir = f"{latest_dir}/recordings"
+    video_prefix = "sim"
+    env = RecordVideo(
+        gym.make('AVAgents/highway-v0', render_mode=render_mode), video_dir, name_prefix=video_prefix
     )
 
     uenv: "AVHighway" = env.unwrapped
@@ -99,6 +102,7 @@ def main(cfg: DictConfig):
             # We do action after MC sim in case it informs actions
             # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
             action = env.action_space.sample()
+            # action = tuple(np.ones_like(action))
             obs, reward, terminated, truncated, info = env.step(action)
 
             # Record the actuals

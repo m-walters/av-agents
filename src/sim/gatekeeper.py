@@ -10,7 +10,7 @@ from omegaconf import DictConfig
 
 from sim.envs import highway, intersection
 from sim.utils import JaxRKey
-from sim.vehicles.highway import Vehicle
+from sim.vehicles.highway import AVVehicleType
 
 logger = logging.getLogger("av-sim")
 
@@ -33,7 +33,7 @@ class Gatekeeper:
     def __init__(
         self,
         gk_idx: int,
-        vehicle: Vehicle,
+        vehicle: AVVehicleType,
         risk_threshold: float,
         seed: int,
     ):
@@ -75,7 +75,7 @@ class GatekeeperCommand:
         self,
         env: Union[highway.AVHighway, intersection.AVIntersection],
         gk_cfg: DictConfig[GatekeeperConfig],
-        control_vehicles: list[Vehicle],
+        control_vehicles: list[AVVehicleType],
         seed: int,
     ):
         """
@@ -102,7 +102,7 @@ class GatekeeperCommand:
         for i, v in enumerate(control_vehicles):
             self._spawn_gatekeeper(v, i)
 
-    def _spawn_gatekeeper(self, vehicle: Vehicle, gk_idx):
+    def _spawn_gatekeeper(self, vehicle: AVVehicleType, gk_idx):
         """
         Spawn a gatekeeper for a vehicle
         """

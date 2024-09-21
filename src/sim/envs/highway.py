@@ -13,20 +13,21 @@ from omegaconf import DictConfig
 
 from sim.road import AVRoad
 from sim.utils import Array
-from sim.vehicles.highway import Vehicle
+from sim.vehicles.highway import IDMVehicle, MetaActionVehicle
 
 logger = logging.getLogger("av-sim")
 
 Observation = np.ndarray
+AVVehicle = IDMVehicle | MetaActionVehicle
 
 
 class AVHighway(HighwayEnv):
     """
     Override the HighwayEnv class for our purposes
     """
-    ACC_MAX = Vehicle.ACC_MAX
-    VEHICLE_MAX_SPEED = Vehicle.MAX_SPEED
-    PERCEPTION_DISTANCE = 5 * Vehicle.MAX_SPEED
+    ACC_MAX = IDMVehicle.ACC_MAX
+    VEHICLE_MAX_SPEED = IDMVehicle.MAX_SPEED
+    PERCEPTION_DISTANCE = 5 * IDMVehicle.MAX_SPEED
 
     def __init__(self, config: dict = None, render_mode: Optional[str] = None) -> None:
         self.vehicle_lookup = {}  # Get vehicle by its ID
@@ -73,7 +74,8 @@ class AVHighway(HighwayEnv):
         Our custom config params used in this class
         """
         return {
-            "target_speed": 40,
+            "reward_speed": 40,
+            "control_vehicle_type": "sim.vehicles.highway.IDMVehicle",
             "simulation_frequency": 15,  # frames per second
             "policy_frequency": 5,  # policy checks per second (and how many 'steps' per second)
             "n_montecarlo": 10,
@@ -158,6 +160,7 @@ class AVHighway(HighwayEnv):
         """
         Create some new random vehicles of a given type, and add them on the road.
         """
+        control_vehicle_class = utils.class_from_path(self.config["control_vehicle_type"])
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
         other_per_controlled = utils.near_split(
             self.config["vehicles_count"], num_bins=self.config[
@@ -167,19 +170,19 @@ class AVHighway(HighwayEnv):
         self.controlled_vehicles = []
         av_id = 1
         for others in other_per_controlled:
-            vehicle = Vehicle.create_random(
+            vehicle = control_vehicle_class.create_random(
                 self.road,
                 speed=25,
                 lane_id=self.config["initial_lane_id"],
                 spacing=self.config["ego_spacing"],
-                target_speed=self.config["target_speed"],
                 av_id=av_id
             )
             self.vehicle_lookup[vehicle.av_id] = vehicle
             av_id += 1
             # vehicle = self.action_type.vehicle_class(self.road, vehicle.position, vehicle.heading, vehicle.speed)
             # Randomize its behavior
-            vehicle.randomize_behavior()
+            if hasattr(vehicle, "randomize_behavior"):
+                vehicle.randomize_behavior()
 
             self.controlled_vehicles.append(vehicle)
             self.road.vehicles.append(vehicle)
@@ -190,7 +193,8 @@ class AVHighway(HighwayEnv):
                 setattr(vehicle, "av_id", av_id)
                 self.vehicle_lookup[vehicle.av_id] = vehicle
                 av_id += 1
-                vehicle.randomize_behavior()
+                if hasattr(vehicle, "randomize_behavior"):
+                    vehicle.randomize_behavior()
                 self.road.vehicles.append(vehicle)
 
     def step(self, action: Action) -> Tuple[Observation, float, bool, bool, dict]:
@@ -235,9 +239,9 @@ class AVHighway(HighwayEnv):
         }
         return info
 
-    def speed_reward(self, vehicle: Vehicle | None = None) -> float:
+    def speed_reward(self, vehicle: AVVehicle | None = None) -> float:
         """
-        Reward for being near the target speed target_speed
+        Reward for being near the reward_speed
 
         :param vehicle: Optional select vehicle. Defaults to self.vehicle
         :return: speed reward
@@ -246,7 +250,7 @@ class AVHighway(HighwayEnv):
         # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
         forward_speed = vehicle.speed * np.cos(vehicle.heading)
         score = self.config['alpha'] * np.exp(
-            - (forward_speed - self.config['target_speed']) ** 2 / (self.config['alpha'] ** 2)
+            - (forward_speed - self.config['reward_speed']) ** 2 / (self.config['alpha'] ** 2)
         )
         logger.debug(f">>> SPEED REWARD: v_forward {forward_speed:0.4f} | score {score:0.4f}")
 
@@ -256,7 +260,7 @@ class AVHighway(HighwayEnv):
 
         return score
 
-    def collision_reward(self, vehicle: Vehicle | None = None) -> float:
+    def collision_reward(self, vehicle: AVVehicle | None = None) -> float:
         """
         Reward based on collision-related factors, like braking distance, and proximity
 
@@ -325,7 +329,7 @@ class AVHighway(HighwayEnv):
     def _rewards(self, action: Action) -> Dict[Text, float]:
         """
         Compute and collect the suite of rewards for our control vehicle.
-        TODO -- Consider a speed-limit penalty (see Vehicle.accelerate)
+        TODO -- Consider a speed-limit penalty (see IDMVehicle.accelerate)
         """
         # neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
         # lane = self.vehicle.target_lane_index[2] if isinstance(self.vehicle, ControlledVehicle) \
@@ -469,12 +473,3 @@ class AVHighway(HighwayEnv):
         Shorthand method for observation sampling that can be called from async env
         """
         return self.observation_space.sample()
-
-
-def register_av_highway():
-    register(
-        id=f"AVAgents/highway-v0",
-        entry_point='sim.envs.highway:AVHighway',
-        # vector_entry_point="sim.envs.highway:AVHighway",
-        # max_episode_steps=1000,  # Adjust the configuration as needed
-    )
