@@ -1,14 +1,15 @@
-from typing import List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 
 import numpy as np
 from highway_env.road.road import Road
 from highway_env.vehicle.objects import Landmark
 
-from sim.vehicle import Vehicle
 
 LaneIndex = Tuple[str, str, int]
 Route = List[LaneIndex]
 
+from sim.vehicles.highway import IDMVehicle, MetaActionVehicle
+AVVehicle = IDMVehicle | MetaActionVehicle
 
 class AVRoad(Road):
     """
@@ -16,7 +17,7 @@ class AVRoad(Road):
     """
 
     def close_vehicles_to(
-        self, vehicle: Vehicle, distance: float, count: int | None = None,
+        self, vehicle: AVVehicle, distance: float, count: int | None = None,
         see_behind: bool = True, sort: bool = True
     ) -> object:
         """
@@ -52,8 +53,8 @@ class AVRoad(Road):
             for other in self.objects:
                 vehicle.handle_collisions(other, dt)
 
-    def neighbour_vehicles(self, vehicle: Vehicle, lane_index: LaneIndex = None) \
-            -> Tuple[Vehicle | None, Vehicle | None]:
+    def neighbour_vehicles(self, vehicle: AVVehicle, lane_index: LaneIndex = None) \
+            -> Tuple[AVVehicle | None, AVVehicle | None]:
         """
         Find the preceding and following vehicles of a given vehicle.
         Note that this returns single vehicles (front, rear), not vectors

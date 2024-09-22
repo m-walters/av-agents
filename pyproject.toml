@@ -30,6 +30,7 @@ hydra-core = "^1.3.2"
 highway-env = "^1.8.2"
 tqdm = "^4.66.5"
 moviepy = "^1.0.3"
+gymnasium = "^0.29.1"
 
 [tool.poetry.dev-dependencies]
 notebook = "*"
@@ -43,9 +44,9 @@ cuda = [
   #torch = { url = "https://download.pytorch.org/whl/cu113/torch-1.10.0+cu113-cp38-cp38-linux_x86_64.whl" }
 ]
 
-# Register our custome envs
+# Register our custom envs
 [tool.poetry.plugins."gymnasium.envs"]
-"AVAgents" = "sim.envs.highway:register_av_highway"
+"AVAgents" ="sim.envs.register:register_envs"
 
 # Build system configuration
 [build-system]

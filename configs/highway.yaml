@@ -7,7 +7,7 @@ defaults:
 env:
   vehicles_count: 50
   vehicles_density: 2
-  target_speed: &target_speed 50
+  reward_speed: &reward_speed 50
   speed_limit: 50
   duration: 60
   mc_horizon: 5
@@ -35,7 +35,7 @@ policy:
 loss:
   model: "LossModel"
   alpha: 10
-  target_speed: *target_speed
+  reward_speed: *reward_speed
   beta: 1
   scale: 0.1
 preference_prior:
