@@ -5,46 +5,46 @@ defaults:
 # Overrides for the env config
 # See AVHighway for defaults
 highway_env:
-  controlled_vehicles: &n_controlled 5  # Number of ego vehicles
-  control_vehicle_type: "sim.vehicles.highway.MetaActionVehicle"
+  controlled_vehicles: &n_controlled 7  # Number of ego vehicles
+  control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
   vehicles_count: 20  # Number of alters
   vehicles_density: 2
   reward_speed: 40
   speed_limit: 40
-  action:
-    type: "MultiAgentAction"
-    action_config:
-      type: "DiscreteMetaAction"
-      lateral: true
-      longitudinal: true
-#      meta_actions: ["LANE_LEFT", "IDLE", "LANE_RIGHT", "FASTER", "SLOWER"]
+#  action:
+#    type: "MultiAgentAction"
+#    action_config:
+#      type: "DiscreteMetaAction"
+#      lateral: true
+#      longitudinal: true
+##      meta_actions: ["LANE_LEFT", "IDLE", "LANE_RIGHT", "FASTER", "SLOWER"]
   observation:
     type: "MultiAgentObservation"
     observation_config:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
-  mc_horizon: &mc_horizon 10
-  n_montecarlo: &n_montecarlo 20
-  duration: 200
+  mc_horizon: &mc_horizon 11
+  n_montecarlo: &n_montecarlo 9
+  duration: 20
 #==============
 name: multiagent
 seed: 867
 world_draws: 1
-warmup_steps: 1e5  # included within the duration
+warmup_steps: 10  # included within the duration
 mc_period: &mc_period 5  # real-world steps between MC issuances
-multiprocessing_cpus: 8
+multiprocessing_cpus: 4
 
 gatekeeper:
   n_controlled: *n_controlled
   mc_period: *mc_period
-  risk_threshold: -5.0
   # Montecarlo params
   mc_horizon: *mc_horizon
   n_montecarlo: *n_montecarlo
-
-preference_prior:
-  model: "ExponentialPreferencePrior"
-  p_star: 0.5
-  l_star: 0.1
-risk:
-  model: "DifferentialEntropyRiskModel"
+  # Models
+  preference_prior:
+    model: "ExponentialPreferencePrior"
+    p_star: 0.5
+    l_star: 0.1
+  risk_model:
+    model: "DifferentialEntropyRiskModel"
+    threshold: -5.0

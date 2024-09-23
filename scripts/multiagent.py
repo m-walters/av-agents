@@ -12,11 +12,9 @@ import numpy as np
 import pymc as pm
 from omegaconf import DictConfig
 from tqdm import tqdm
-from gymnasium.wrappers import RecordVideo
-
 
 import sim.params as sim_params
-from sim import gatekeeper, models, run, utils
+from sim import gatekeeper, run, utils
 from sim.envs.highway import AVHighway
 
 # Name of file in configs, set this to your liking
@@ -53,18 +51,10 @@ def main(cfg: DictConfig):
         param_collection = sim_params.ParamCollection(params)
         param_collection.draw(cfg.world_draws)
 
-    preference_prior = getattr(models, cfg.preference_prior.model)(**cfg.preference_prior, seed=seed)
-    risk_model = getattr(models, cfg.risk.model)(preference_prior=preference_prior, **cfg.risk, seed=seed)
-
     # Create our gym Env
     # render_mode = 'rgb_array'
     render_mode = None  # No visuals because of multiprocessing
-    render_mode = 'rgb_array'
-    video_dir = f"{latest_dir}/recordings"
-    video_prefix = "sim"
-    env = RecordVideo(
-        gym.make('AVAgents/highway-v0', render_mode=render_mode), video_dir, name_prefix=video_prefix
-    )
+    env = gym.make('AVAgents/highway-v0', render_mode=render_mode)
 
     uenv: "AVHighway" = env.unwrapped
     uenv.update_config(env_cfg, reset=True)
@@ -75,28 +65,26 @@ def main(cfg: DictConfig):
     i_mc = 0  # Tracking MC steps
 
     # Init the gatekeeper
-    gk_cmd = gatekeeper.GatekeeperCommand(uenv, cfg.gatekeeper, uenv.controlled_vehicles, seed)
+    gk_cmd = gatekeeper.GatekeeperCommand(
+        uenv, cfg.gatekeeper, uenv.controlled_vehicles, seed
+    )
 
     with multiprocessing.Pool(cfg.get('multiprocessing_cpus', 8), maxtasksperchild=100) as pool:
         for step in tqdm(range(run_params['duration']), desc="Steps"):
             # We'll use the gatekeeper params for montecarlo control
             if step >= run_params['warmup_steps']:
                 if step % gk_cmd.mc_period == 0:
-                    # Run the montecarlo simulation, capturing the risks, losses
-                    # Returned dimensions are [n_montecarlo]
-                    losses, loss_log_probs, collisions = gk_cmd.simulate_mc(pool)
-
-                    risk, entropy, energy = risk_model(losses, loss_log_probs)
+                    # Returned dimensions are [n_controlled]
+                    results = gk_cmd.run(pool)
 
                     # Record data
-                    ds["mc_loss"][0, i_mc, :, :] = losses
-                    ds["loss_mean"][0, i_mc, :] = np.mean(losses)
-                    ds["loss_p5"][0, i_mc, :] = np.percentile(losses, 5)
-                    ds["loss_p95"][0, i_mc, :] = np.percentile(losses, 95)
-                    ds["risk"][0, i_mc, :] = risk
-                    ds["entropy"][0, i_mc, :] = entropy
-                    ds["energy"][0, i_mc, :] = energy
-
+                    ds["mc_loss"][0, i_mc, :, :] = results["losses"]
+                    ds["loss_mean"][0, i_mc, :] = np.mean(results["losses"])
+                    ds["loss_p5"][0, i_mc, :] = np.percentile(results["losses"], 5)
+                    ds["loss_p95"][0, i_mc, :] = np.percentile(results["losses"], 95)
+                    ds["risk"][0, i_mc, :] = results["risk"]
+                    ds["entropy"][0, i_mc, :] = results["entropy"]
+                    ds["energy"][0, i_mc, :] = results["energy"]
                     i_mc += 1
 
             # We do action after MC sim in case it informs actions

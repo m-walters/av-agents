@@ -3,7 +3,6 @@ import logging
 from typing import Dict, Optional, Text, Tuple
 
 import numpy as np
-from gymnasium.envs.registration import register
 from gymnasium.utils import seeding
 from highway_env import utils
 from highway_env.envs.common.action import Action
@@ -175,7 +174,8 @@ class AVHighway(HighwayEnv):
                 speed=25,
                 lane_id=self.config["initial_lane_id"],
                 spacing=self.config["ego_spacing"],
-                av_id=av_id
+                av_id=str(av_id),
+                target_speed=self.config["reward_speed"]
             )
             self.vehicle_lookup[vehicle.av_id] = vehicle
             av_id += 1
@@ -188,9 +188,11 @@ class AVHighway(HighwayEnv):
             self.road.vehicles.append(vehicle)
 
             for _ in range(others):
-                vehicle = other_vehicles_type.create_random(self.road, spacing=1 / self.config["vehicles_density"])
+                vehicle = other_vehicles_type.create_random(
+                    self.road, spacing=1 / self.config["vehicles_density"]
+                )
                 # Since this may be an external class..
-                setattr(vehicle, "av_id", av_id)
+                setattr(vehicle, "av_id", str(av_id))
                 self.vehicle_lookup[vehicle.av_id] = vehicle
                 av_id += 1
                 if hasattr(vehicle, "randomize_behavior"):

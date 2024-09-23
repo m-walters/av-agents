@@ -3,8 +3,23 @@ from typing import Optional, Union
 import numpy as np
 from highway_env.road.road import Road, Route
 from highway_env.utils import Vector
-from highway_env.vehicle.controller import ControlledVehicle
 from highway_env.vehicle.behavior import AggressiveVehicle
+from highway_env.vehicle.controller import ControlledVehicle
+
+
+class VehicleBase:
+    """ Vehicle length [m] """
+    LENGTH = 5.0
+    """ Vehicle width [m] """
+    WIDTH = 2.0
+    """ Range for random initial speeds [m/s] """
+    DEFAULT_INITIAL_SPEEDS = [20, 30]
+    """ Maximum reachable speed [m/s] """
+    MAX_SPEED = 40.
+    """ Minimum reachable speed [m/s] """
+    MIN_SPEED = -20.
+    """ Length of the vehicle state history, for trajectory display"""
+    HISTORY_SIZE = 30
 
 
 class AggressiveParams:
@@ -62,24 +77,12 @@ class HotshotParams(AggressiveParams):
     LANE_CHANGE_DELAY = 1.0  # [s]; lower means more frequent lane checks. Default = 1.0
 
 
-class IDMVehicle(HotshotParams, AggressiveVehicle):
+class IDMVehicle(HotshotParams, VehicleBase, AggressiveVehicle):
     """
     IDM Vehicle override.
     IDMVehicles don't respond to action inputs, but instead operate
     intelligently from their surroundings.
     """
-    """ Vehicle length [m] """
-    LENGTH = 5.0
-    """ Vehicle width [m] """
-    WIDTH = 2.0
-    """ Range for random initial speeds [m/s] """
-    DEFAULT_INITIAL_SPEEDS = [20, 30]
-    """ Maximum reachable speed [m/s] """
-    MAX_SPEED = 40.
-    """ Minimum reachable speed [m/s] """
-    MIN_SPEED = -20.
-    """ Length of the vehicle state history, for trajectory display"""
-    HISTORY_SIZE = 30
 
     def __init__(
         self,
@@ -93,7 +96,7 @@ class IDMVehicle(HotshotParams, AggressiveVehicle):
         enable_lane_change: bool = True,
         timer: float | None = None,
         data: dict | None = None,
-        av_id: int = -1,
+        av_id: str | None = None,
     ):
         super().__init__(
             road, position, heading, speed, target_lane_index, target_speed, route,
@@ -103,6 +106,9 @@ class IDMVehicle(HotshotParams, AggressiveVehicle):
         self.collecting_data = True
         # Our internal tracking ID
         self.av_id = av_id
+
+    def act(self, action: Union[dict, str] = None):
+        super().act(action)
 
     def randomize_behavior(self):
         """
@@ -125,8 +131,8 @@ class IDMVehicle(HotshotParams, AggressiveVehicle):
         lane_id: Optional[int] = None,
         spacing: float = 1,
         target_speed: Optional[float] = None,
-        av_id: int = -1,
-    ) -> "Vehicle":
+        av_id: str | None = None,
+    ) -> "IDMVehicle":
         """
         Create a random vehicle on the road.
 
@@ -151,7 +157,7 @@ class IDMVehicle(HotshotParams, AggressiveVehicle):
             if lane.speed_limit is not None:
                 speed = road.np_random.uniform(0.7 * lane.speed_limit, 0.8 * lane.speed_limit)
             else:
-                speed = road.np_random.uniform(Vehicle.DEFAULT_INITIAL_SPEEDS[0], Vehicle.DEFAULT_INITIAL_SPEEDS[1])
+                speed = road.np_random.uniform(cls.DEFAULT_INITIAL_SPEEDS[0], cls.DEFAULT_INITIAL_SPEEDS[1])
         default_spacing = 12 + 1.0 * speed
         offset = spacing * default_spacing * np.exp(-5 / 40 * len(road.network.graph[_from][_to]))
         x0 = np.max([lane.local_coordinates(v.position)[0] for v in road.vehicles]) \
@@ -162,6 +168,9 @@ class IDMVehicle(HotshotParams, AggressiveVehicle):
             target_speed=target_speed, av_id=av_id
         )
         return v
+
+    def __str__(self):
+        return f"IDMVehicle [#{id(self) % 1000}, AV-{self.av_id}]"
 
 
 class MetaActionVehicle(ControlledVehicle):
@@ -190,7 +199,7 @@ class MetaActionVehicle(ControlledVehicle):
         target_lane_index: int | None = None,
         target_speed: float | None = None,
         route: Route | None = None,
-        av_id: int = -1,
+        av_id: str | None = None,
     ):
         super().__init__(
             road, position, heading, speed, target_lane_index, target_speed, route,
@@ -208,8 +217,8 @@ class MetaActionVehicle(ControlledVehicle):
         lane_id: Optional[int] = None,
         spacing: float = 1,
         target_speed: float = None,
-        av_id: int = -1,
-    ) -> "Vehicle":
+        av_id: str | None = None,
+    ) -> "MetaActionVehicle":
         """
         Create a random vehicle on the road.
 
@@ -241,13 +250,13 @@ class MetaActionVehicle(ControlledVehicle):
                 )
             else:
                 speed = road.np_random.uniform(
-                    Vehicle.DEFAULT_INITIAL_SPEEDS[0], Vehicle.DEFAULT_INITIAL_SPEEDS[1]
+                    cls.DEFAULT_INITIAL_SPEEDS[0], cls.DEFAULT_INITIAL_SPEEDS[1]
                 )
         default_spacing = 12 + 1.0 * speed
         offset = (
-            spacing
-            * default_spacing
-            * np.exp(-5 / 40 * len(road.network.graph[_from][_to]))
+                spacing
+                * default_spacing
+                * np.exp(-5 / 40 * len(road.network.graph[_from][_to]))
         )
         x0 = (
             np.max([lane.local_coordinates(v.position)[0] for v in road.vehicles])
@@ -259,6 +268,9 @@ class MetaActionVehicle(ControlledVehicle):
             road, lane.position(x0, 0), lane.heading_at(x0), speed, target_speed=target_speed, av_id=av_id
         )
         return v
+
+    def __str__(self):
+        return f"MetaActionVehicle [#{id(self) % 1000}, AV-{self.av_id}]"
 
 
 AVVehicleType = IDMVehicle | MetaActionVehicle

@@ -1,15 +1,16 @@
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Tuple
 
 import numpy as np
 from highway_env.road.road import Road
 from highway_env.vehicle.objects import Landmark
 
-
 LaneIndex = Tuple[str, str, int]
 Route = List[LaneIndex]
 
 from sim.vehicles.highway import IDMVehicle, MetaActionVehicle
+
 AVVehicle = IDMVehicle | MetaActionVehicle
+
 
 class AVRoad(Road):
     """

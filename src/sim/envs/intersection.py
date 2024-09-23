@@ -13,7 +13,6 @@ from highway_env.envs.intersection_env import IntersectionEnv
 from highway_env.road.lane import AbstractLane, CircularLane, LineType, StraightLane
 from highway_env.road.regulation import RegulatedRoad
 from highway_env.road.road import RoadNetwork
-from highway_env.vehicle.kinematics import Vehicle
 from omegaconf import DictConfig
 
 from sim.utils import Array
