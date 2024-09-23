@@ -135,7 +135,8 @@ def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams"]:
 
     # Seed RNG
     seed = cfg.get("seed", None) or np.random.randint(1e6.__int__())
-    logger.warning(f"No seed provided. Using random seed: {seed}")
+    if not "seed" in cfg:
+        logger.warning(f"No seed provided. Using random seed: {seed}")
     np.random.seed(seed)
     random.seed(seed)
 

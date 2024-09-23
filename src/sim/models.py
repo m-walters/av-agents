@@ -1,16 +1,14 @@
 import logging
 from abc import ABC
-from typing import Tuple, Union
+from typing import Tuple
 
 import jax.numpy as jnp
 import numpy as np
-from omegaconf import DictConfig
 from scipy.special import logsumexp
 from scipy.stats import differential_entropy as entr
 
-from sim.params import ParamCollection
 from sim.utils import (
-    Array, JaxGaussian, JaxRKey, Number, ParamEvolution, ParamIterator, ParamIteratorConfig
+    Array, JaxGaussian, JaxRKey, Number
 )
 
 logger = logging.getLogger("av-sim")
@@ -24,23 +22,6 @@ class ModelBase(ABC):
     def __init__(self, *args, **kwargs):
         # We leave kwargs open
         self.key = JaxRKey(seed=kwargs.get("seed", 8675309))
-
-
-class Policy(ModelBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def sample(self, env, params: ParamCollection):
-        raise NotImplementedError
-
-
-class DefaultPolicy(Policy):
-    """
-    This policy is the HighwayEnv default policy
-    """
-
-    def sample(self, env, params: ParamCollection):
-        ...
 
 
 class LossModel(ModelBase):
@@ -86,46 +67,7 @@ class NoisyLossModel(LossModel):
         return rloss, log_probs
 
 
-class PreferencePrior(ModelBase):
-    def __init__(self, *args, **kwargs):
-        """
-        Also store param histories as they evolve, keyed by their name
-        """
-        super().__init__(*args, **kwargs)
-        self._param_history = {}
-
-    def get_param_history(self):
-        # Return param history if non-null
-        return {
-            k: np.array(v) for k, v in self._param_history.items() if len(v) > 0
-        }
-
-    def _init_param(self, p: Union[Number, ParamIteratorConfig]) -> ParamIterator:
-        """
-        Use this method to initialize you parameters as ParamIterators
-        """
-        if isinstance(p, ParamIterator):
-            return p
-
-        if isinstance(p, (dict, DictConfig)):
-            return ParamIterator(**p)
-        elif isinstance(p, (int, float)):
-            return ParamIterator(evolution=ParamEvolution.CONSTANT, x_0=p)
-        else:
-            raise ValueError(f"Unrecognized parameter type: {p}")
-
-    def step(self):
-        """
-        Evolve the preference prior
-        Be sure to also store its last value
-        """
-        raise NotImplementedError
-
-    def __call__(self, *args, **kwargs):
-        raise NotImplementedError
-
-
-class SoftmaxPreferencePrior(PreferencePrior):
+class SoftmaxPreferencePrior(ModelBase):
     """
     Softmax preference prior weighted by constant kappa
     """
@@ -136,10 +78,6 @@ class SoftmaxPreferencePrior(PreferencePrior):
         *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
-
-        self._param_history = {
-            "kappa": [],
-        }
         self.kappa = kappa
 
     def __call__(self, Lt: Array, take_log: bool = True) -> Array:
@@ -155,7 +93,7 @@ class SoftmaxPreferencePrior(PreferencePrior):
             return jnp.exp(-self.kappa * Lt) / jnp.sum(jnp.exp(-self.kappa * Lt), axis=0)
 
 
-class ExponentialPreferencePrior(PreferencePrior):
+class ExponentialPreferencePrior(ModelBase):
     """
     k is an empirical constant related to stakeholder loss aversion
     k = -ln(p*)/L* where p* is the stakeholder's probability that loss will surpass L*
@@ -164,37 +102,16 @@ class ExponentialPreferencePrior(PreferencePrior):
     def __init__(
         self,
         p_star: Number,
-        l_star: Union[ParamIterator, ParamIteratorConfig, Number],
+        l_star: Number,
         *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
-
-        self._param_history = {
-            "p_star": [],
-            "l_star": [],
-            "k": [],
-        }
-
-        p_star_iter = self._init_param(p_star)
-        l_star_iter = self._init_param(l_star)
-
-        self.p_star_iter = p_star_iter
-        self.l_star_iter = l_star_iter
-        # Init value
-        self.p_star = self.p_star_iter()
-        self.l_star = self.l_star_iter()
+        self.p_star = p_star
+        self.l_star = l_star
 
     @property
     def k(self):
         return -jnp.log(self.p_star) / self.l_star
-
-    def step(self):
-        self._param_history["p_star"].append(self.p_star)
-        self._param_history["l_star"].append(self.l_star)
-        self._param_history["k"].append(self.k)
-
-        self.p_star = self.p_star_iter()
-        self.l_star = self.l_star_iter()
 
     def __call__(self, Lt: Array, take_log: bool = True) -> Array:
         """
