@@ -87,6 +87,8 @@ def main(cfg: DictConfig):
                     ds["energy"][0, i_mc, :] = results["energy"]
                     i_mc += 1
 
+                    return
+
             # We do action after MC sim in case it informs actions
             # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
             action = env.action_space.sample()

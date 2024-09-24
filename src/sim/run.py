@@ -118,13 +118,13 @@ def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams"]:
     """
     Process the config, set up some objects etc.
     """
-    log_level = cfg.get("log_level", "INFO")
+    log_level = cfg.get("log_level", "INFO").lower()
     # Get logger *after* setting the level
-    if log_level == "DEBUG":
+    if log_level == "debug":
         logger.setLevel(logging.DEBUG)
-    elif log_level == "INFO":
+    elif log_level == "info":
         logger.setLevel(logging.INFO)
-    elif log_level == "WARNING":
+    elif log_level == "warning":
         logger.setLevel(logging.WARNING)
 
     # Print our config
@@ -160,8 +160,8 @@ def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams"]:
     warmup_steps = cfg.get("warmup_steps", 0)
 
     # Monte Carlo logistics
-    mc_period = env_cfg.get("mc_period", 5)
-    mc_steps = np.arange(warmup_steps, duration, mc_period)
+    mc_period = cfg.get("mc_period", 5)
+    mc_steps = np.arange(warmup_steps, duration, mc_period, dtype=int)
     n_montecarlo = env_cfg['n_montecarlo']
 
     # Convert to py-dict so we can record the seed in case this is a random run

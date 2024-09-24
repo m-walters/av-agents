@@ -8,7 +8,7 @@ from sim import plotting
 # Create the video with the saved frames and data
 # Load the data
 RESULTS_DIR = "../results"
-run_dir = RESULTS_DIR + "/mc-10period"
+run_dir = RESULTS_DIR + "/latest"
 
 frames = np.load(f"{run_dir}/frames.npy")
 dataset = xr.open_dataset(f"{run_dir}/results.nc")

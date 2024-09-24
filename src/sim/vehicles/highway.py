@@ -172,6 +172,9 @@ class IDMVehicle(HotshotParams, VehicleBase, AggressiveVehicle):
     def __str__(self):
         return f"IDMVehicle [#{id(self) % 1000}, AV-{self.av_id}]"
 
+    def __repr__(self):
+        return self.__str__()
+
 
 class MetaActionVehicle(ControlledVehicle):
     """
@@ -271,6 +274,9 @@ class MetaActionVehicle(ControlledVehicle):
 
     def __str__(self):
         return f"MetaActionVehicle [#{id(self) % 1000}, AV-{self.av_id}]"
+
+    def __repr__(self):
+        return self.__str__()
 
 
 AVVehicleType = IDMVehicle | MetaActionVehicle

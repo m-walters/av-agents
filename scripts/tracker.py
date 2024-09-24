@@ -4,6 +4,7 @@ of the run, and a video of the evolution of the data during the sim.
 """
 import logging
 import os
+import multiprocessing
 import shutil
 
 import gymnasium as gym

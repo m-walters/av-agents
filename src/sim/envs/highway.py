@@ -278,9 +278,7 @@ class AVHighway(HighwayEnv):
         )
 
         # See our AV Project, "Vehicle Agent" section for derivation
-        # TODO -- f"MW With 8675309 seed, we get collision penalties exceeding 500 with this scaling
         # In IDMVehicle.act you can see acceleration getting clipped by [-ACC_MAX, ACC_MAX]
-        # beta = 3 * self.ACC_MAX / 2
         beta = 1 / (2 * self.ACC_MAX)
         logger.debug(f">> BETA: {beta}")
 
@@ -288,9 +286,14 @@ class AVHighway(HighwayEnv):
         penalty = 0
         for lane in self.road.network.all_side_lanes(vehicle.lane_index):
             logger.debug(f"CHECKING LANE {lane}")
+            if abs(lane[2] - vehicle.lane_index[2]) > 1:
+                # Don't worry about lanes that are more than 1 away
+                logger.debug(f"SKIPPING LANE {lane}")
+                continue
+
             front, rear = self.road.neighbour_vehicles(vehicle, lane)
             if front is not None:
-                logger.debug(f"FOUND FRONT [{front}]")
+                logger.debug(f"FOUND FRONT [{front}] | LANE {front.lane_index[2]}")
                 n_nbr += 1
                 front_speed = front.speed * np.cos(front.heading)
                 front_delta = front_speed - v_x
@@ -299,7 +302,7 @@ class AVHighway(HighwayEnv):
                     # Note, lane_distance_to: <argument>.x - self.x
                     front_distance = vehicle.lane_distance_to(front)
                     assert front_distance > 0, f"Front distance <= 0: {front_distance}"
-                    front_distance = max(front_distance, vehicle.LENGTH)
+                    front_distance = max(front_distance, vehicle.LENGTH * 1.2)
                     _penalty = beta * front_delta ** 2 / (
                             front_distance * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
                     penalty += _penalty
@@ -316,15 +319,18 @@ class AVHighway(HighwayEnv):
                     # Rear car approaching
                     rear_distance = rear.lane_distance_to(vehicle)
                     assert rear_distance > 0, f"Rear distance <= 0: {rear_distance}"
-                    rear_distance = max(rear_distance, rear.LENGTH)
+                    rear_distance = max(rear_distance, rear.LENGTH * 1.2)
                     _penalty = beta * rear_delta ** 2 / (
                             rear_distance * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
                     penalty += _penalty
                     logger.debug(f">> {rear_speed:0.4f} | {rear_delta:0.4f} | {rear_distance:0.4f} | {_penalty:0.4f}")
 
-        logger.debug(f"COLLISION PENALTY: {penalty}\n")
+        logger.debug(f"COLLISION PENALTY: {penalty}\n across {n_nbr} nbrs")
         # Average over the neighbors
-        penalty /= n_nbr if n_nbr > 0 else 1
+        # penalty /= n_nbr if n_nbr > 0 else 1
+
+        # Multiply it by the sin(theta) of our heading -- the harder we are turning the more dangerous this is
+        penalty *= 1 + np.abs(np.sin(vehicle.heading))
 
         return -penalty
 
