@@ -26,6 +26,7 @@ highway_env:
   mc_horizon: &mc_horizon 11
   n_montecarlo: &n_montecarlo 9
   duration: 100
+  normalize_reward: true
 #==============
 name: multiagent
 seed: 867

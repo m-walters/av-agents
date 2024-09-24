@@ -51,7 +51,8 @@ class AVHighway(HighwayEnv):
                 "duration": 40,  # [s]
                 "ego_spacing": 2,
                 "vehicles_density": 1,
-                "defensive_reward": -1,  # The reward received when colliding with a vehicle.
+                "crash_reward": -1,  # The reward received when colliding with a vehicle.
+                "defensive_reward_min": -2,  # Cap the defensive reward/penalty
                 # The reward received when driving on the right-most lanes, linearly mapped to
                 # zero for other lanes.
                 "right_lane_reward": 0.1,
@@ -262,6 +263,13 @@ class AVHighway(HighwayEnv):
 
         return score
 
+    def crash_reward(self, vehicle: AVVehicle | None = None) -> float:
+        """
+        Negative penalty for crashing
+        """
+        vehicle = vehicle or self.vehicle
+        return self.config['crash_reward'] if vehicle.crashed else 0
+
     def defensive_reward(self, vehicle: AVVehicle | None = None) -> float:
         """
         Reward based on collision-related factors, like braking distance, and proximity
@@ -270,6 +278,9 @@ class AVHighway(HighwayEnv):
         :return: collision reward
         """
         vehicle = vehicle or self.vehicle
+        if vehicle.crashed:
+            return self.config['defensive_reward_min']
+
         v_x = vehicle.speed * np.cos(vehicle.heading)
 
         # Grab the front and behind cars across different lanes and consider their speed deltas from ego
@@ -332,6 +343,10 @@ class AVHighway(HighwayEnv):
         # Multiply it by the sin(theta) of our heading -- the harder we are turning the more dangerous this is
         penalty *= 1 + np.abs(np.sin(vehicle.heading))
 
+        if penalty < self.config['defensive_reward_min']:
+            logger.warning(f"DEFENSIVE REWARD MINIMUM PENALTY EXCEEDED: {penalty}")
+            penalty = self.config['defensive_reward_min']
+
         return -penalty
 
     def _rewards(self, action: Action) -> Dict[Text, float]:
@@ -345,12 +360,12 @@ class AVHighway(HighwayEnv):
 
         speed_reward = self.speed_reward()
         defensive_reward = self.defensive_reward()
+        crash_reward = self.crash_reward()
 
         r = {
             "defensive_reward": defensive_reward,
-            # "right_lane_reward": lane / max(len(neighbours) - 1, 1),
             "speed_reward": speed_reward,
-            # "on_road_reward": float(self.vehicle.on_road),
+            "crash_reward": crash_reward,
         }
         logger.debug(f">>>> REWARDS: {r}")
 
@@ -365,13 +380,17 @@ class AVHighway(HighwayEnv):
         rewards = rewards or self._rewards(action)
         reward = sum(rewards.values())
 
-        # if self.config["normalize_reward"]:
-        #     reward = utils.lmap(
-        #         reward,
-        #         [self.config["defensive_reward"], self.config["right_lane_reward"]],
-        #         [0, 1]
-        #     )
-        # reward *= rewards['on_road_reward']
+        if self.config["normalize_reward"]:
+            # Best is 1
+            # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_reward
+            best = 1
+            worst = self.config['crash_reward'] + self.config['defensive_reward_min']
+            reward = utils.lmap(
+                reward,
+                [worst, best],
+                [0, 1]
+            )
+
         return reward
 
     def _is_terminated(self) -> bool:
