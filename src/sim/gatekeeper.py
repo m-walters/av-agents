@@ -49,7 +49,7 @@ class Gatekeeper:
         # See AVHighway class for types
         # These must be callables in the Env class
         self.reward_types = [
-            "collision_reward",
+            "defensive_reward",
             "speed_reward",
         ]
         self.latest_reward = 0

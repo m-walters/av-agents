@@ -51,7 +51,7 @@ class AVHighway(HighwayEnv):
                 "duration": 40,  # [s]
                 "ego_spacing": 2,
                 "vehicles_density": 1,
-                "collision_reward": -1,  # The reward received when colliding with a vehicle.
+                "defensive_reward": -1,  # The reward received when colliding with a vehicle.
                 # The reward received when driving on the right-most lanes, linearly mapped to
                 # zero for other lanes.
                 "right_lane_reward": 0.1,
@@ -262,7 +262,7 @@ class AVHighway(HighwayEnv):
 
         return score
 
-    def collision_reward(self, vehicle: AVVehicle | None = None) -> float:
+    def defensive_reward(self, vehicle: AVVehicle | None = None) -> float:
         """
         Reward based on collision-related factors, like braking distance, and proximity
 
@@ -344,10 +344,10 @@ class AVHighway(HighwayEnv):
         #     else self.vehicle.lane_index[2]
 
         speed_reward = self.speed_reward()
-        collision_reward = self.collision_reward()
+        defensive_reward = self.defensive_reward()
 
         r = {
-            "collision_reward": collision_reward,
+            "defensive_reward": defensive_reward,
             # "right_lane_reward": lane / max(len(neighbours) - 1, 1),
             "speed_reward": speed_reward,
             # "on_road_reward": float(self.vehicle.on_road),
@@ -368,7 +368,7 @@ class AVHighway(HighwayEnv):
         # if self.config["normalize_reward"]:
         #     reward = utils.lmap(
         #         reward,
-        #         [self.config["collision_reward"], self.config["right_lane_reward"]],
+        #         [self.config["defensive_reward"], self.config["right_lane_reward"]],
         #         [0, 1]
         #     )
         # reward *= rewards['on_road_reward']

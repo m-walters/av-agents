@@ -97,7 +97,7 @@ def main(cfg: DictConfig):
 
             # Record the actuals
             # ds["reward"][0, step] = reward
-            # ds["collision_reward"][0, step] = info["rewards"]["collision_reward"]
+            # ds["defensive_reward"][0, step] = info["rewards"]["defensive_reward"]
             # ds["speed_reward"][0, step] = info["rewards"]["speed_reward"]
 
             if terminated or truncated:
@@ -122,7 +122,7 @@ def main(cfg: DictConfig):
     #
     # # Create the video with the saved frames and data
     # ds_label_map = {
-    #     "R_Coll": "collision_reward",
+    #     "R_Coll": "defensive_reward",
     #     "R_Spd": "speed_reward",
     #     "Actual Loss": "real_loss",
     #     "E[Loss]": "loss_mean",

@@ -14,7 +14,7 @@ frames = np.load(f"{run_dir}/frames.npy")
 dataset = xr.open_dataset(f"{run_dir}/results.nc")
 
 ds_label_map = {
-    "R_Coll": "collision_reward",
+    "R_Def": "defensive_reward",
     "R_Spd": "speed_reward",
     "Actual Loss": "real_loss",
     "E[Loss]": "loss_mean",

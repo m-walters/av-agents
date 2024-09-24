@@ -108,8 +108,8 @@ def main(cfg: DictConfig):
 
         observations, rewards, terminated, truncated, infos = envs_wrapper.step(actions)
         ds["reward"][:, step] = rewards
-        # info["rewards"] is a list of {"collision_reward": <float>, "speed_reward": <float>} items
-        ds["collision_reward"][:, step] = [r["collision_reward"] for r in infos["rewards"]]
+        # info["rewards"] is a list of {"defensive_reward": <float>, "speed_reward": <float>} items
+        ds["defensive_reward"][:, step] = [r["defensive_reward"] for r in infos["rewards"]]
         ds["speed_reward"][:, step] = [r["speed_reward"] for r in infos["rewards"]]
         ds["crashed"][:, step] = infos["crashed"]
 

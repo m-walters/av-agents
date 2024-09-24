@@ -81,7 +81,7 @@ def main(cfg: DictConfig):
             # action = env.action_space.sample()
             # action = env.action_space.sample()
             # spd_reward = env.unwrapped.speed_reward()
-            # coll_reward = env.unwrapped.collision_reward()
+            # def_reward = env.unwrapped.defensive_reward()
 
             if step >= run_params['warmup_steps']:
                 if step % run_params['mc_period'] == 0:
@@ -106,7 +106,7 @@ def main(cfg: DictConfig):
 
             obs, reward, terminated, truncated, info = env.step(action)
             ds["reward"][wdraw, step] = reward
-            ds["collision_reward"][wdraw, step] = info["rewards"]["collision_reward"]
+            ds["defensive_reward"][wdraw, step] = info["rewards"]["defensive_reward"]
             ds["speed_reward"][wdraw, step] = info["rewards"]["speed_reward"]
 
             logger.debug(f"REWARD: {reward}")

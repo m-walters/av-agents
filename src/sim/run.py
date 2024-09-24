@@ -51,7 +51,7 @@ def init_results_dataset(
             ### Data recorded every world step
             # Rewards
             "reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            "collision_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "defensive_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "speed_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "crashed": (("world", "step"), np.full((world_draws, duration), np.nan)),
             ### Data recorded from MC Sweeps
@@ -87,7 +87,7 @@ def init_multiagent_results_dataset(
             ### Data recorded every world step
             # Rewards
             "reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
-            "collision_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
+            "defensive_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "speed_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "crashed": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             ### Data recorded from MC Sweeps
