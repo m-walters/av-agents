@@ -1,9 +1,10 @@
 """
 Gatekeeper module
 """
+import copy
 import logging
 import multiprocessing
-from typing import Dict, List, TypedDict, Union
+from typing import Dict, List, TypedDict, Union, Optional
 
 import numpy as np
 from omegaconf import DictConfig
@@ -42,6 +43,7 @@ class Gatekeeper:
         seed: int,
     ):
         self.gk_idx = gk_idx  # Tracks this gatekeepers index in the results array for the GKCommand
+        # Don't store the vehicle object because env duplicating will change the memory address during MC
         self.vehicle_id = vehicle.av_id
         self.risk_threshold: float = risk_threshold
         self.rkey = JaxRKey(seed)
@@ -155,35 +157,35 @@ class GatekeeperCommand:
         self, seed: int,
     ):
         """
-        For use within the multiprocessing workers.
-        We can take advantage of how mp copies objects to skip copy.deepcopy(env)
+        Run an MC trajectory and accumulate the results across controlled vehicles
         """
-        self.env.seed_montecarlo(self.env, seed)
+        env = copy.deepcopy(self.env)
+        env.seed_montecarlo(env, seed)
 
         losses = np.zeros(self.n_controlled)
         collisions = np.zeros_like(losses)
 
         for j in range(self.mc_horizon):
             # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
-            action = self.env.action_space.sample()
+            action = env.action_space.sample()
 
             # Like the regular Env sim but we ignore reward calculations and such
-            self.env.time += 1 / self.env.config["policy_frequency"]
-            self.env._simulate(action)
+            env.time += 1 / env.config["policy_frequency"]
+            env._simulate(action)
 
             if j + 1 < self.mc_horizon:
                 continue
 
             # Else, last step so we take measurements
             for i_gk, gk in enumerate(self.gatekeepers):
-                crashed = gk.crashed(self.env)
+                crashed = gk.crashed(env)
                 if crashed:
                     collisions[i_gk] = 1
-                reward = sum(gk.calculate_reward(self.env).values())
+                reward = sum(gk.calculate_reward(env).values())
                 losses[i_gk] -= reward
 
-            # if self.env.render_mode == 'human':
-            #     self.env.render()
+            # if env.render_mode == 'human':
+            #     env.render()
 
             # if terminated or truncated:
             #     if terminated:
@@ -194,7 +196,7 @@ class GatekeeperCommand:
 
         return losses, collisions
 
-    def run(self, pool: multiprocessing.Pool, gamma: float = 1.0) -> dict:
+    def run(self, pool: Optional["multiprocessing.Pool"], gamma: float = 1.0) -> dict:
         """
         Perform montecarlo simulations and calculate risk equations etc.
 
@@ -209,16 +211,17 @@ class GatekeeperCommand:
         # Very sensitive that these seeds are python integers...
         seeds = [int(s) for s in self.rkey.next_seeds(self.n_montecarlo)]
 
-        # Issue trajectories to workers
-        # Use starmap if you need to provide more arguments
-        results = pool.map(self._mc_trajectory, seeds)
+        if pool:
+            # Issue trajectories to workers
+            # Use starmap if you need to provide more arguments
+            results = pool.map(self._mc_trajectory, seeds)
+            # Stack results along first dimension
+            results = np.stack(results, axis=0)
+        else:
+            results = np.zeros((self.n_montecarlo, 2, self.n_controlled))
+            for i, seed in enumerate(seeds):
+                results[i] = self._mc_trajectory(seed)
 
-        # Stack results along first dimension
-        results = np.stack(results, axis=0)
-
-        # for i, (loss, collision) in enumerate(results):
-        #     losses[i, :] = loss
-        #     collisions[i, :] = collision
         losses = results[:, 0, :]
         collisions = results[:, 1, :]
 

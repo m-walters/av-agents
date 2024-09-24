@@ -7,17 +7,16 @@ defaults:
 highway_env:
   controlled_vehicles: &n_controlled 7  # Number of ego vehicles
   control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
-  vehicles_count: 20  # Number of alters
-  vehicles_density: 2
+  vehicles_count: 30  # Number of alters
+  vehicles_density: 3
   reward_speed: 40
   speed_limit: 40
-#  action:
-#    type: "MultiAgentAction"
-#    action_config:
-#      type: "DiscreteMetaAction"
-#      lateral: true
-#      longitudinal: true
-##      meta_actions: ["LANE_LEFT", "IDLE", "LANE_RIGHT", "FASTER", "SLOWER"]
+  action:
+    type: "MultiAgentAction"
+    action_config:
+      type: "DiscreteMetaAction"
+      lateral: true
+      longitudinal: true
   observation:
     type: "MultiAgentObservation"
     observation_config:
@@ -25,7 +24,7 @@ highway_env:
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: &mc_horizon 11
   n_montecarlo: &n_montecarlo 9
-  duration: 100
+  duration: 200
   normalize_reward: true
 #==============
 name: multiagent
@@ -33,7 +32,11 @@ seed: 867
 world_draws: 1
 warmup_steps: 1e5  # included within the duration
 mc_period: &mc_period 5  # real-world steps between MC issuances
-multiprocessing_cpus: 4
+
+# Multiprocessing configs
+use_mp: false
+multiprocessing_cpus: 2
+
 
 gatekeeper:
   n_controlled: *n_controlled

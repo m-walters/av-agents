@@ -4,7 +4,6 @@ of the run, and a video of the evolution of the data during the sim.
 """
 import logging
 import os
-import multiprocessing
 import shutil
 
 import gymnasium as gym
@@ -100,6 +99,7 @@ def main(cfg: DictConfig):
         ds["reward"][0, step] = reward
         ds["defensive_reward"][0, step] = info["rewards"]["defensive_reward"]
         ds["speed_reward"][0, step] = info["rewards"]["speed_reward"]
+        ds["crash_reward"][0, step] = info["rewards"]["crash_reward"]
 
         logger.debug(f"REWARD: {reward}")
         if terminated or truncated:

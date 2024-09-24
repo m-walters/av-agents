@@ -53,6 +53,7 @@ def init_results_dataset(
             "reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "defensive_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "speed_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "crash_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "crashed": (("world", "step"), np.full((world_draws, duration), np.nan)),
             ### Data recorded from MC Sweeps
             "risk": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),

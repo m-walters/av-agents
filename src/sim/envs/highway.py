@@ -1,6 +1,6 @@
 import copy
 import logging
-from typing import Dict, Optional, Text, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 from gymnasium.utils import seeding
@@ -30,6 +30,8 @@ class AVHighway(HighwayEnv):
 
     def __init__(self, config: dict = None, render_mode: Optional[str] = None) -> None:
         self.vehicle_lookup = {}  # Get vehicle by its ID
+        self.multiagent: bool = False
+        self.alter_vehicles: list[AVVehicle] = []
         super().__init__(config, render_mode)
 
     @classmethod
@@ -95,6 +97,13 @@ class AVHighway(HighwayEnv):
         if reset:
             self.reset()
 
+    @property
+    def vehicle(self) -> AVVehicle:
+        # if self.multiagent:
+        #     raise RuntimeError("Multi-agent environment. AVHighway.vehicle is ambiguous.")
+
+        return self.controlled_vehicles[0] if self.controlled_vehicles else None
+
     def _reset(self) -> None:
         """
         Init road and vehicles
@@ -104,6 +113,7 @@ class AVHighway(HighwayEnv):
 
         self._create_road()
         self._create_vehicles()
+        self.multiagent = len(self.controlled_vehicles) > 1
 
     def reset(
         self,
@@ -168,6 +178,7 @@ class AVHighway(HighwayEnv):
         )
 
         self.controlled_vehicles = []
+        self.alter_vehicles = []
         av_id = 1
         for others in other_per_controlled:
             vehicle = control_vehicle_class.create_random(
@@ -198,6 +209,7 @@ class AVHighway(HighwayEnv):
                 av_id += 1
                 if hasattr(vehicle, "randomize_behavior"):
                     vehicle.randomize_behavior()
+                self.alter_vehicles.append(vehicle)
                 self.road.vehicles.append(vehicle)
 
     def step(self, action: Action) -> Tuple[Observation, float, bool, bool, dict]:
@@ -210,8 +222,8 @@ class AVHighway(HighwayEnv):
         :param action: the action performed by the ego-vehicle
         :return: a tuple (observation, reward, terminated, truncated, info)
         """
-        if self.road is None or self.vehicle is None:
-            raise NotImplementedError("The road and vehicle must be initialized in the environment implementation")
+        if self.road is None or not self.road.vehicles:
+            raise NotImplementedError("The road and vehicles must be initialized in the environment implementation")
 
         self.time += 1 / self.config["policy_frequency"]
         self._simulate(action)
@@ -225,22 +237,6 @@ class AVHighway(HighwayEnv):
             self.render()
 
         return obs, reward, terminated, truncated, info
-
-    def _info(self, obs: Observation, action: Optional[Action] = None) -> dict:
-        """
-        Return a dictionary of additional information
-
-        :param obs: current observation
-        :param action: current action
-        :return: info dict
-        """
-        info = {
-            "speed": self.vehicle.speed,
-            "crashed": self.vehicle.crashed,
-            "action": action,
-            "rewards": self._rewards(action),
-        }
-        return info
 
     def speed_reward(self, vehicle: AVVehicle | None = None) -> float:
         """
@@ -349,37 +345,84 @@ class AVHighway(HighwayEnv):
 
         return -penalty
 
-    def _rewards(self, action: Action) -> Dict[Text, float]:
+    def _info(self, obs: Observation, action: Optional[Action] = None) -> dict:
         """
-        Compute and collect the suite of rewards for our control vehicle.
+        Return a dictionary of additional information
+
+        :param obs: current observation
+        :param action: current action
+        :return: info dict
+        """
+        if not self.multiagent:
+            return {
+                "speed": self.vehicle.speed,
+                "crashed": self.vehicle.crashed,
+                "action": action,
+                "rewards": self._rewards(action),
+                "av_id": self.vehicle.av_id,
+            }
+
+        return {
+            "speed": [v.speed for v in self.controlled_vehicles],
+            "crashed": [v.crashed for v in self.controlled_vehicles],
+            "action": action,
+            "rewards": self._rewards(action),
+            "av_ids": [v.av_id for v in self.controlled_vehicles],
+        }
+
+    def _rewards(self, action: Action) -> dict:
+        """
+        Compute and collect the suite of rewards for our control vehicles.
         TODO -- Consider a speed-limit penalty (see IDMVehicle.accelerate)
         """
-        # neighbours = self.road.network.all_side_lanes(self.vehicle.lane_index)
-        # lane = self.vehicle.target_lane_index[2] if isinstance(self.vehicle, ControlledVehicle) \
-        #     else self.vehicle.lane_index[2]
+        if self.multiagent:
+            return {
+                "defensive_reward": [self.defensive_reward(v) for v in self.controlled_vehicles],
+                "speed_reward": [self.speed_reward(v) for v in self.controlled_vehicles],
+                "crash_reward": [self.crash_reward(v) for v in self.controlled_vehicles],
+            }
+        else:
+            return {
+                "defensive_reward": self.defensive_reward(self.vehicle),
+                "speed_reward": self.speed_reward(self.vehicle),
+                "crash_reward": self.crash_reward(self.vehicle),
+            }
 
-        speed_reward = self.speed_reward()
-        defensive_reward = self.defensive_reward()
-        crash_reward = self.crash_reward()
-
-        r = {
-            "defensive_reward": defensive_reward,
-            "speed_reward": speed_reward,
-            "crash_reward": crash_reward,
-        }
-        logger.debug(f">>>> REWARDS: {r}")
-
-        return r
-
-    def _reward(self, action: Action, rewards: dict | None = None) -> float:
+    def _reward(self, action: Action, rewards: dict | None = None) -> float | list[float]:
         """
+        Scalar reward value
+
         :param action: the last action performed
         :param rewards: optionally provide the computed rewards if available, for efficiency
         :return: the corresponding reward
         """
-        rewards = rewards or self._rewards(action)
-        reward = sum(rewards.values())
+        if not self.multiagent:
+            rewards = rewards or self._rewards(action)
+            reward = sum(rewards.values())
 
+            if self.config["normalize_reward"]:
+                # Best is 1
+                # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_reward
+                best = 1
+                worst = self.config['crash_reward'] + self.config['defensive_reward_min']
+                reward = utils.lmap(
+                    reward,
+                    [worst, best],
+                    [0, 1]
+                )
+
+            return reward
+
+        # Mutli-agent rewards
+        rewards = rewards or self._rewards(action)
+        # Accumulated reward for each vehicle
+        reward = np.array(
+            [
+                sum(reward_tup) for reward_tup in zip(
+                rewards["defensive_reward"], rewards["speed_reward"], rewards["crash_reward"]
+            )
+            ]
+        )
         if self.config["normalize_reward"]:
             # Best is 1
             # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_reward
@@ -393,10 +436,16 @@ class AVHighway(HighwayEnv):
 
         return reward
 
-    def _is_terminated(self) -> bool:
+    def _is_terminated(self) -> bool | Array:
         """The episode is over if the ego vehicle crashed."""
-        return (self.vehicle.crashed or
-                self.config["offroad_terminal"] and not self.vehicle.on_road)
+        if not self.multiagent:
+            return (self.vehicle.crashed or
+                    self.config["offroad_terminal"] and not self.vehicle.on_road)
+
+        return np.array(
+            [v.crashed or self.config["offroad_terminal"] and not v.on_road for v in self.controlled_vehicles],
+            dtype=int
+        )
 
     def _is_truncated(self) -> bool:
         """The episode is truncated if the time limit is reached."""
@@ -434,9 +483,8 @@ class AVHighway(HighwayEnv):
         mc_env.observation_space.seed(seed)
 
         # Randomize the behavior of all the alter vehicles on the road
-        for vehicle in mc_env.road.vehicles:
-            if vehicle is not mc_env.vehicle:
-                vehicle.randomize_behavior()
+        for vehicle in mc_env.alter_vehicles:
+            vehicle.randomize_behavior()
 
     def simulate_mc(self) -> tuple[Array, Array, Array]:
         """
@@ -500,3 +548,11 @@ class AVHighway(HighwayEnv):
         Shorthand method for observation sampling that can be called from async env
         """
         return self.observation_space.sample()
+
+    def set_vehicle_field(self, args: Tuple[str, object]) -> "AVHighway":
+        field, value = args
+        env_copy = copy.deepcopy(self)
+        for v in env_copy.road.vehicles:
+            if v not in self.controlled_vehicles:
+                setattr(v, field, value)
+        return env_copy
