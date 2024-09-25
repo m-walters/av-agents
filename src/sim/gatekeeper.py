@@ -4,9 +4,10 @@ Gatekeeper module
 import copy
 import logging
 import multiprocessing
-from typing import Dict, List, TypedDict, Union, Optional
+from typing import Dict, List, Optional, TypedDict, Union
 
 import numpy as np
+from highway_env import utils
 from omegaconf import DictConfig
 
 from sim import models
@@ -53,8 +54,8 @@ class Gatekeeper:
         self.reward_types = [
             "defensive_reward",
             "speed_reward",
+            "crash_reward",
         ]
-        self.latest_reward = 0
 
     def get_vehicle(self, env):
         return env.vehicle_lookup[self.vehicle_id]
@@ -71,16 +72,29 @@ class Gatekeeper:
         Calculate the reward for this vehicle
         """
         vehicle = self.get_vehicle(env)
-        return {
+        rewards = {
             reward: getattr(env, reward)(vehicle) for reward in self.reward_types
         }
+        reward = sum(rewards.values())
+        if env.config["normalize_reward"]:
+            # Best is 1
+            # Worst is -3. defensive_reward clipped at -2; -1 for crash_penalty
+            best = 1
+            worst = env.config['crash_penalty'] + env.config['max_defensive_penalty']
+            reward = utils.lmap(
+                reward,
+                [worst, best],
+                [0, 1]
+            )
+
+        return reward
 
     def update_policy(self, nbrhood_cre):
         """
         Update policy based on nbrhood cre
         """
         if nbrhood_cre > self.risk_threshold:
-            print(f"MW GK[{self.gk_idx}] THRESHOLD EXCEEDED: {nbrhood_cre} > {self.risk_threshold}")
+            ...
 
     def __str__(self):
         return f"Gatekeeper[{self.gk_idx} | {self.vehicle_id}]"
@@ -181,18 +195,8 @@ class GatekeeperCommand:
                 crashed = gk.crashed(env)
                 if crashed:
                     collisions[i_gk] = 1
-                reward = sum(gk.calculate_reward(env).values())
+                reward = gk.calculate_reward(env)
                 losses[i_gk] -= reward
-
-            # if env.render_mode == 'human':
-            #     env.render()
-
-            # if terminated or truncated:
-            #     if terminated:
-            #         collisions[i] = 1
-            #     break
-            #
-            # losses[i] = -reward
 
         return losses, collisions
 

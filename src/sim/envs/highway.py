@@ -53,8 +53,8 @@ class AVHighway(HighwayEnv):
                 "duration": 40,  # [s]
                 "ego_spacing": 2,
                 "vehicles_density": 1,
-                "crash_reward": -1,  # The reward received when colliding with a vehicle.
-                "defensive_reward_min": -2,  # Cap the defensive reward/penalty
+                "crash_penalty": -1,  # The reward received when colliding with a vehicle.
+                "max_defensive_penalty": -3,  # Cap the defensive reward/penalty
                 # The reward received when driving on the right-most lanes, linearly mapped to
                 # zero for other lanes.
                 "right_lane_reward": 0.1,
@@ -264,7 +264,7 @@ class AVHighway(HighwayEnv):
         Negative penalty for crashing
         """
         vehicle = vehicle or self.vehicle
-        return self.config['crash_reward'] if vehicle.crashed else 0
+        return self.config['crash_penalty'] if vehicle.crashed else 0
 
     def defensive_reward(self, vehicle: AVVehicle | None = None) -> float:
         """
@@ -275,7 +275,7 @@ class AVHighway(HighwayEnv):
         """
         vehicle = vehicle or self.vehicle
         if vehicle.crashed:
-            return self.config['defensive_reward_min']
+            return self.config['max_defensive_penalty']
 
         v_x = vehicle.speed * np.cos(vehicle.heading)
 
@@ -339,9 +339,9 @@ class AVHighway(HighwayEnv):
         # Multiply it by the sin(theta) of our heading -- the harder we are turning the more dangerous this is
         penalty *= 1 + np.abs(np.sin(vehicle.heading))
 
-        if penalty < self.config['defensive_reward_min']:
-            logger.warning(f"DEFENSIVE REWARD MINIMUM PENALTY EXCEEDED: {penalty}")
-            penalty = self.config['defensive_reward_min']
+        if -penalty < self.config['max_defensive_penalty']:
+            logger.warning(f"MAX DEFENSIVE PENALTY EXCEEDED: {-penalty}")
+            return self.config['max_defensive_penalty']
 
         return -penalty
 
@@ -402,9 +402,9 @@ class AVHighway(HighwayEnv):
 
             if self.config["normalize_reward"]:
                 # Best is 1
-                # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_reward
+                # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_penalty
                 best = 1
-                worst = self.config['crash_reward'] + self.config['defensive_reward_min']
+                worst = self.config['crash_penalty'] + self.config['max_defensive_penalty']
                 reward = utils.lmap(
                     reward,
                     [worst, best],
@@ -425,9 +425,9 @@ class AVHighway(HighwayEnv):
         )
         if self.config["normalize_reward"]:
             # Best is 1
-            # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_reward
+            # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_penalty
             best = 1
-            worst = self.config['crash_reward'] + self.config['defensive_reward_min']
+            worst = self.config['crash_penalty'] + self.config['max_defensive_penalty']
             reward = utils.lmap(
                 reward,
                 [worst, best],

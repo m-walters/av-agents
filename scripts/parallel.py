@@ -16,6 +16,7 @@ from sim import models, run, utils
 DEFAULT_CONFIG = "tmp"
 
 RESULTS_DIR = "../results"
+LATEST_DIR = f"{RESULTS_DIR}/latest"
 
 logger = logging.getLogger("av-sim")
 
@@ -25,13 +26,12 @@ def main(cfg: DictConfig):
     """
     Set the parameters and run the sim
     """
-    cfg, run_params = run.init(cfg)
+    cfg, run_params = run.init(cfg, LATEST_DIR)
     ds = run.init_results_dataset(
         run_params['world_draws'], run_params['duration'], run_params['mc_steps'], run_params['n_montecarlo']
     )
     seed = run_params['seed']
     env_cfg = cfg.highway_env
-    latest_dir = f"{RESULTS_DIR}/latest"
 
     # Initiate the pymc model and load the parameters
     params = []
@@ -121,7 +121,7 @@ def main(cfg: DictConfig):
 
     # Automatically save latest
     logger.info("Saving results")
-    utils.Results.save_ds(ds, f"{latest_dir}/results.nc")
+    utils.Results.save_ds(ds, f"{LATEST_DIR}/results.nc")
 
     # If a name is provided, copy results over
     if "name" in cfg:
@@ -130,7 +130,7 @@ def main(cfg: DictConfig):
         logger.info(f"Copying run results to {run_dir}")
         if os.path.exists(run_dir):
             shutil.rmtree(run_dir)
-        shutil.copytree(latest_dir, run_dir)
+        shutil.copytree(LATEST_DIR, run_dir)
 
 
 if __name__ == '__main__':

@@ -148,7 +148,8 @@ class RiskModel(ModelBase):
         log_pref_mean = self.preference_prior(Lt, take_log=True).mean(axis=0)
 
         entropy = self.compute_entropy(Lt, Lt_logprob)
-        Gt = - entropy - log_pref_mean
+        # Gt = - entropy - log_pref_mean
+        Gt = entropy - log_pref_mean
         return Gt, entropy, log_pref_mean
 
 

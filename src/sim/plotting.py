@@ -308,3 +308,278 @@ class TrackerPlotter:
             anim.save(save_path, writer='ffmpeg', fps=fps)
 
         return anim
+
+    def multiagent_plot(
+        self,
+        save_path: str,
+        ds_or_path: Union[xr.Dataset, str],
+        ds_label_map: dict,
+        max_av: int | None = None,
+        truncate: Union[int, range, list] | None = None,
+    ):
+        """
+        PLot data from multiagent dataset
+
+        :param save_path: Save path
+        :param ds_or_path: Dataset or path to one
+        :param ds_label_map: Map of plot labels to Dataset keys
+        :param max_av: Optionally limit the number of egos plotted
+        :param truncate: Optionally limit the plotting range by simulation step.
+            Provide an int for an end limit or an inclusive window range
+        """
+        if isinstance(ds_or_path, xr.Dataset):
+            ds = ds_or_path
+        else:
+            ds = xr.open_dataset(ds_or_path)
+
+        nrow = len(ds_label_map)
+        y_labels = list(ds_label_map)
+        egos = ds.coords['ego'].values
+        # Cap at max AV if provided
+        n_ego = max_av or len(egos)
+        egos = egos[:n_ego]
+
+        steps = ds.coords['step'].values
+        mc_steps = ds.coords['mc_step'].values
+        if isinstance(truncate, int):
+            steps = steps[steps <= truncate]
+            mc_steps = mc_steps[mc_steps <= truncate]
+        elif isinstance(truncate, (range, list)):
+            steps = steps[truncate[0] <= steps <= truncate[1]]
+            mc_steps = mc_steps[truncate[0] <= mc_steps <= truncate[1]]
+
+        # Determine these indices for filtering our y-value data for plotting
+        _steps = ds.coords['step'].values
+        _mc_steps = ds.coords['mc_step'].values
+        left_steps_idx = int(np.argwhere(_steps == steps[0])[0][0])
+        right_steps_idx = int(np.argwhere(_steps == steps[-1])[0][0])
+        left_mc_steps_idx = int(np.argwhere(_mc_steps == mc_steps[0])[0][0])
+        right_mc_steps_idx = int(np.argwhere(_mc_steps == mc_steps[-1])[0][0])
+
+        duration = steps[-1] - steps[0] + 1
+        col_wheel = self.get_color_wheel()
+        colors = {ego: next(col_wheel) for ego in egos}
+
+        fig, axs = self.subplots(nrow, 1, figsize=(6.4, nrow * 1.6))
+
+        # Make ticks nice
+        if duration < 20:
+            xticks = np.arange(steps[0], duration + 1)
+        elif duration < 100:
+            xticks = np.arange(steps[0], duration + 1, 5)
+        elif duration <= 200:
+            # Round to nearest 10
+            r = 10 - duration % 10
+            xticks = np.arange(steps[0], duration + r + 1, 10, dtype=int)
+        else:
+            # Do at most 20 of some multiple of 10
+            size = duration // 20
+            # We want our size to be the next multiple of 10
+            size = size + (-size % 10)
+            # Remainder to final bin
+            r = size - duration % size
+            # Tick to the next bin above duration
+            xticks = np.arange(steps[0], duration + r + 1, size, dtype=int)
+
+        # Tighten up
+        plt.subplots_adjust(hspace=0.1, bottom=0.05, right=0.95, top=0.98)
+
+        for i, label in enumerate(y_labels):
+            var = ds_label_map[label]
+            data = ds[var].sel(world=0)
+            y_lines = {}
+            # Some plots use world steps, others mc-steps
+            if 'mc_step' in ds[var].dims:
+                x = mc_steps
+                for ego in egos:
+                    y = data.sel(ego=ego).values
+                    y_lines[ego] = y[left_mc_steps_idx:right_mc_steps_idx + 1]
+            else:
+                x = steps
+                for ego in egos:
+                    y = data.sel(ego=ego).values
+                    y_lines[ego] = y[left_steps_idx:right_steps_idx + 1]
+
+            # Plot lines for each ego
+            for ego in egos:
+                sns.lineplot(
+                    x=x, y=y_lines[ego], color=colors[ego], ax=axs[i],
+                    legend=False, label=f"AV-{ego}",
+                )
+
+            axs[i].set_ylabel(label)
+            # All have the tick lines
+            axs[i].set_xticks(xticks)
+            axs[i].set_xlim(steps[0] - 0.95, steps[-1] + 0.95)
+
+            if i < len(y_labels) - 1:
+                # Remove x-label
+                axs[i].set_xticklabels([])
+                axs[i].set_xlabel('')
+            else:
+                # Set the final plot's label
+                axs[i].set_xlabel("Step")
+
+        if save_path:
+            plt.savefig(save_path)
+
+        plt.show()
+
+    def create_multiagent_animation(
+        self,
+        save_path: str,
+        ds_or_path: Union[xr.Dataset, str],
+        ds_label_map: dict,
+        sim_frames: list[np.ndarray],
+        fps: int = 30,
+    ):
+        """
+        Use pyplot animation to create video + data animation
+        'ds_label_map' maps the figure labels to keys in the dataset
+        """
+        if isinstance(ds_or_path, xr.Dataset):
+            ds = ds_or_path
+        else:
+            ds = xr.open_dataset(ds_or_path)
+
+        # There is one more frame than recorded data, so we'll drop the first frame
+        frames = sim_frames[1:]
+        nframe = len(frames)
+        nrow = len(ds_label_map) + 1
+        y_labels = list(ds_label_map)
+        try:
+            mc_steps = ds.coords['mc_step'].values
+        except AttributeError:
+            # Older data may not have the mc-steps
+            mc_steps = np.arange(0, nframe)
+
+        fig, axs = self.subplots(nrow, 1, figsize=(6.4, nrow * 1.6))
+        # fig, axs = self.subplots(nrow, 1)
+        sim_ax, data_axes = axs[0], axs[1:]
+        sim_ax.axis('off')
+
+        steps = ds.coords['step'].values
+        # Make ticks nice
+        if nframe < 20:
+            xticks = np.arange(0, nframe + 1)
+        elif nframe < 100:
+            xticks = np.arange(0, nframe + 1, 5)
+        elif nframe <= 200:
+            # Round to nearest 10
+            r = 10 - nframe % 10
+            xticks = np.arange(0, nframe + r + 1, 10, dtype=int)
+        else:
+            # Do at most 20 of some multiple of 10
+            size = nframe // 20
+            # We want our size to be the next multiple of 10
+            size = size + (-size % 10)
+            # Remainder to final bin
+            r = size - nframe % size
+            # Tick to the next bin above nframe
+            xticks = np.arange(0, nframe + r + 1, size, dtype=int)
+
+        # Tighten up
+        plt.subplots_adjust(hspace=0.1, bottom=0.05, right=0.95, top=0.98)
+
+        # We initialize our plots to get limits etc.
+        color = next(self.get_color_wheel())
+        lines = []  # Line2D objects
+        y_values = []
+        x_values = []
+        mc_axes = []  # Mask for MC graphs
+
+        for i, label in enumerate(y_labels):
+            data_axes[i].set_ylabel(label)
+
+            var = ds_label_map[label]
+            # This produces a pivot table with time as index and batch as columns
+            pivot = ds[var].to_pandas()
+
+            # Plot each world draw as a separate line; same color though
+            data = pivot.T
+            world = 0  # We should only have one world
+            y_values.append(data[world].to_numpy())
+
+            # Some plots use world steps, others mc-steps
+            if 'mc_step' in ds[var].dims:
+                mc_axes.append(True)
+                x_values.append(mc_steps.copy())
+            else:
+                mc_axes.append(False)
+                x_values.append(steps.copy())
+
+            # Plot the whole line
+            sns.lineplot(
+                x=x_values[-1], y=y_values[-1], color=color, ax=data_axes[i],
+                legend=False, label=None,
+            )
+
+            # data_axes[i].set_ylim(-1.5, 1.5)
+            # data_axes[i].set_yticks(np.linspace(-1, 1, 3))
+            data_axes[i].set_autoscaley_on(True)
+
+            # Append the Line2D object
+            lines.append(data_axes[i].lines[0])
+
+            # All have the tick lines
+            data_axes[i].set_xticks(xticks)
+            data_axes[i].set_xlim(-0.95, nframe + 0.95)
+
+            if i < len(y_labels) - 1:
+                # Remove x-label
+                data_axes[i].set_xticklabels([])
+                data_axes[i].set_xlabel('')
+            else:
+                # Set the final plot's label
+                data_axes[i].set_xlabel("Step")
+
+        # Init the frames ax
+        sim_img = sim_ax.imshow(frames[0])
+
+        def f_init():
+            for ln in lines:
+                ln.set_data([], [])
+            sim_img.set_data(frames[0])
+            return axs
+
+        def f_animate(frame_idx):
+            i_step = steps[frame_idx]
+            world_xs = steps[:frame_idx + 1]
+            do_mc = i_step in mc_steps
+            if do_mc:
+                # Get mc xs
+                i_mc = np.argwhere(mc_steps == i_step).flatten()[0]
+                mc_xs = mc_steps[:i_mc + 1]
+
+            for j, ln in enumerate(lines):
+                ax_is_mc = mc_axes[j]
+                if ax_is_mc and do_mc:
+                    ln.set_data(mc_xs, y_values[j][:i_mc + 1])
+                    # Re-lim y-axis
+                    data_axes[j].relim()
+                    data_axes[j].autoscale_view(scalex=False)
+                elif not ax_is_mc:
+                    ln.set_data(world_xs, y_values[j][:frame_idx + 1])
+                    # Re-lim y-axis
+                    data_axes[j].relim()
+                    data_axes[j].autoscale_view(scalex=False)
+
+            sim_img.set_data(frames[frame_idx])
+            # sim_ax.imshow(frames[i], animated=True)
+            return axs
+
+        anim = animation.FuncAnimation(
+            fig,
+            f_animate,
+            frames=steps,
+            init_func=f_init,
+            interval=50,
+            repeat_delay=3000,
+            blit=False,  # blitting can't be used with Figure artists
+        )
+
+        if save_path:
+            print(f"Saving animation {save_path}")
+            anim.save(save_path, writer='ffmpeg', fps=fps)
+
+        return anim

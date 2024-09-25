@@ -22,6 +22,7 @@ from sim.envs.highway import AVHighway
 DEFAULT_CONFIG = "tmp"
 
 RESULTS_DIR = "../results"
+LATEST_DIR = f"{RESULTS_DIR}/latest"
 
 logger = logging.getLogger("av-sim")
 
@@ -31,13 +32,12 @@ def main(cfg: DictConfig):
     """
     Set the parameters and run the sim
     """
-    cfg, run_params = run.init(cfg)
+    cfg, run_params = run.init(cfg, LATEST_DIR)
     ds = run.init_results_dataset(
         run_params['world_draws'], run_params['duration'], run_params['mc_steps'], run_params['n_montecarlo']
     )
     seed = run_params['seed']
     env_cfg = cfg.highway_env
-    latest_dir = f"{RESULTS_DIR}/latest"
 
     if cfg.world_draws > 1:
         raise ValueError("world_draws > 1 not allowed for tracker.py")
@@ -56,7 +56,7 @@ def main(cfg: DictConfig):
 
     # Create our gym Env
     render_mode = 'rgb_array'
-    video_dir = f"{latest_dir}/recordings"
+    video_dir = f"{LATEST_DIR}/recordings"
     video_prefix = "sim"
     env = RecordVideo(
         gym.make('AVAgents/highway-v0', render_mode=render_mode), video_dir, name_prefix=video_prefix
@@ -117,10 +117,10 @@ def main(cfg: DictConfig):
 
     # Automatically save latest
     logger.info("Saving results")
-    utils.Results.save_ds(ds, f"{latest_dir}/results.nc")
+    utils.Results.save_ds(ds, f"{LATEST_DIR}/results.nc")
 
     # Save frames
-    np.save(f"{latest_dir}/frames.npy", env.video_recorder.recorded_frames)
+    np.save(f"{LATEST_DIR}/frames.npy", env.video_recorder.recorded_frames)
 
     # Create the video with the saved frames and data
     ds_label_map = {
@@ -134,7 +134,7 @@ def main(cfg: DictConfig):
     }
     plotter = plotting.TrackerPlotter()
     plotter.create_animation(
-        f"{latest_dir}/tracker.mp4",
+        f"{LATEST_DIR}/tracker.mp4",
         ds,
         ds_label_map,
         env.video_recorder.recorded_frames,
@@ -148,7 +148,7 @@ def main(cfg: DictConfig):
         logger.info(f"Copying run results to {run_dir}")
         if os.path.exists(run_dir):
             shutil.rmtree(run_dir)
-        shutil.copytree(latest_dir, run_dir)
+        shutil.copytree(LATEST_DIR, run_dir)
 
 
 if __name__ == '__main__':

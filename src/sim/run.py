@@ -13,8 +13,6 @@ from omegaconf import DictConfig, OmegaConf
 
 from sim import utils
 
-RESULTS_DIR = "../../results"
-
 logger = logging.getLogger("av-sim")
 
 
@@ -115,7 +113,7 @@ def init_multiagent_results_dataset(
     )
 
 
-def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams"]:
+def init(cfg: DictConfig, latest_dir: str) -> Tuple[DictConfig, "RunParams"]:
     """
     Process the config, set up some objects etc.
     """
@@ -142,7 +140,6 @@ def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams"]:
     random.seed(seed)
 
     # Results save dir
-    latest_dir = RESULTS_DIR + "/latest"
     if os.path.exists(latest_dir):
         # Clear and write over the latest dir
         for f in os.listdir(latest_dir):

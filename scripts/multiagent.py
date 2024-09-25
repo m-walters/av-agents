@@ -14,13 +14,14 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 
 import sim.params as sim_params
-from sim import gatekeeper, run, utils, recorder
+from sim import gatekeeper, recorder, run, utils
 from sim.envs.highway import AVHighway
 
 # Name of file in configs, set this to your liking
 DEFAULT_CONFIG = "multiagent"
 
 RESULTS_DIR = "../results"
+LATEST_DIR = f"{RESULTS_DIR}/latest"
 
 logger = logging.getLogger("av-sim")
 
@@ -30,7 +31,7 @@ def main(cfg: DictConfig):
     """
     Set the parameters and run the sim
     """
-    cfg, run_params = run.init(cfg)
+    cfg, run_params = run.init(cfg, LATEST_DIR)
     if run_params['world_draws'] > 1:
         raise ValueError("world_draws > 1 not configured for multiagent")
 
@@ -40,7 +41,6 @@ def main(cfg: DictConfig):
     )
     seed = run_params['seed']
     env_cfg = cfg.highway_env
-    latest_dir = f"{RESULTS_DIR}/latest"
     use_mp = cfg.get('use_mp', False)
 
     # Initiate the pymc model and load the parameters
@@ -58,7 +58,7 @@ def main(cfg: DictConfig):
         env = gym.make('AVAgents/highway-v0', render_mode=render_mode)
     else:
         render_mode = 'rgb_array'
-        video_dir = f"{latest_dir}/recordings"
+        video_dir = f"{LATEST_DIR}/recordings"
         video_prefix = "sim"
         env = recorder.AVRecorder(
             gym.make('AVAgents/highway-v0', render_mode=render_mode), video_dir, name_prefix=video_prefix
@@ -89,9 +89,9 @@ def main(cfg: DictConfig):
 
                         # Record data
                         ds["mc_loss"][0, i_mc, :, :] = results["losses"]
-                        ds["loss_mean"][0, i_mc, :] = np.mean(results["losses"])
-                        ds["loss_p5"][0, i_mc, :] = np.percentile(results["losses"], 5)
-                        ds["loss_p95"][0, i_mc, :] = np.percentile(results["losses"], 95)
+                        ds["loss_mean"][0, i_mc, :] = np.mean(results["losses"], axis=0)
+                        ds["loss_p5"][0, i_mc, :] = np.percentile(results["losses"], 5, axis=0)
+                        ds["loss_p95"][0, i_mc, :] = np.percentile(results["losses"], 95, axis=0)
                         ds["risk"][0, i_mc, :] = results["risk"]
                         ds["entropy"][0, i_mc, :] = results["entropy"]
                         ds["energy"][0, i_mc, :] = results["energy"]
@@ -133,9 +133,9 @@ def main(cfg: DictConfig):
 
                     # Record data
                     ds["mc_loss"][0, i_mc, :, :] = results["losses"]
-                    ds["loss_mean"][0, i_mc, :] = np.mean(results["losses"])
-                    ds["loss_p5"][0, i_mc, :] = np.percentile(results["losses"], 5)
-                    ds["loss_p95"][0, i_mc, :] = np.percentile(results["losses"], 95)
+                    ds["loss_mean"][0, i_mc, :] = np.mean(results["losses"], axis=0)
+                    ds["loss_p5"][0, i_mc, :] = np.percentile(results["losses"], 5, axis=0)
+                    ds["loss_p95"][0, i_mc, :] = np.percentile(results["losses"], 95, axis=0)
                     ds["risk"][0, i_mc, :] = results["risk"]
                     ds["entropy"][0, i_mc, :] = results["entropy"]
                     ds["energy"][0, i_mc, :] = results["energy"]
@@ -166,39 +166,19 @@ def main(cfg: DictConfig):
                 # Times up
                 break
 
+        # Conclude the video
+        env.close()
 
-
-    # Conclude the video
-    env.close()
+        if isinstance(env, recorder.AVRecorder):
+            # Save frames
+            np.save(f"{LATEST_DIR}/frames.npy", env.video_recorder.recorded_frames)
 
     # Append an extra data array "real_loss" to our dataset that is the negative of reward
     ds["real_loss"] = -ds["reward"]
 
     # Automatically save latest
     logger.info("Saving results")
-    utils.Results.save_ds(ds, f"{latest_dir}/results.nc")
-
-    # # Save frames
-    # np.save(f"{latest_dir}/frames.npy", env.video_recorder.recorded_frames)
-    #
-    # # Create the video with the saved frames and data
-    # ds_label_map = {
-    #     "R_Coll": "defensive_reward",
-    #     "R_Spd": "speed_reward",
-    #     "Actual Loss": "real_loss",
-    #     "E[Loss]": "loss_mean",
-    #     "E[Energy]": "energy",
-    #     "E[Entropy]": "entropy",
-    #     "Risk": "risk",
-    # }
-    # plotter = plotting.TrackerPlotter()
-    # plotter.create_animation(
-    #     f"{latest_dir}/tracker.mp4",
-    #     ds,
-    #     ds_label_map,
-    #     env.video_recorder.recorded_frames,
-    #     fps=10,
-    # )
+    utils.Results.save_ds(ds, f"{LATEST_DIR}/results.nc")
 
     # If a name is provided, copy results over
     if "name" in cfg:
@@ -207,7 +187,7 @@ def main(cfg: DictConfig):
         logger.info(f"Copying run results to {run_dir}")
         if os.path.exists(run_dir):
             shutil.rmtree(run_dir)
-        shutil.copytree(latest_dir, run_dir)
+        shutil.copytree(LATEST_DIR, run_dir)
 
 
 if __name__ == '__main__':
