@@ -77,7 +77,7 @@ class HotshotParams(AggressiveParams):
     LANE_CHANGE_DELAY = 1.0  # [s]; lower means more frequent lane checks. Default = 1.0
 
 
-class IDMVehicle(HotshotParams, VehicleBase, AggressiveVehicle):
+class IDMVehicle(AggressiveParams, VehicleBase, AggressiveVehicle):
     """
     IDM Vehicle override.
     IDMVehicles don't respond to action inputs, but instead operate

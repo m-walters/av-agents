@@ -55,7 +55,7 @@ def main(cfg: DictConfig):
     # Create our gym Env
     if use_mp:
         render_mode = None  # No visuals because of multiprocessing
-        env = gym.make('AVAgents/highway-v0', render_mode=render_mode)
+        env = gym.make('AVAgents/racetrack-v0', render_mode=render_mode)
     else:
         render_mode = 'rgb_array'
         video_dir = f"{LATEST_DIR}/recordings"
