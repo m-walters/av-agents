@@ -1,11 +1,13 @@
 """
 Gatekeeper module
 """
+import copy
 import logging
 import multiprocessing
-from typing import Dict, List, TypedDict, Union
+from typing import Dict, List, Optional, TypedDict, Union
 
 import numpy as np
+from highway_env import utils
 from omegaconf import DictConfig
 
 from sim import models
@@ -42,6 +44,7 @@ class Gatekeeper:
         seed: int,
     ):
         self.gk_idx = gk_idx  # Tracks this gatekeepers index in the results array for the GKCommand
+        # Don't store the vehicle object because env duplicating will change the memory address during MC
         self.vehicle_id = vehicle.av_id
         self.risk_threshold: float = risk_threshold
         self.rkey = JaxRKey(seed)
@@ -49,10 +52,10 @@ class Gatekeeper:
         # See AVHighway class for types
         # These must be callables in the Env class
         self.reward_types = [
-            "collision_reward",
+            "defensive_reward",
             "speed_reward",
+            "crash_reward",
         ]
-        self.latest_reward = 0
 
     def get_vehicle(self, env):
         return env.vehicle_lookup[self.vehicle_id]
@@ -69,16 +72,29 @@ class Gatekeeper:
         Calculate the reward for this vehicle
         """
         vehicle = self.get_vehicle(env)
-        return {
+        rewards = {
             reward: getattr(env, reward)(vehicle) for reward in self.reward_types
         }
+        reward = sum(rewards.values())
+        if env.config["normalize_reward"]:
+            # Best is 1
+            # Worst is -3. defensive_reward clipped at -2; -1 for crash_penalty
+            best = 1
+            worst = env.config['crash_penalty'] + env.config['max_defensive_penalty']
+            reward = utils.lmap(
+                reward,
+                [worst, best],
+                [0, 1]
+            )
+
+        return reward
 
     def update_policy(self, nbrhood_cre):
         """
         Update policy based on nbrhood cre
         """
         if nbrhood_cre > self.risk_threshold:
-            print(f"MW GK[{self.gk_idx}] THRESHOLD EXCEEDED: {nbrhood_cre} > {self.risk_threshold}")
+            ...
 
     def __str__(self):
         return f"Gatekeeper[{self.gk_idx} | {self.vehicle_id}]"
@@ -155,46 +171,36 @@ class GatekeeperCommand:
         self, seed: int,
     ):
         """
-        For use within the multiprocessing workers.
-        We can take advantage of how mp copies objects to skip copy.deepcopy(env)
+        Run an MC trajectory and accumulate the results across controlled vehicles
         """
-        self.env.seed_montecarlo(self.env, seed)
+        env = copy.deepcopy(self.env)
+        env.seed_montecarlo(env, seed)
 
         losses = np.zeros(self.n_controlled)
         collisions = np.zeros_like(losses)
 
         for j in range(self.mc_horizon):
             # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
-            action = self.env.action_space.sample()
+            action = env.action_space.sample()
 
             # Like the regular Env sim but we ignore reward calculations and such
-            self.env.time += 1 / self.env.config["policy_frequency"]
-            self.env._simulate(action)
+            env.time += 1 / env.config["policy_frequency"]
+            env._simulate(action)
 
             if j + 1 < self.mc_horizon:
                 continue
 
             # Else, last step so we take measurements
             for i_gk, gk in enumerate(self.gatekeepers):
-                crashed = gk.crashed(self.env)
+                crashed = gk.crashed(env)
                 if crashed:
                     collisions[i_gk] = 1
-                reward = sum(gk.calculate_reward(self.env).values())
+                reward = gk.calculate_reward(env)
                 losses[i_gk] -= reward
-
-            # if self.env.render_mode == 'human':
-            #     self.env.render()
-
-            # if terminated or truncated:
-            #     if terminated:
-            #         collisions[i] = 1
-            #     break
-            #
-            # losses[i] = -reward
 
         return losses, collisions
 
-    def run(self, pool: multiprocessing.Pool, gamma: float = 1.0) -> dict:
+    def run(self, pool: Optional["multiprocessing.Pool"], gamma: float = 1.0) -> dict:
         """
         Perform montecarlo simulations and calculate risk equations etc.
 
@@ -209,16 +215,17 @@ class GatekeeperCommand:
         # Very sensitive that these seeds are python integers...
         seeds = [int(s) for s in self.rkey.next_seeds(self.n_montecarlo)]
 
-        # Issue trajectories to workers
-        # Use starmap if you need to provide more arguments
-        results = pool.map(self._mc_trajectory, seeds)
+        if pool:
+            # Issue trajectories to workers
+            # Use starmap if you need to provide more arguments
+            results = pool.map(self._mc_trajectory, seeds)
+            # Stack results along first dimension
+            results = np.stack(results, axis=0)
+        else:
+            results = np.zeros((self.n_montecarlo, 2, self.n_controlled))
+            for i, seed in enumerate(seeds):
+                results[i] = self._mc_trajectory(seed)
 
-        # Stack results along first dimension
-        results = np.stack(results, axis=0)
-
-        # for i, (loss, collision) in enumerate(results):
-        #     losses[i, :] = loss
-        #     collisions[i, :] = collision
         losses = results[:, 0, :]
         collisions = results[:, 1, :]
 
@@ -244,7 +251,11 @@ class GatekeeperCommand:
                 continue
 
             # Get the neighborhood around this gatekeeper
-            nbrhood = self._discover_neighborhood(gk, [])
+            if gk.get_vehicle(self.env).crashed:
+                # Crashed are excluded from neighborhoods
+                nbrhood = [gk]
+            else:
+                nbrhood = self._discover_neighborhood(gk, [])
             measured_gks += nbrhood
             nbrhoods.append(nbrhood)
 
@@ -255,6 +266,9 @@ class GatekeeperCommand:
             # Convert GKs to their 0-based indices
             nbrhood_idx = np.array([_gk.gk_idx for _gk in nbrhood])
             nbrhood_cre = risk[nbrhood_idx].mean()
+
+            # Update the risk value for the nbrhood
+            risk[nbrhood_idx] = nbrhood_cre
 
             # Update the policies
             for gk in nbrhood:
@@ -279,6 +293,10 @@ class GatekeeperCommand:
         for nbr in self.env.road.close_vehicles_to(gk.get_vehicle(self.env), self.nbr_distance):
             if nbr.av_id not in self.gatekept_vehicles:
                 # Ignore
+                continue
+
+            if nbr.crashed:
+                # Also exclude from neighborhood
                 continue
 
             nbr_gk = self.gatekeeper_lookup[nbr.av_id]

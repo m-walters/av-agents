@@ -13,8 +13,6 @@ from omegaconf import DictConfig, OmegaConf
 
 from sim import utils
 
-RESULTS_DIR = "../../results"
-
 logger = logging.getLogger("av-sim")
 
 
@@ -51,8 +49,9 @@ def init_results_dataset(
             ### Data recorded every world step
             # Rewards
             "reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
-            "collision_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "defensive_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "speed_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            "crash_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "crashed": (("world", "step"), np.full((world_draws, duration), np.nan)),
             ### Data recorded from MC Sweeps
             "risk": (("world", "mc_step"), np.full((world_draws, num_mc_sweeps), np.nan)),
@@ -87,7 +86,7 @@ def init_multiagent_results_dataset(
             ### Data recorded every world step
             # Rewards
             "reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
-            "collision_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
+            "defensive_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "speed_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "crashed": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             ### Data recorded from MC Sweeps
@@ -114,17 +113,17 @@ def init_multiagent_results_dataset(
     )
 
 
-def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams"]:
+def init(cfg: DictConfig, latest_dir: str) -> Tuple[DictConfig, "RunParams"]:
     """
     Process the config, set up some objects etc.
     """
-    log_level = cfg.get("log_level", "INFO")
+    log_level = cfg.get("log_level", "INFO").lower()
     # Get logger *after* setting the level
-    if log_level == "DEBUG":
+    if log_level == "debug":
         logger.setLevel(logging.DEBUG)
-    elif log_level == "INFO":
+    elif log_level == "info":
         logger.setLevel(logging.INFO)
-    elif log_level == "WARNING":
+    elif log_level == "warning":
         logger.setLevel(logging.WARNING)
 
     # Print our config
@@ -141,7 +140,6 @@ def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams"]:
     random.seed(seed)
 
     # Results save dir
-    latest_dir = RESULTS_DIR + "/latest"
     if os.path.exists(latest_dir):
         # Clear and write over the latest dir
         for f in os.listdir(latest_dir):
@@ -160,8 +158,8 @@ def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams"]:
     warmup_steps = cfg.get("warmup_steps", 0)
 
     # Monte Carlo logistics
-    mc_period = env_cfg.get("mc_period", 5)
-    mc_steps = np.arange(warmup_steps, duration, mc_period)
+    mc_period = cfg.get("mc_period", 5)
+    mc_steps = np.arange(warmup_steps, duration, mc_period, dtype=int)
     n_montecarlo = env_cfg['n_montecarlo']
 
     # Convert to py-dict so we can record the seed in case this is a random run

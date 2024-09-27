@@ -77,7 +77,7 @@ class HotshotParams(AggressiveParams):
     LANE_CHANGE_DELAY = 1.0  # [s]; lower means more frequent lane checks. Default = 1.0
 
 
-class IDMVehicle(HotshotParams, VehicleBase, AggressiveVehicle):
+class IDMVehicle(AggressiveParams, VehicleBase, AggressiveVehicle):
     """
     IDM Vehicle override.
     IDMVehicles don't respond to action inputs, but instead operate
@@ -171,6 +171,9 @@ class IDMVehicle(HotshotParams, VehicleBase, AggressiveVehicle):
 
     def __str__(self):
         return f"IDMVehicle [#{id(self) % 1000}, AV-{self.av_id}]"
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class MetaActionVehicle(ControlledVehicle):
@@ -271,6 +274,9 @@ class MetaActionVehicle(ControlledVehicle):
 
     def __str__(self):
         return f"MetaActionVehicle [#{id(self) % 1000}, AV-{self.av_id}]"
+
+    def __repr__(self):
+        return self.__str__()
 
 
 AVVehicleType = IDMVehicle | MetaActionVehicle

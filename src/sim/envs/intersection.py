@@ -187,7 +187,7 @@ class AVIntersection(IntersectionEnv):
                 "screen_height": 600,
                 "centering_position": [0.5, 0.6],
                 "scaling": 5.5 * 1.3,
-                "collision_reward": -5,
+                "defensive_reward": -5,
                 # "high_speed_reward": 1,
                 "arrived_reward": 1,
                 "reward_speed_range": [7.0, 9.0],
@@ -412,7 +412,7 @@ class AVIntersection(IntersectionEnv):
         reward = self.config["arrived_reward"] if rewards["arrived_reward"] else reward
         reward *= rewards["on_road_reward"]
         if self.config["normalize_reward"]:
-            reward = utils.lmap(reward, [self.config["collision_reward"], self.config["arrived_reward"]], [0, 1])
+            reward = utils.lmap(reward, [self.config["defensive_reward"], self.config["arrived_reward"]], [0, 1])
         return reward
 
     def _agent_rewards(self, action: int, vehicle: AVVehicle) -> Dict[Text, float]:
@@ -421,15 +421,15 @@ class AVIntersection(IntersectionEnv):
         """
         scaled_speed = utils.lmap(vehicle.speed, self.config["reward_speed_range"], [0, 1])
         return {
-            # "collision_reward": vehicle.crashed,
+            # "defensive_reward": vehicle.crashed,
             "speed_reward": np.clip(scaled_speed, 0, 1),
             "arrived_reward": self.has_arrived(vehicle),
             "on_road_reward": vehicle.on_road,
             ### Custom
-            "collision_reward": self.collision_reward(vehicle),
+            "defensive_reward": self.defensive_reward(vehicle),
         }
 
-    def collision_reward(self, vehicle: AVVehicle) -> float:
+    def defensive_reward(self, vehicle: AVVehicle) -> float:
         """
         Reward based on collision-related factors, like braking distance, and proximity
 
