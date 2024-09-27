@@ -61,7 +61,7 @@ def main(cfg: DictConfig):
         video_dir = f"{LATEST_DIR}/recordings"
         video_prefix = "sim"
         env = recorder.AVRecorder(
-            gym.make('AVAgents/highway-v0', render_mode=render_mode), video_dir, name_prefix=video_prefix
+            gym.make('AVAgents/racetrack-v0', render_mode=render_mode), video_dir, name_prefix=video_prefix
         )
 
     uenv: "AVHighway" = env.unwrapped
@@ -106,8 +106,8 @@ def main(cfg: DictConfig):
                 # Record the actuals
                 ds["reward"][0, step, :] = reward
                 ds["crashed"][0, step, :] = crashed
-                ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
-                ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
+                # ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
+                # ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
 
                 # Print which, if any, av-IDs have crashed
                 crashed_ids = np.argwhere(crashed)
@@ -150,8 +150,8 @@ def main(cfg: DictConfig):
             # Record the actuals
             ds["reward"][0, step, :] = reward
             ds["crashed"][0, step, :] = crashed
-            ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
-            ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
+            # ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
+            # ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
 
             # Print which, if any, av-IDs have crashed
             crashed_ids = np.argwhere(crashed)

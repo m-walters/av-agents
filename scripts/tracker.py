@@ -59,7 +59,7 @@ def main(cfg: DictConfig):
     video_dir = f"{LATEST_DIR}/recordings"
     video_prefix = "sim"
     env = RecordVideo(
-        gym.make('AVAgents/highway-v0', render_mode=render_mode), video_dir, name_prefix=video_prefix
+        gym.make('AVAgents/racetrack-v0', render_mode=render_mode), video_dir, name_prefix=video_prefix
     )
 
     uenv: "AVHighway" = env.unwrapped

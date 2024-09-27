@@ -10,3 +10,7 @@ def register_envs():
         id=f"AVAgents/intersection-v0",
         entry_point='sim.envs.intersection:AVIntersection',
     )
+    register(
+        id=f"AVAgents/racetrack-v0",
+        entry_point='sim.envs.racetrack:AVRacetrack',
+    )

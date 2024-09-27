@@ -251,7 +251,11 @@ class GatekeeperCommand:
                 continue
 
             # Get the neighborhood around this gatekeeper
-            nbrhood = self._discover_neighborhood(gk, [])
+            if gk.get_vehicle(self.env).crashed:
+                # Crashed are excluded from neighborhoods
+                nbrhood = [gk]
+            else:
+                nbrhood = self._discover_neighborhood(gk, [])
             measured_gks += nbrhood
             nbrhoods.append(nbrhood)
 
@@ -262,6 +266,9 @@ class GatekeeperCommand:
             # Convert GKs to their 0-based indices
             nbrhood_idx = np.array([_gk.gk_idx for _gk in nbrhood])
             nbrhood_cre = risk[nbrhood_idx].mean()
+
+            # Update the risk value for the nbrhood
+            risk[nbrhood_idx] = nbrhood_cre
 
             # Update the policies
             for gk in nbrhood:
@@ -286,6 +293,10 @@ class GatekeeperCommand:
         for nbr in self.env.road.close_vehicles_to(gk.get_vehicle(self.env), self.nbr_distance):
             if nbr.av_id not in self.gatekept_vehicles:
                 # Ignore
+                continue
+
+            if nbr.crashed:
+                # Also exclude from neighborhood
                 continue
 
             nbr_gk = self.gatekeeper_lookup[nbr.av_id]
