@@ -165,7 +165,449 @@ class AVRacetrack(RacetrackEnv):
         return obs, info
 
     def _make_road(self) -> None:
-        self.road = road4(self)
+        net = RoadNetwork()
+        w = 5
+        w2 = 2 * w
+        default_speedlimit = 10
+
+        # Initialise First Lane
+        lane = StraightLane(
+            [42, 0],
+            [200, 0],
+            line_types=(LineType.CONTINUOUS, LineType.STRIPED),
+            width=w,
+            speed_limit=default_speedlimit,
+        )
+        self.lane = lane
+
+        # Add Lanes to Road Network - Straight Section
+        net.add_lane("a", "b", lane)
+        net.add_lane(
+            "a",
+            "b",
+            StraightLane(
+                [42, w],
+                [200, w],
+                line_types=(LineType.STRIPED, LineType.STRIPED),
+                width=w,
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "a",
+            "b",
+            StraightLane(
+                [42, w2],
+                [200, w2],
+                line_types=(LineType.NONE, LineType.CONTINUOUS),
+                width=w,
+                speed_limit=default_speedlimit,
+            ),
+        )
+
+        # 2 - Circular Arc #1
+        center1 = [200, -20]
+        radii1 = 20
+        net.add_lane(
+            "b",
+            "c",
+            CircularLane(
+                center1,
+                radii1,
+                np.deg2rad(90),
+                np.deg2rad(-1),
+                width=w,
+                clockwise=False,
+                line_types=(LineType.CONTINUOUS, LineType.NONE),
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "b",
+            "c",
+            CircularLane(
+                center1,
+                radii1 + w,
+                np.deg2rad(90),
+                np.deg2rad(-1),
+                width=w,
+                clockwise=False,
+                line_types=(LineType.STRIPED, LineType.STRIPED),
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "b",
+            "c",
+            CircularLane(
+                center1,
+                radii1 + w2,
+                np.deg2rad(90),
+                np.deg2rad(-1),
+                width=w,
+                clockwise=False,
+                line_types=(LineType.NONE, LineType.CONTINUOUS),
+                speed_limit=default_speedlimit,
+            ),
+        )
+
+        # 3 - Vertical Straight
+        net.add_lane(
+            "c",
+            "d",
+            StraightLane(
+                [220, -20],
+                [220, -60],
+                line_types=(LineType.CONTINUOUS, LineType.NONE),
+                width=w,
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "c",
+            "d",
+            StraightLane(
+                [220 + w, -20],
+                [220 + w, -60],
+                line_types=(LineType.STRIPED, LineType.STRIPED),
+                width=w,
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "c",
+            "d",
+            StraightLane(
+                [220 + w2, -20],
+                [220 + w2, -60],
+                line_types=(LineType.NONE, LineType.CONTINUOUS),
+                width=w,
+                speed_limit=default_speedlimit,
+            ),
+        )
+
+        # 4 - Circular Arc #2
+        center4 = [205, -60]
+        radii4 = 15
+        net.add_lane(
+            "d",
+            "e",
+            CircularLane(
+                center4,
+                radii4,
+                np.deg2rad(0),
+                np.deg2rad(-181),
+                width=w,
+                clockwise=False,
+                line_types=(LineType.CONTINUOUS, LineType.NONE),
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "d",
+            "e",
+            CircularLane(
+                center4,
+                radii4 + w,
+                np.deg2rad(0),
+                np.deg2rad(-181),
+                width=w,
+                clockwise=False,
+                line_types=(LineType.STRIPED, LineType.STRIPED),
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "d",
+            "e",
+            CircularLane(
+                center4,
+                radii4 + w2,
+                np.deg2rad(0),
+                np.deg2rad(-181),
+                width=w,
+                clockwise=False,
+                line_types=(LineType.NONE, LineType.CONTINUOUS),
+                speed_limit=default_speedlimit,
+            ),
+        )
+
+        # 5 - Circular Arc #3
+        center5 = [170, -60]
+        radii5 = 15
+        net.add_lane(
+            "e",
+            "f",
+            CircularLane(
+                center5,
+                radii5 + 5,
+                np.deg2rad(0),
+                np.deg2rad(136),
+                width=w,
+                clockwise=True,
+                line_types=(LineType.CONTINUOUS, LineType.NONE),
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "e",
+            "f",
+            CircularLane(
+                center5,
+                radii5,
+                np.deg2rad(0),
+                np.deg2rad(137),
+                width=w,
+                clockwise=True,
+                line_types=(LineType.STRIPED, LineType.STRIPED),
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "e",
+            "f",
+            CircularLane(
+                center5,
+                radii5 - w,
+                np.deg2rad(0),
+                np.deg2rad(137),
+                width=w,
+                clockwise=True,
+                line_types=(LineType.NONE, LineType.CONTINUOUS),
+                speed_limit=default_speedlimit,
+            ),
+        )
+
+        # 6 - Slant
+        # Extending [-30,-30]
+        extend = np.array([-30, -30])
+        start6 = np.array([155.7, -45.7])
+        end6 = np.array([135.7, -65.7]) + extend
+        net.add_lane(
+            "f",
+            "g",
+            StraightLane(
+                start6,
+                end6,
+                line_types=(LineType.CONTINUOUS, LineType.NONE),
+                width=w,
+                speed_limit=default_speedlimit,
+            ),
+        )
+        start6_2 = np.array([159.3934, -49.2])
+        end6_2 = np.array([139.3934, -69.2]) + extend
+        net.add_lane(
+            "f",
+            "g",
+            StraightLane(
+                start6_2,
+                end6_2,
+                line_types=(LineType.STRIPED, LineType.STRIPED),
+                width=w,
+                speed_limit=default_speedlimit,
+            ),
+        )
+        start6_3 = np.array(
+            [
+                start6[0] + 2 * (start6_2[0] - start6[0]),
+                start6[1] + 2 * (start6_2[1] - start6[1])
+            ]
+        )
+        end6_3 = np.array(
+            [
+                end6[0] + 2 * (end6_2[0] - end6[0]),
+                end6[1] + 2 * (end6_2[1] - end6[1]),
+            ]
+        )
+        net.add_lane(
+            "f",
+            "g",
+            StraightLane(
+                start6_3,
+                end6_3,
+                line_types=(LineType.NONE, LineType.CONTINUOUS),
+                width=w,
+                speed_limit=default_speedlimit,
+            ),
+        )
+
+        # 7 - Circular Arc #4
+        # Reflect it with the slant
+        center7 = np.array([118.1, -48.1]) + extend
+        radii7 = 25
+        theta7 = 317
+        # theta7_end = 270 - (theta7 - 270) - 10
+        theta7_end = 205
+        net.add_lane(
+            "g",
+            "h",
+            CircularLane(
+                center7,
+                radii7,
+                np.deg2rad(theta7),
+                np.deg2rad(theta7_end - 3),  # nicer
+                width=w,
+                clockwise=False,
+                line_types=(LineType.CONTINUOUS, LineType.NONE),
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "g",
+            "h",
+            CircularLane(
+                center7,
+                radii7 + 5,
+                np.deg2rad(theta7),
+                np.deg2rad(theta7_end),
+                width=w,
+                clockwise=False,
+                line_types=(LineType.STRIPED, LineType.STRIPED),
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "g",
+            "h",
+            CircularLane(
+                center7,
+                radii7 + w2,
+                np.deg2rad(theta7),
+                np.deg2rad(theta7_end),
+                width=w,
+                clockwise=False,
+                line_types=(LineType.NONE, LineType.CONTINUOUS),
+                speed_limit=default_speedlimit,
+            ),
+        )
+
+        # 8 - Next slant
+        # Reflected from the last arc's center
+        start8 = np.array(
+            [
+                center7[0] + radii7 * np.cos(np.deg2rad(theta7_end)),
+                center7[1] + radii7 * np.sin(np.deg2rad(theta7_end))
+            ]
+        )
+        start8_2 = np.array(
+            [
+                center7[0] + (radii7 + w) * np.cos(np.deg2rad(theta7_end)),
+                center7[1] + (radii7 + w) * np.sin(np.deg2rad(theta7_end))
+            ]
+        )
+        start8_3 = np.array(
+            [
+                center7[0] + (radii7 + w2) * np.cos(np.deg2rad(theta7_end)),
+                center7[1] + (radii7 + w2) * np.sin(np.deg2rad(theta7_end))
+            ]
+        )
+
+        # We preemptively take section 9's radius to make a nice join.
+        radii9 = 15
+        rad = np.deg2rad(30)
+        end8 = np.array(
+            [
+                42 - radii9 * np.cos(rad),
+                -radii9 - radii9 * np.sin(rad)
+            ]
+        )
+        end8_2 = np.array(
+            [
+                42 - (radii9 + w) * np.cos(rad),
+                -radii9 - (radii9 + w) * np.sin(rad)
+            ]
+        )
+        end8_3 = np.array(
+            [
+                42 - (radii9 + w2) * np.cos(rad),
+                -radii9 - (radii9 + w2) * np.sin(rad)
+            ]
+        )
+        net.add_lane(
+            "h",
+            "i",
+            StraightLane(
+                start8,
+                end8,
+                line_types=(LineType.CONTINUOUS, LineType.NONE),
+                width=w,
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "h",
+            "i",
+            StraightLane(
+                start8_2,
+                end8_2,
+                line_types=(LineType.STRIPED, LineType.STRIPED),
+                width=w,
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "h",
+            "i",
+            StraightLane(
+                start8_3,
+                end8_3,
+                line_types=(LineType.NONE, LineType.CONTINUOUS),
+                width=w,
+                speed_limit=default_speedlimit,
+            ),
+        )
+
+        # 9 - Circular arc 7, end
+        # Since y2 = 0...
+        center9 = np.array([42, -radii9])
+        net.add_lane(
+            "i",
+            "a",
+            CircularLane(
+                center9,
+                radii9,
+                np.deg2rad(210),
+                np.deg2rad(88),
+                width=w,
+                clockwise=False,
+                line_types=(LineType.CONTINUOUS, LineType.NONE),
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "i",
+            "a",
+            CircularLane(
+                center9,
+                radii9 + w,
+                np.deg2rad(210),
+                np.deg2rad(90),
+                width=w,
+                clockwise=False,
+                line_types=(LineType.STRIPED, LineType.STRIPED),
+                speed_limit=default_speedlimit,
+            ),
+        )
+        net.add_lane(
+            "i",
+            "a",
+            CircularLane(
+                center9,
+                radii9 + w2,
+                np.deg2rad(212),
+                np.deg2rad(88),  # nicer join
+                width=w,
+                clockwise=False,
+                line_types=(LineType.NONE, LineType.CONTINUOUS),
+                speed_limit=default_speedlimit,
+            ),
+        )
+
+        self.road = Road(
+            network=net,
+            np_random=self.np_random,
+            record_history=self.config["show_trajectories"],
+        )
 
     def _make_vehicles(self) -> None:
         rng = self.np_random
@@ -836,849 +1278,6 @@ def road1(env: "AVRacetrack"):
 
 
 def road2(env: "AVRacetrack"):
-    """
-    Like Road 1 but elongated and bigger, more lanes
-    """
-    net = RoadNetwork()
-
-    # Set Speed Limits for Road Sections - Straight, Turn20, Straight, Turn 15, Turn15, Straight, Turn25x2, Turn18
-    speedlimits = [None, 10, 10, 10, 10, 10, 10, 10, 10]
-
-    # Initialise First Lane
-    lane = StraightLane(
-        [42, 0],
-        [200, 0],
-        line_types=(LineType.CONTINUOUS, LineType.STRIPED),
-        width=5,
-        speed_limit=speedlimits[1],
-    )
-    env.lane = lane
-
-    # Add Lanes to Road Network - Straight Section
-    net.add_lane("a", "b", lane)
-    net.add_lane(
-        "a",
-        "b",
-        StraightLane(
-            [42, 5],
-            [200, 5],
-            line_types=(LineType.STRIPED, LineType.CONTINUOUS),
-            width=5,
-            speed_limit=speedlimits[1],
-        ),
-    )
-
-    # 2 - Circular Arc #1
-    center1 = [200, -20]
-    radii1 = 20
-    net.add_lane(
-        "b",
-        "c",
-        CircularLane(
-            center1,
-            radii1,
-            np.deg2rad(90),
-            np.deg2rad(-1),
-            width=5,
-            clockwise=False,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            speed_limit=speedlimits[2],
-        ),
-    )
-    net.add_lane(
-        "b",
-        "c",
-        CircularLane(
-            center1,
-            radii1 + 5,
-            np.deg2rad(90),
-            np.deg2rad(-1),
-            width=5,
-            clockwise=False,
-            line_types=(LineType.STRIPED, LineType.CONTINUOUS),
-            speed_limit=speedlimits[2],
-        ),
-    )
-
-    # 3 - Vertical Straight
-    net.add_lane(
-        "c",
-        "d",
-        StraightLane(
-            [220, -20],
-            [220, -60],
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            width=5,
-            speed_limit=speedlimits[3],
-        ),
-    )
-    net.add_lane(
-        "c",
-        "d",
-        StraightLane(
-            [225, -20],
-            [225, -60],
-            line_types=(LineType.STRIPED, LineType.CONTINUOUS),
-            width=5,
-            speed_limit=speedlimits[3],
-        ),
-    )
-
-    # 4 - Circular Arc #2
-    center2 = [205, -60]
-    radii2 = 15
-    net.add_lane(
-        "d",
-        "e",
-        CircularLane(
-            center2,
-            radii2,
-            np.deg2rad(0),
-            np.deg2rad(-181),
-            width=5,
-            clockwise=False,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            speed_limit=speedlimits[4],
-        ),
-    )
-    net.add_lane(
-        "d",
-        "e",
-        CircularLane(
-            center2,
-            radii2 + 5,
-            np.deg2rad(0),
-            np.deg2rad(-181),
-            width=5,
-            clockwise=False,
-            line_types=(LineType.STRIPED, LineType.CONTINUOUS),
-            speed_limit=speedlimits[4],
-        ),
-    )
-
-    # 5 - Circular Arc #3
-    center3 = [170, -60]
-    radii3 = 15
-    net.add_lane(
-        "e",
-        "f",
-        CircularLane(
-            center3,
-            radii3 + 5,
-            np.deg2rad(0),
-            np.deg2rad(136),
-            width=5,
-            clockwise=True,
-            line_types=(LineType.CONTINUOUS, LineType.STRIPED),
-            speed_limit=speedlimits[5],
-        ),
-    )
-    net.add_lane(
-        "e",
-        "f",
-        CircularLane(
-            center3,
-            radii3,
-            np.deg2rad(0),
-            np.deg2rad(137),
-            width=5,
-            clockwise=True,
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            speed_limit=speedlimits[5],
-        ),
-    )
-
-    # 6 - Slant
-    # Extending [-30,-30]
-    extend = np.array([-30, -30])
-    net.add_lane(
-        "f",
-        "g",
-        StraightLane(
-            [155.7, -45.7],
-            np.array([135.7, -65.7]) + extend,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            width=5,
-            speed_limit=speedlimits[6],
-        ),
-    )
-    net.add_lane(
-        "f",
-        "g",
-        StraightLane(
-            [159.3934, -49.2],
-            np.array([139.3934, -69.2]) + extend,
-            line_types=(LineType.STRIPED, LineType.CONTINUOUS),
-            width=5,
-            speed_limit=speedlimits[6],
-        ),
-    )
-
-    # 7 - Circular Arc #4
-    center4 = np.array([118.1, -48.1]) + extend
-    radii4 = 25
-    net.add_lane(
-        "g",
-        "h",
-        CircularLane(
-            center4,
-            radii4,
-            np.deg2rad(315),
-            np.deg2rad(135),
-            width=5,
-            clockwise=False,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            speed_limit=speedlimits[7],
-        ),
-    )
-    net.add_lane(
-        "g",
-        "h",
-        CircularLane(
-            center4,
-            radii4 + 5,
-            np.deg2rad(315),
-            np.deg2rad(135),
-            width=5,
-            clockwise=False,
-            line_types=(LineType.STRIPED, LineType.CONTINUOUS),
-            speed_limit=speedlimits[7],
-        ),
-    )
-
-    # 8 - Circular Arc #5
-    center5 = center4 + np.array([-55, 55]) / np.sqrt(2)
-    radii5 = 25
-    net.add_lane(
-        "h",
-        "i",
-        CircularLane(
-            center5,
-            radii5 + 5,
-            np.deg2rad(315),
-            np.deg2rad(360),
-            width=5,
-            clockwise=True,
-            line_types=(LineType.CONTINUOUS, LineType.STRIPED),
-            speed_limit=speedlimits[7],
-        ),
-    )
-    net.add_lane(
-        "h",
-        "i",
-        CircularLane(
-            center5,
-            radii5,
-            np.deg2rad(315),
-            np.deg2rad(360),
-            width=5,
-            clockwise=True,
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            speed_limit=speedlimits[7],
-        ),
-    )
-
-    # 9 - Circular Arc #6
-    radii6 = 8
-    center6 = center5 + np.array([radii5 - radii6, 0])
-    net.add_lane(
-        "i",
-        "j",
-        CircularLane(
-            center6,
-            radii6 + 5,
-            np.deg2rad(0),
-            np.deg2rad(90),
-            width=5,
-            clockwise=True,
-            line_types=(LineType.CONTINUOUS, LineType.STRIPED),
-            speed_limit=speedlimits[8],
-        ),
-    )
-    net.add_lane(
-        "i",
-        "j",
-        CircularLane(
-            center6,
-            radii6,
-            np.deg2rad(0),
-            np.deg2rad(90),
-            width=5,
-            clockwise=True,
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            speed_limit=speedlimits[8],
-        ),
-    )
-
-    # 10 - Straight leg
-    ref10 = np.array([center6[0], center6[1] + radii6 + 5])
-    # Extend such that x equals 42
-    net.add_lane(
-        "j",
-        "k",
-        StraightLane(
-            ref10,
-            np.array([42, ref10[1]]),
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            width=5,
-            speed_limit=speedlimits[1],
-        ),
-    )
-    net.add_lane(
-        "j",
-        "k",
-        StraightLane(
-            ref10 + np.array([0, -5]),
-            np.array([42, ref10[1] - 5]),
-            line_types=(LineType.STRIPED, LineType.CONTINUOUS),
-            width=5,
-            speed_limit=speedlimits[1],
-        ),
-    )
-
-    # 11 - Circular arc 7, end
-    # Since y2 = 0...
-    center7 = np.array([42, (ref10[1]) / 2.])
-    radii7 = abs(float(center7[1]))
-    net.add_lane(
-        "k",
-        "a",
-        CircularLane(
-            center7,
-            radii7,
-            np.deg2rad(270),
-            np.deg2rad(90),
-            width=5,
-            clockwise=False,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            speed_limit=speedlimits[7],
-        ),
-    )
-    net.add_lane(
-        "k",
-        "a",
-        CircularLane(
-            center7,
-            radii7 + 5,
-            np.deg2rad(270),
-            np.deg2rad(90),
-            width=5,
-            clockwise=False,
-            line_types=(LineType.STRIPED, LineType.CONTINUOUS),
-            speed_limit=speedlimits[7],
-        ),
-    )
-
-    return Road(
-        network=net,
-        np_random=env.np_random,
-        record_history=env.config["show_trajectories"],
-    )
-
-
-def road3(env: "AVRacetrack"):
-    """
-    Road 2 with extra outside lanes
-    """
-    net = RoadNetwork()
-    w = 5
-    w2 = 2 * w
-    w3 = 3 * w
-
-    # Set Speed Limits for Road Sections - Straight, Turn20, Straight, Turn 15, Turn15, Straight, Turn25x2, Turn18
-    speedlimits = [None, 10, 10, 10, 10, 10, 10, 10, 10]
-
-    # Initialise First Lane
-    lane = StraightLane(
-        [42, 0],
-        [200, 0],
-        line_types=(LineType.CONTINUOUS, LineType.STRIPED),
-        width=w,
-        speed_limit=speedlimits[1],
-    )
-    env.lane = lane
-
-    # Add Lanes to Road Network - Straight Section
-    net.add_lane("a", "b", lane)
-    net.add_lane(
-        "a",
-        "b",
-        StraightLane(
-            [42, 5],
-            [200, 5],
-            line_types=(LineType.STRIPED, LineType.STRIPED),
-            width=w,
-            speed_limit=speedlimits[1],
-        ),
-    )
-    net.add_lane(
-        "a",
-        "b",
-        StraightLane(
-            [42, w2],
-            [200, w2],
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            width=w,
-            speed_limit=speedlimits[1],
-        ),
-    )
-
-    # 2 - Circular Arc #1
-    center1 = [200, -20]
-    radii1 = 20
-    net.add_lane(
-        "b",
-        "c",
-        CircularLane(
-            center1,
-            radii1,
-            np.deg2rad(90),
-            np.deg2rad(-1),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            speed_limit=speedlimits[2],
-        ),
-    )
-    net.add_lane(
-        "b",
-        "c",
-        CircularLane(
-            center1,
-            radii1 + w,
-            np.deg2rad(90),
-            np.deg2rad(-1),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.STRIPED, LineType.STRIPED),
-            speed_limit=speedlimits[2],
-        ),
-    )
-    net.add_lane(
-        "b",
-        "c",
-        CircularLane(
-            center1,
-            radii1 + w2,
-            np.deg2rad(90),
-            np.deg2rad(-1),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            speed_limit=speedlimits[2],
-        ),
-    )
-
-    # 3 - Vertical Straight
-    net.add_lane(
-        "c",
-        "d",
-        StraightLane(
-            [220, -20],
-            [220, -60],
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            width=w,
-            speed_limit=speedlimits[3],
-        ),
-    )
-    net.add_lane(
-        "c",
-        "d",
-        StraightLane(
-            [225, -20],
-            [225, -60],
-            line_types=(LineType.STRIPED, LineType.STRIPED),
-            width=w,
-            speed_limit=speedlimits[3],
-        ),
-    )
-    net.add_lane(
-        "c",
-        "d",
-        StraightLane(
-            [230, -20],
-            [230, -60],
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            width=w,
-            speed_limit=speedlimits[3],
-        ),
-    )
-
-    # 4 - Circular Arc #2
-    center2 = [205, -60]
-    radii2 = 15
-    net.add_lane(
-        "d",
-        "e",
-        CircularLane(
-            center2,
-            radii2,
-            np.deg2rad(0),
-            np.deg2rad(-181),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            speed_limit=speedlimits[4],
-        ),
-    )
-    net.add_lane(
-        "d",
-        "e",
-        CircularLane(
-            center2,
-            radii2 + w,
-            np.deg2rad(0),
-            np.deg2rad(-181),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.STRIPED, LineType.STRIPED),
-            speed_limit=speedlimits[4],
-        ),
-    )
-    net.add_lane(
-        "d",
-        "e",
-        CircularLane(
-            center2,
-            radii2 + w2,
-            np.deg2rad(0),
-            np.deg2rad(-181),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            speed_limit=speedlimits[4],
-        ),
-    )
-
-    # 5 - Circular Arc #3
-    center3 = [170, -60]
-    radii3 = 15
-    net.add_lane(
-        "e",
-        "f",
-        CircularLane(
-            center3,
-            radii3 + 5,
-            np.deg2rad(0),
-            np.deg2rad(136),
-            width=w,
-            clockwise=True,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            speed_limit=speedlimits[5],
-        ),
-    )
-    net.add_lane(
-        "e",
-        "f",
-        CircularLane(
-            center3,
-            radii3,
-            np.deg2rad(0),
-            np.deg2rad(137),
-            width=w,
-            clockwise=True,
-            line_types=(LineType.STRIPED, LineType.STRIPED),
-            speed_limit=speedlimits[5],
-        ),
-    )
-    net.add_lane(
-        "e",
-        "f",
-        CircularLane(
-            center3,
-            radii3 - w,
-            np.deg2rad(0),
-            np.deg2rad(137),
-            width=w,
-            clockwise=True,
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            speed_limit=speedlimits[5],
-        ),
-    )
-
-    # 6 - Slant
-    # Extending [-30,-30]
-    extend = np.array([-30, -30])
-    start6 = np.array([155.7, -45.7])
-    end6 = np.array([135.7, -65.7]) + extend
-    net.add_lane(
-        "f",
-        "g",
-        StraightLane(
-            start6,
-            end6,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            width=w,
-            speed_limit=speedlimits[6],
-        ),
-    )
-    start6_2 = np.array([159.3934, -49.2])
-    end6_2 = np.array([139.3934, -69.2]) + extend
-    net.add_lane(
-        "f",
-        "g",
-        StraightLane(
-            start6_2,
-            end6_2,
-            line_types=(LineType.STRIPED, LineType.STRIPED),
-            width=w,
-            speed_limit=speedlimits[6],
-        ),
-    )
-    start6_3 = np.array(
-        [
-            start6[0] + 2 * (start6_2[0] - start6[0]),
-            start6[1] + 2 * (start6_2[1] - start6[1])
-        ]
-    )
-    end6_3 = np.array(
-        [
-            end6[0] + 2 * (end6_2[0] - end6[0]),
-            end6[1] + 2 * (end6_2[1] - end6[1]),
-        ]
-    )
-    net.add_lane(
-        "f",
-        "g",
-        StraightLane(
-            start6_3,
-            end6_3,
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            width=w,
-            speed_limit=speedlimits[6],
-        ),
-    )
-
-    # 7 - Circular Arc #4
-    center4 = np.array([118.1, -48.1]) + extend
-    radii4 = 25
-    net.add_lane(
-        "g",
-        "h",
-        CircularLane(
-            center4,
-            radii4,
-            np.deg2rad(315),
-            np.deg2rad(135),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            speed_limit=speedlimits[7],
-        ),
-    )
-    net.add_lane(
-        "g",
-        "h",
-        CircularLane(
-            center4,
-            radii4 + 5,
-            np.deg2rad(315),
-            np.deg2rad(135),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.STRIPED, LineType.STRIPED),
-            speed_limit=speedlimits[7],
-        ),
-    )
-    net.add_lane(
-        "g",
-        "h",
-        CircularLane(
-            center4,
-            radii4 + w2,
-            np.deg2rad(315),
-            np.deg2rad(135),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            speed_limit=speedlimits[7],
-        ),
-    )
-
-    # 8 - Circular Arc #5
-    center5 = center4 + np.array([-55, 55]) / np.sqrt(2)
-    radii5 = 25
-    net.add_lane(
-        "h",
-        "i",
-        CircularLane(
-            center5,
-            radii5 + 5,
-            np.deg2rad(315),
-            np.deg2rad(360),
-            width=w,
-            clockwise=True,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            speed_limit=speedlimits[7],
-        ),
-    )
-    net.add_lane(
-        "h",
-        "i",
-        CircularLane(
-            center5,
-            radii5,
-            np.deg2rad(315),
-            np.deg2rad(360),
-            width=w,
-            clockwise=True,
-            line_types=(LineType.STRIPED, LineType.STRIPED),
-            speed_limit=speedlimits[7],
-        ),
-    )
-    net.add_lane(
-        "h",
-        "i",
-        CircularLane(
-            center5,
-            radii5 - 5,
-            np.deg2rad(315),
-            np.deg2rad(360),
-            width=w,
-            clockwise=True,
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            speed_limit=speedlimits[7],
-        ),
-    )
-
-    # 9 - Circular Arc #6
-    radii6 = 8
-    center6 = center5 + np.array([radii5 - radii6, 0])
-    net.add_lane(
-        "i",
-        "j",
-        CircularLane(
-            center6,
-            radii6 + 5,
-            np.deg2rad(0),
-            np.deg2rad(90),
-            width=w,
-            clockwise=True,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            speed_limit=speedlimits[8],
-        ),
-    )
-    net.add_lane(
-        "i",
-        "j",
-        CircularLane(
-            center6,
-            radii6,
-            np.deg2rad(0),
-            np.deg2rad(90),
-            width=w,
-            clockwise=True,
-            line_types=(LineType.STRIPED, LineType.STRIPED),
-            speed_limit=speedlimits[8],
-        ),
-    )
-    net.add_lane(
-        "i",
-        "j",
-        CircularLane(
-            center6,
-            radii6 - w,
-            np.deg2rad(0),
-            np.deg2rad(90),
-            width=w,
-            clockwise=True,
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            speed_limit=speedlimits[8],
-        ),
-    )
-
-    # 10 - Straight leg
-    ref10 = np.array([center6[0], center6[1] + radii6 + 5])
-    # Extend such that x equals 42
-    net.add_lane(
-        "j",
-        "k",
-        StraightLane(
-            ref10,
-            np.array([42, ref10[1]]),
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            width=w,
-            speed_limit=speedlimits[1],
-        ),
-    )
-    net.add_lane(
-        "j",
-        "k",
-        StraightLane(
-            ref10 + np.array([0, -w]),
-            np.array([42, ref10[1] - w]),
-            line_types=(LineType.STRIPED, LineType.STRIPED),
-            width=w,
-            speed_limit=speedlimits[1],
-        ),
-    )
-    net.add_lane(
-        "j",
-        "k",
-        StraightLane(
-            ref10 + np.array([0, -w2]),
-            np.array([42, ref10[1] - w2]),
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            width=w,
-            speed_limit=speedlimits[1],
-        ),
-    )
-
-    # 11 - Circular arc 7, end
-    # Since y2 = 0...
-    center7 = np.array([42, (ref10[1]) / 2.])
-    radii7 = abs(float(center7[1]))
-    net.add_lane(
-        "k",
-        "a",
-        CircularLane(
-            center7,
-            radii7,
-            np.deg2rad(270),
-            np.deg2rad(90),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.CONTINUOUS, LineType.NONE),
-            speed_limit=speedlimits[7],
-        ),
-    )
-    net.add_lane(
-        "k",
-        "a",
-        CircularLane(
-            center7,
-            radii7 + w,
-            np.deg2rad(270),
-            np.deg2rad(90),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.STRIPED, LineType.STRIPED),
-            speed_limit=speedlimits[7],
-        ),
-    )
-    net.add_lane(
-        "k",
-        "a",
-        CircularLane(
-            center7,
-            radii7 + w2,
-            np.deg2rad(270),
-            np.deg2rad(90),
-            width=w,
-            clockwise=False,
-            line_types=(LineType.NONE, LineType.CONTINUOUS),
-            speed_limit=speedlimits[7],
-        ),
-    )
-
-    return Road(
-        network=net,
-        np_random=env.np_random,
-        record_history=env.config["show_trajectories"],
-    )
-
-
-def road4(env: "AVRacetrack"):
     """
     Road 2 with extra outside lanes
     """
