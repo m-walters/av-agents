@@ -132,6 +132,13 @@ def main(cfg: DictConfig):
         "E[Entropy]": "entropy",
         "Risk": "risk",
     }
+    if run_params['warmup_steps'] >= run_params['duration']:
+        # No Montecarlo data to plot
+        _ = ds_label_map.pop("E[Loss]")
+        _ = ds_label_map.pop("E[Energy]")
+        _ = ds_label_map.pop("E[Entropy]")
+        _ = ds_label_map.pop("Risk")
+
     plotter = plotting.TrackerPlotter()
     plotter.create_animation(
         f"{LATEST_DIR}/tracker.mp4",

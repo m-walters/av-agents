@@ -277,13 +277,6 @@ class AVHighway(HighwayEnv):
         if vehicle.crashed:
             return self.config['max_defensive_penalty']
 
-        v_x = vehicle.speed * np.cos(vehicle.heading)
-
-        # Grab the front and behind cars across different lanes and consider their speed deltas from ego
-        logger.debug(
-            f">>> COLLISION REWARD START | EGO [{vehicle}]\n\tv_x {v_x:0.4f} | lane {vehicle.lane_index}"
-        )
-
         # See our AV Project, "Vehicle Agent" section for derivation
         # In IDMVehicle.act you can see acceleration getting clipped by [-ACC_MAX, ACC_MAX]
         beta = 1 / (2 * self.ACC_MAX)
@@ -291,53 +284,57 @@ class AVHighway(HighwayEnv):
 
         n_nbr = 0
         penalty = 0
-        for lane in self.road.network.all_side_lanes(vehicle.lane_index):
-            logger.debug(f"CHECKING LANE {lane}")
+        # Boundary of neighbour consideration
+        boundary = max(vehicle.speed, 10)
+        for v in self.road.close_vehicles_to(vehicle, distance=boundary, count=None, see_behind=True, sort=False):
+            lane = v.lane_index
             if abs(lane[2] - vehicle.lane_index[2]) > 1:
                 # Don't worry about lanes that are more than 1 away
-                logger.debug(f"SKIPPING LANE {lane}")
                 continue
 
-            front, rear = self.road.neighbour_vehicles(vehicle, lane)
-            if front is not None:
-                logger.debug(f"FOUND FRONT [{front}] | LANE {front.lane_index[2]}")
-                n_nbr += 1
-                front_speed = front.speed * np.cos(front.heading)
-                front_delta = front_speed - v_x
-                if front_delta < 0:
-                    # Front car is slower
-                    # Note, lane_distance_to: <argument>.x - self.x
-                    front_distance = vehicle.lane_distance_to(front)
-                    assert front_distance > 0, f"Front distance <= 0: {front_distance}"
-                    front_distance = max(front_distance, vehicle.LENGTH * 1.2)
-                    _penalty = beta * front_delta ** 2 / (
-                            front_distance * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
-                    penalty += _penalty
-                    logger.debug(
-                        f">> {front_speed:0.4f} | {front_delta:0.4f} | {front_distance:0.4f} | {_penalty:0.4f}"
-                    )
+            # Determine if we are approaching this car either from behind or in front
+            relative_pos = v.position - vehicle.position
+            relative_velocity = v.velocity - vehicle.velocity
+            dist = np.linalg.norm(relative_pos)
 
-            if rear is not None:
-                logger.debug(f"FOUND REAR [{rear}]")
-                n_nbr += 1
-                rear_speed = rear.speed * np.cos(rear.heading)
-                rear_delta = v_x - rear_speed
-                if rear_delta < 0:
-                    # Rear car approaching
-                    rear_distance = rear.lane_distance_to(vehicle)
-                    assert rear_distance > 0, f"Rear distance <= 0: {rear_distance}"
-                    rear_distance = max(rear_distance, rear.LENGTH * 1.2)
-                    _penalty = beta * rear_delta ** 2 / (
-                            rear_distance * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
-                    penalty += _penalty
-                    logger.debug(f">> {rear_speed:0.4f} | {rear_delta:0.4f} | {rear_distance:0.4f} | {_penalty:0.4f}")
+            # if vehicle.av_id == "1":
+            #     print(
+            #         f"MW DEFENCE COMPARE [{vehicle}, {v}]\n\t pos {vehicle.position} | {v.position} -> {relative_pos}"
+            #         f"\n\t dir {vehicle.direction} | {v.direction} -> {v.direction - vehicle.direction}"
+            #         f"\n\t vel {vehicle.velocity} | {v.velocity} -> {relative_velocity}"
+            #         f"\n\t dist {dist:0.4f} | rel_pos . v.direction = {np.dot(relative_pos, v.direction):0.4f} |"
+            #         f" rel_vel . vehicle.direction = {np.dot(relative_velocity, vehicle.direction):0.4f}"
+            #     )
+
+            if np.dot(relative_pos, vehicle.direction) < 0:
+                # Behind
+                # Compare relative velocity with our velocity to see if its approaching or not
+                if np.dot(relative_velocity, vehicle.direction) > 0:
+                    # Approaching from behind
+                    ...
+                else:
+                    # Moving away, ignore
+                    continue
+            else:
+                # In front
+                # Compare relative velocity with our velocity to see if its approaching or not
+                if np.dot(relative_velocity, vehicle.direction) < 0:
+                    # Approaching from front
+                    ...
+                else:
+                    # Moving away, ignore
+                    continue
+
+            # Found approacher
+            n_nbr += 1
+            dist = max(dist, vehicle.LENGTH * 1.)
+            relative_speed = np.linalg.norm(relative_velocity)
+            _penalty = beta * relative_speed ** 2 / (dist * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
+            penalty += _penalty
 
         logger.debug(f"COLLISION PENALTY: {penalty}\n across {n_nbr} nbrs")
         # Average over the neighbors
         # penalty /= n_nbr if n_nbr > 0 else 1
-
-        # Multiply it by the sin(theta) of our heading -- the harder we are turning the more dangerous this is
-        penalty *= 1 + np.abs(np.sin(vehicle.heading))
 
         if -penalty < self.config['max_defensive_penalty']:
             logger.warning(f"MAX DEFENSIVE PENALTY EXCEEDED: {-penalty}")
