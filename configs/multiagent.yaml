@@ -9,7 +9,7 @@ highway_env:
   control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
   vehicles_count: 30  # Number of alters
   vehicles_density: 2
-  reward_speed: 42
+  reward_speed: 50
   speed_limit: 40
   action:
     type: "MultiAgentAction"
@@ -24,11 +24,11 @@ highway_env:
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: &mc_horizon 20
   n_montecarlo: &n_montecarlo 100
-  duration: 400
+  duration: 1000
   normalize_reward: true
 #==============
 name: multiagent
-seed: 867
+seed: 86777
 world_draws: 1
 warmup_steps: 1e5  # included within the duration
 mc_period: &mc_period 2   # real-world steps between MC issuances

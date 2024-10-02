@@ -65,8 +65,7 @@ class AVRacetrack(RacetrackEnv):
                 "screen_width": 600,
                 "screen_height": 600,
                 "centering_position": [0.5, 0.5],
-
-                "lanes_count": 4,
+                "lanes_count": 3,
                 "ego_spacing": 2,
                 "vehicles_density": 1,
                 "normalize_reward": True,
@@ -89,6 +88,7 @@ class AVRacetrack(RacetrackEnv):
             "crash_penalty": -1,  # The reward received when colliding with a vehicle.
             "max_defensive_penalty": -3,  # Cap the defensive reward/penalty
             "control_vehicle_type": "sim.vehicles.highway.IDMVehicle",
+            "other_vehicles_type": "sim.vehicles.highway.AlterIDMVehicle",
             "simulation_frequency": 15,  # frames per second
             "policy_frequency": 5,  # policy checks per second (and how many 'steps' per second)
             "n_montecarlo": 10,
@@ -119,6 +119,10 @@ class AVRacetrack(RacetrackEnv):
         """
         Init road and vehicles
         """
+        # Lanes-count must be 3
+        if self.config["lanes_count"] != 3:
+            raise ValueError("AVRacetrack only supports 3 lanes")
+
         # Clear the vehicle lookup
         self.vehicle_lookup = {}
 
@@ -619,31 +623,57 @@ class AVRacetrack(RacetrackEnv):
         self.controlled_vehicles = []
         self.alter_vehicles = []
         av_id = 1
-        for i in range(self.config["controlled_vehicles"]):
-            lane_index = (
-                ("a", "b", 0)
-            )
-            # Long
+        controlled_created = 0
+        break_count = 1e3
+        attempts = 0
+
+        while controlled_created < self.config["controlled_vehicles"]:
+            attempts += 1
+            if attempts == break_count:
+                raise RuntimeError(f"Failed to create {self.config['controlled_vehicles']} control vehicles")
+
+            # Grab a random lane portion
             random_lane_index = self.road.network.random_lane_index(rng)
+            # Spread across lanes more evenly
+            lane_idx = (random_lane_index[0], random_lane_index[1], av_id % self.config["lanes_count"])
+            long = rng.uniform(
+                low=0, high=self.road.network.get_lane(random_lane_index).length
+            )
             controlled_vehicle = control_vehicle_class.make_on_lane(
                 self.road,
-                random_lane_index,
-                longitudinal=rng.uniform(
-                    low=0, high=self.road.network.get_lane(random_lane_index).length
-                ),
+                lane_idx,
+                longitudinal=long,
                 speed=0.7 * rng.normal(self.config["speed_limit"])
             )
-            setattr(controlled_vehicle, "av_id", str(av_id))
-            av_id += 1
-            self.vehicle_lookup[controlled_vehicle.av_id] = controlled_vehicle
-            self.controlled_vehicles.append(controlled_vehicle)
-            self.road.vehicles.append(controlled_vehicle)
-            # Randomize its behavior
-            if hasattr(controlled_vehicle, "randomize_behavior"):
-                controlled_vehicle.randomize_behavior()
+            controlled_vehicle.target_speed = self.config["reward_speed"]
+            # Prevent early collisions
+            for v in self.road.vehicles:
+                if np.linalg.norm(controlled_vehicle.position - v.position) < 12:
+                    # Try again
+                    break
+            else:
+                # Add vehicle
+                setattr(controlled_vehicle, "av_id", str(av_id))
+                av_id += 1
+                controlled_created += 1
+                self.vehicle_lookup[controlled_vehicle.av_id] = controlled_vehicle
+                self.controlled_vehicles.append(controlled_vehicle)
+                self.road.vehicles.append(controlled_vehicle)
+                # Randomize its behavior
+                if hasattr(controlled_vehicle, "randomize_behavior"):
+                    controlled_vehicle.randomize_behavior()
 
-        other_vehicles = self.config["vehicles_count"] - self.config["controlled_vehicles"]
-        for i in range(other_vehicles):
+        other_vehicles = self.config["vehicles_count"] - len(self.road.vehicles)
+        if other_vehicles < 0:
+            raise ValueError("More 'controlled_vehicles' than 'vehicles_count'")
+
+        # Count attempts and created vehicles
+        attempts, others_created = 0, 0
+        while others_created < other_vehicles:
+            attempts += 1
+            if attempts == break_count:
+                raise ValueError(f"Failed to create {other_vehicles} vehicles")
+
             random_lane_index = self.road.network.random_lane_index(rng)
             vehicle = other_vehicles_type.make_on_lane(
                 self.road,
@@ -656,16 +686,20 @@ class AVRacetrack(RacetrackEnv):
             # Prevent early collisions
             for v in self.road.vehicles:
                 if np.linalg.norm(vehicle.position - v.position) < 12:
+                    # Try again
                     break
             else:
                 setattr(vehicle, 'av_id', str(av_id))
                 av_id += 1
+                others_created += 1
                 self.vehicle_lookup[vehicle.av_id] = vehicle
                 self.alter_vehicles.append(vehicle)
                 self.road.vehicles.append(vehicle)
                 # Randomize its behavior
                 if hasattr(vehicle, "randomize_behavior"):
                     vehicle.randomize_behavior()
+
+        logger.info(f"Created {len(self.road.vehicles)} vehicles")
 
     def step(self, action: Action) -> Tuple[Observation, float, bool, bool, dict]:
         """
@@ -702,7 +736,7 @@ class AVRacetrack(RacetrackEnv):
         """
         vehicle = vehicle or self.vehicle
         # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
-        forward_speed = vehicle.speed * np.cos(vehicle.heading)
+        forward_speed = vehicle.speed
         score = self.config['alpha'] * np.exp(
             - (forward_speed - self.config['reward_speed']) ** 2 / (self.config['alpha'] ** 2)
         )
@@ -732,13 +766,6 @@ class AVRacetrack(RacetrackEnv):
         if vehicle.crashed:
             return self.config['max_defensive_penalty']
 
-        v_x = vehicle.speed * np.cos(vehicle.heading)
-
-        # Grab the front and behind cars across different lanes and consider their speed deltas from ego
-        logger.debug(
-            f">>> COLLISION REWARD START | EGO [{vehicle}]\n\tv_x {v_x:0.4f} | lane {vehicle.lane_index}"
-        )
-
         # See our AV Project, "Vehicle Agent" section for derivation
         # In IDMVehicle.act you can see acceleration getting clipped by [-ACC_MAX, ACC_MAX]
         beta = 1 / (2 * self.ACC_MAX)
@@ -746,53 +773,57 @@ class AVRacetrack(RacetrackEnv):
 
         n_nbr = 0
         penalty = 0
-        for lane in self.road.network.all_side_lanes(vehicle.lane_index):
-            logger.debug(f"CHECKING LANE {lane}")
+        # Boundary of neighbour consideration
+        boundary = max(vehicle.speed, 10)
+        for v in self.road.close_vehicles_to(vehicle, distance=boundary, count=None, see_behind=True, sort=False):
+            lane = v.lane_index
             if abs(lane[2] - vehicle.lane_index[2]) > 1:
                 # Don't worry about lanes that are more than 1 away
-                logger.debug(f"SKIPPING LANE {lane}")
                 continue
 
-            front, rear = self.road.neighbour_vehicles(vehicle, lane)
-            if front is not None:
-                logger.debug(f"FOUND FRONT [{front}] | LANE {front.lane_index[2]}")
-                n_nbr += 1
-                front_speed = front.speed * np.cos(front.heading)
-                front_delta = front_speed - v_x
-                if front_delta < 0:
-                    # Front car is slower
-                    # Note, lane_distance_to: <argument>.x - self.x
-                    front_distance = vehicle.lane_distance_to(front)
-                    assert front_distance > 0, f"Front distance <= 0: {front_distance}"
-                    front_distance = max(front_distance, vehicle.LENGTH * 1.2)
-                    _penalty = beta * front_delta ** 2 / (
-                            front_distance * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
-                    penalty += _penalty
-                    logger.debug(
-                        f">> {front_speed:0.4f} | {front_delta:0.4f} | {front_distance:0.4f} | {_penalty:0.4f}"
-                    )
+            # Determine if we are approaching this car either from behind or in front
+            relative_pos = v.position - vehicle.position
+            relative_velocity = v.velocity - vehicle.velocity
+            dist = np.linalg.norm(relative_pos)
 
-            if rear is not None:
-                logger.debug(f"FOUND REAR [{rear}]")
-                n_nbr += 1
-                rear_speed = rear.speed * np.cos(rear.heading)
-                rear_delta = v_x - rear_speed
-                if rear_delta < 0:
-                    # Rear car approaching
-                    rear_distance = rear.lane_distance_to(vehicle)
-                    assert rear_distance > 0, f"Rear distance <= 0: {rear_distance}"
-                    rear_distance = max(rear_distance, rear.LENGTH * 1.2)
-                    _penalty = beta * rear_delta ** 2 / (
-                            rear_distance * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
-                    penalty += _penalty
-                    logger.debug(f">> {rear_speed:0.4f} | {rear_delta:0.4f} | {rear_distance:0.4f} | {_penalty:0.4f}")
+            # if vehicle.av_id == "1":
+            #     print(
+            #         f"MW DEFENCE COMPARE [{vehicle}, {v}]\n\t pos {vehicle.position} | {v.position} -> {relative_pos}"
+            #         f"\n\t dir {vehicle.direction} | {v.direction} -> {v.direction - vehicle.direction}"
+            #         f"\n\t vel {vehicle.velocity} | {v.velocity} -> {relative_velocity}"
+            #         f"\n\t dist {dist:0.4f} | rel_pos . v.direction = {np.dot(relative_pos, v.direction):0.4f} |"
+            #         f" rel_vel . vehicle.direction = {np.dot(relative_velocity, vehicle.direction):0.4f}"
+            #     )
+
+            if np.dot(relative_pos, vehicle.direction) < 0:
+                # Behind
+                # Compare relative velocity with our velocity to see if its approaching or not
+                if np.dot(relative_velocity, vehicle.direction) > 0:
+                    # Approaching from behind
+                    ...
+                else:
+                    # Moving away, ignore
+                    continue
+            else:
+                # In front
+                # Compare relative velocity with our velocity to see if its approaching or not
+                if np.dot(relative_velocity, vehicle.direction) < 0:
+                    # Approaching from front
+                    ...
+                else:
+                    # Moving away, ignore
+                    continue
+
+            # Found approacher
+            n_nbr += 1
+            dist = max(dist, vehicle.LENGTH * 1.)
+            relative_speed = np.linalg.norm(relative_velocity)
+            _penalty = beta * relative_speed ** 2 / (dist * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
+            penalty += _penalty
 
         logger.debug(f"COLLISION PENALTY: {penalty}\n across {n_nbr} nbrs")
         # Average over the neighbors
         # penalty /= n_nbr if n_nbr > 0 else 1
-
-        # Multiply it by the sin(theta) of our heading -- the harder we are turning the more dangerous this is
-        penalty *= 1 + np.abs(np.sin(vehicle.heading))
 
         if -penalty < self.config['max_defensive_penalty']:
             logger.warning(f"MAX DEFENSIVE PENALTY EXCEEDED: {-penalty}")
@@ -828,59 +859,60 @@ class AVRacetrack(RacetrackEnv):
     def _reward(self, action: np.ndarray, rewards: dict | None = None) -> float | list[float]:
         if not self.multiagent:
             rewards = rewards or self._rewards(action)
-            reward = sum(
-                self.config.get(name, 0) * reward for name, reward in rewards.items()
-            )
-            worst, best = self.config["crash_penalty"], 1
-            reward = utils.lmap(reward, [worst, best], [0, 1])
-            reward *= rewards["on_road_reward"]
+            reward = sum(rewards.values())
 
-        else:
-            rewards = rewards or self._rewards(action)
-            # Accumulated reward for each vehicle
-            reward = np.array(
-                [
-                    sum(reward_tup) for reward_tup in zip(
-                    rewards["lane_centering_reward"], rewards["crash_reward"], rewards["on_road_reward"]
-                )
-                ]
-            )
             if self.config["normalize_reward"]:
-                worst, best = self.config['crash_penalty'], 1
+                # Best is 1
+                # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_penalty
+                best = 1
+                worst = self.config['crash_penalty'] + self.config['max_defensive_penalty']
                 reward = utils.lmap(
                     reward,
                     [worst, best],
                     [0, 1]
                 )
 
-            # Multiply each by their on_road_reward
-            reward *= rewards["on_road_reward"]
+            return reward
+
+        # Mutli-agent rewards
+        rewards = rewards or self._rewards(action)
+        # Accumulated reward for each vehicle
+        reward = np.array(
+            [
+                sum(reward_tup) for reward_tup in zip(
+                rewards["defensive_reward"], rewards["speed_reward"], rewards["crash_reward"]
+            )
+            ]
+        )
+        if self.config["normalize_reward"]:
+            # Best is 1
+            # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_penalty
+            best = 1
+            worst = self.config['crash_penalty'] + self.config['max_defensive_penalty']
+            reward = utils.lmap(
+                reward,
+                [worst, best],
+                [0, 1]
+            )
 
         return reward
 
-    def _rewards(self, action: np.ndarray) -> dict:
+    def _rewards(self, action: Action) -> dict:
+        """
+        Compute and collect the suite of rewards for our control vehicles.
+        TODO -- Consider a speed-limit penalty (see IDMVehicle.accelerate)
+        """
         if self.multiagent:
-            result = {
-                "lane_centering_reward": [],
-                "crash_reward": [],
-                "on_road_reward": [],
-            }
-            for vehicle in self.controlled_vehicles:
-                lateral = vehicle.lane.local_coordinates(vehicle.position)[1]
-                result["lane_centering_reward"].append(
-                    1 / (1 + self.config["lane_centering_cost"] * lateral ** 2)
-                )
-                result["crash_reward"].append(self.crash_reward(vehicle))
-                result["on_road_reward"].append(vehicle.on_road)
-
-            return result
-        else:
-            _, lateral = self.vehicle.lane.local_coordinates(self.vehicle.position)
             return {
-                "lane_centering_reward": 1 / (1 + self.config["lane_centering_cost"] * lateral ** 2),
-                # "action_reward": np.linalg.norm(action),
+                "defensive_reward": [self.defensive_reward(v) for v in self.controlled_vehicles],
+                "speed_reward": [self.speed_reward(v) for v in self.controlled_vehicles],
+                "crash_reward": [self.crash_reward(v) for v in self.controlled_vehicles],
+            }
+        else:
+            return {
+                "defensive_reward": self.defensive_reward(self.vehicle),
+                "speed_reward": self.speed_reward(self.vehicle),
                 "crash_reward": self.crash_reward(self.vehicle),
-                "on_road_reward": self.vehicle.on_road,
             }
 
     def _is_terminated(self) -> bool | Array:
@@ -898,7 +930,7 @@ class AVRacetrack(RacetrackEnv):
         """The episode is truncated if the time limit is reached."""
         return self.time >= self.config["duration"]
 
-    def simplify(self) -> "AVHighway":
+    def simplify(self) -> "AVRacetrack":
         """
         Return a simplified copy of the environment where distant vehicles have been removed from the road.
 
@@ -912,7 +944,7 @@ class AVRacetrack(RacetrackEnv):
         # Since policy_frequency is how many calls to step per second and mc_horizon is num steps per mc sim..
         distance += self.VEHICLE_MAX_SPEED * self.config["mc_horizon"] / self.config["policy_frequency"]
 
-        state_copy: "AVHighway" = copy.deepcopy(self)
+        state_copy: "AVRacetrack" = copy.deepcopy(self)
         state_copy.road.vehicles = [state_copy.vehicle] + state_copy.road.close_vehicles_to(
             state_copy.vehicle, distance
         )
@@ -920,7 +952,7 @@ class AVRacetrack(RacetrackEnv):
         return state_copy
 
     @staticmethod
-    def seed_montecarlo(mc_env: "AVHighway", seed):
+    def seed_montecarlo(mc_env: "AVRacetrack", seed):
         """
         Seed a montecarlo environment
         """
