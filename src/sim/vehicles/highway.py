@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Union
+from typing import Optional
 
 import numpy as np
 from highway_env.road.road import Road, Route
@@ -153,9 +153,6 @@ class IDMVehicle(AggressiveParams, VehicleBase, AggressiveVehicle):
         self.crashed_timer = 0
         self.color = self.DEFAULT_COLOR
 
-    def act(self, action: Union[dict, str] = None):
-        super().act(action)
-
     def randomize_behavior(self):
         """
         Call this method to initiate some randomization of behavior
@@ -225,17 +222,10 @@ class IDMVehicle(AggressiveParams, VehicleBase, AggressiveVehicle):
 
         :param dt: timestep of integration of the model [s]
         """
-        if self.av_id == "1":
-            front, _ = self.road.neighbour_vehicles(self, self.lane_index)
-            next_lane = self.road.network.next_lane(self.lane_index, position=self.position)
-            nxt_front, _ = self.road.neighbour_vehicles(self, next_lane)
-            if front:
-                dist = self.lane_distance_to(front)
-                # print(f"MW FRONT: {front.position} | {front.speed} | {front.heading} | {dist}")
-            if nxt_front:
-                dist = self.lane_distance_to(nxt_front)
-                # print(f"MW NXT FRONT: {nxt_front.position} | {nxt_front.speed} | {nxt_front.heading} | {dist}")
+        # From IDMVehicle
+        self.timer += dt
 
+        # From Vehicle
         self.clip_actions()
         delta_f = self.action["steering"]
         beta = np.arctan(1 / 2 * np.tan(delta_f))
@@ -253,14 +243,12 @@ class IDMVehicle(AggressiveParams, VehicleBase, AggressiveVehicle):
 
         # Reduce the crash cooldown
         if self.crashed:
-            logger.debug(f"MW CRASHED CAR -- {self}: {self.crashed_timer}")
             self.crashed_timer = self.crashed_timer - dt
             if self.crashed_timer <= 0:
                 self._recover_from_crash()
 
     def _set_crash(self):
         if not self.crashed:
-            logger.debug(f"MW _SET_CRASHING -- {self} | speed {self.speed}")
             self.crashed = True
             self.crashed_timer = self.CRASH_COOLDOWN
             self.color = VehicleGraphics.RED
@@ -272,10 +260,10 @@ class IDMVehicle(AggressiveParams, VehicleBase, AggressiveVehicle):
         """
         # Check that there's enough space in front
         front_vehicle, _ = self.road.neighbour_vehicles(self, self.lane_index)
-        logger.debug(f"MW RECOVER -- {self} -> {front_vehicle}")
         if front_vehicle and self.lane_distance_to(front_vehicle) < self.LENGTH:
             # Not safe to start driving again
             return
+
         if not front_vehicle:
             # Check upcoming lane
             next_lane = self.road.network.next_lane(self.lane_index, position=self.position)
