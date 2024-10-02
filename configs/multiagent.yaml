@@ -31,7 +31,7 @@ highway_env:
 name: multiagent
 seed: 86777
 world_draws: 1
-warmup_steps: 0  # included within the duration
+warmup_steps: 1e5  # included within the duration
 mc_period: &mc_period 2   # real-world steps between MC issuances
 
 # Multiprocessing configs

@@ -265,10 +265,12 @@ class GatekeeperCommand:
             # Average the CRE for the nbrhood
             # Convert GKs to their 0-based indices
             nbrhood_idx = np.array([_gk.gk_idx for _gk in nbrhood])
-            nbrhood_cre = risk[nbrhood_idx].mean()
+            nbrhood_cre = np.array(risk[nbrhood_idx].mean())
 
             # Update the risk value for the nbrhood
-            risk[nbrhood_idx] = nbrhood_cre
+            # JAX arrays are immutable. Instead of ``x[idx] = y``, use ``x = x.at[idx].set(y)`` or another
+            # .at[] method: https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.ndarray.at.html
+            risk = risk.at[nbrhood_idx].set(nbrhood_cre)
 
             # Update the policies
             for gk in nbrhood:

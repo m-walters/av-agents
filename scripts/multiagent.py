@@ -106,8 +106,8 @@ def main(cfg: DictConfig):
                 # Record the actuals
                 ds["reward"][0, step, :] = reward
                 ds["crashed"][0, step, :] = crashed
-                # ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
-                # ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
+                ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
+                ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
 
                 # Print which, if any, av-IDs have crashed
                 crashed_ids = np.argwhere(crashed)
@@ -150,8 +150,8 @@ def main(cfg: DictConfig):
             # Record the actuals
             ds["reward"][0, step, :] = reward
             ds["crashed"][0, step, :] = crashed
-            # ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
-            # ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
+            ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
+            ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
 
             # Print which, if any, av-IDs have crashed
             crashed_ids = np.argwhere(crashed)
