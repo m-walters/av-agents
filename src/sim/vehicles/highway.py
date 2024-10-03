@@ -64,6 +64,43 @@ class AlterParams:
     MERGE_TARGET_VEL = 30
 
 
+class ConservativeParams:
+    """
+    For conservative driving
+    """
+    # Longitudinal policy parameters
+    """Maximum acceleration."""
+    ACC_MAX = 4.0  # [m/s2]
+
+    """Desired maximum acceleration."""
+    COMFORT_ACC_MAX = 3.0  # [m/s2]
+
+    """Desired maximum deceleration."""
+    COMFORT_ACC_MIN = -3.0  # [m/s2]
+
+    """Exponent of the velocity term."""
+    DELTA = 4.0  # []
+
+    """Range of delta when chosen randomly."""
+    DELTA_RANGE = [3.5, 4.5]
+
+    """Desired jam distance to the front vehicle."""
+    DISTANCE_WANTED = 7.0 + ControlledVehicle.LENGTH  # [m]
+
+    """Desired time gap to the front vehicle."""
+    TIME_WANTED = 3.0  # [s]
+
+    # Lateral policy parameters
+    POLITENESS = 0.8  # in [0, 1]
+    LANE_CHANGE_MIN_ACC_GAIN = 0.1  # [m/s2]; larger means more likely to accept a lane change. Default = 0.2
+    LANE_CHANGE_MAX_BRAKING_IMPOSED = 1.0  # [m/s2]; larger means more likely to accept a lane change. Default = 2.0
+    LANE_CHANGE_DELAY = 2.0  # [s]; lower means more frequent lane checks. Default = 1.0
+
+    MERGE_ACC_GAIN = 0.8
+    MERGE_VEL_RATIO = 0.75
+    MERGE_TARGET_VEL = 30
+
+
 class AggressiveParams:
     """
     From the AggressiveVehicle class
@@ -152,6 +189,25 @@ class IDMVehicle(AggressiveParams, VehicleBase, AggressiveVehicle):
         self.av_id = av_id
         self.crashed_timer = 0
         self.color = self.DEFAULT_COLOR
+
+    def set_behavior_params(self, param_class):
+        """
+        Given one of the param classes above, change our vehicle's values
+        """
+        self.ACC_MAX = param_class.ACC_MAX
+        self.COMFORT_ACC_MAX = param_class.COMFORT_ACC_MAX
+        self.COMFORT_ACC_MIN = param_class.COMFORT_ACC_MIN
+        self.DELTA = param_class.DELTA
+        self.DELTA_RANGE = param_class.DELTA_RANGE
+        self.DISTANCE_WANTED = param_class.DISTANCE_WANTED
+        self.TIME_WANTED = param_class.TIME_WANTED
+        self.POLITENESS = param_class.POLITENESS
+        self.LANE_CHANGE_MIN_ACC_GAIN = param_class.LANE_CHANGE_MIN_ACC_GAIN
+        self.LANE_CHANGE_MAX_BRAKING_IMPOSED = param_class.LANE_CHANGE_MAX_BRAKING_IMPOSED
+        self.LANE_CHANGE_DELAY = param_class.LANE_CHANGE_DELAY
+        self.MERGE_ACC_GAIN = param_class.MERGE_ACC_GAIN
+        self.MERGE_VEL_RATIO = param_class.MERGE_VEL_RATIO
+        self.MERGE_TARGET_VEL = param_class.MERGE_TARGET_VEL
 
     def randomize_behavior(self):
         """

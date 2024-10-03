@@ -12,6 +12,7 @@ import xarray as xr
 from omegaconf import DictConfig, OmegaConf
 
 from sim import utils
+from sim.gatekeeper import Behaviors
 
 logger = logging.getLogger("av-sim")
 
@@ -79,8 +80,14 @@ def init_multiagent_results_dataset(
     mc_steps: utils.Array,
     n_montecarlo: int,
     n_controlled: int,
-) -> xr.Dataset:
+) -> Tuple[xr.Dataset, dict]:
     num_mc_sweeps = len(mc_steps)
+    # For mapping the 'beahvior_mode' results
+    behavior_index = {
+        0: Behaviors.NOMINAL.value,
+        1: Behaviors.CONSERVATIVE.value,
+    }
+
     return xr.Dataset(
         {
             ### Data recorded every world step
@@ -89,6 +96,9 @@ def init_multiagent_results_dataset(
             "defensive_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "speed_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "crashed": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
+            # For gatekeeper analysis
+            # 0 for nominal, 1 for conservative, etc...
+            "behavior_mode": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             ### Data recorded from MC Sweeps
             "risk": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
             "entropy": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
@@ -110,7 +120,7 @@ def init_multiagent_results_dataset(
             "mc_step": mc_steps,
             "sample": np.arange(n_montecarlo),
         },
-    )
+    ), behavior_index
 
 
 def init(cfg: DictConfig, latest_dir: str) -> Tuple[DictConfig, "RunParams"]:

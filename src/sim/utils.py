@@ -1,6 +1,7 @@
 from collections import namedtuple
 from enum import Enum
 from typing import Generator, List, Optional, TypedDict, Union
+import json
 
 import jax
 import jax.numpy as jnp
@@ -231,6 +232,22 @@ class Results:
         Load a saved dataset
         """
         return xr.open_dataset(path)
+
+    @staticmethod
+    def save_json(data, path):
+        """
+        Save a dict to a json file
+        """
+        with open(path, "w") as f:
+            json.dump(data, f)
+
+    @staticmethod
+    def load_json(path):
+        """
+        Load a json file
+        """
+        with open(path, "r") as f:
+            return json.load(f)
 
 
 class OmegaResults(Results):

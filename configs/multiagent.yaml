@@ -24,8 +24,8 @@ highway_env:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: &mc_horizon 20
-  n_montecarlo: &n_montecarlo 100
-  duration: 300
+  n_montecarlo: &n_montecarlo 10
+  duration: 40
   normalize_reward: true
 #==============
 name: multiagent
@@ -51,4 +51,10 @@ gatekeeper:
     l_star: 0.9
   risk_model:
     model: "DifferentialEntropyRiskModel"
-    threshold: -5.0
+  behavior_cfg:
+    enable: true
+    nominal_risk_threshold: -5.0
+    conservative_risk_threshold: -6.0
+    nominal_class: "sim.vehicles.highway.AggressiveParams"
+    conservative_class: "sim.vehicles.highway.ConservativeParams"
+
