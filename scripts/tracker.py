@@ -139,7 +139,7 @@ def main(cfg: DictConfig):
         _ = ds_label_map.pop("E[Entropy]")
         _ = ds_label_map.pop("Risk")
 
-    plotter = plotting.TrackerPlotter()
+    plotter = plotting.AVPlotter()
     plotter.create_animation(
         f"{LATEST_DIR}/tracker.mp4",
         ds,

@@ -25,7 +25,7 @@ highway_env:
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: &mc_horizon 20
   n_montecarlo: &n_montecarlo 100
-  duration: 300
+  duration: 200
   normalize_reward: true
 #==============
 name: multiagent
@@ -35,8 +35,8 @@ warmup_steps: 0  # included within the duration
 mc_period: &mc_period 2   # real-world steps between MC issuances
 
 # Multiprocessing configs
-use_mp: false
-multiprocessing_cpus: 8
+use_mp: true
+multiprocessing_cpus: 16
 
 gatekeeper:
   n_controlled: *n_controlled
@@ -51,4 +51,9 @@ gatekeeper:
     l_star: 0.9
   risk_model:
     model: "DifferentialEntropyRiskModel"
-    threshold: -5.0
+  behavior_cfg:
+    enable: true
+    nominal_risk_threshold: -5.0
+    conservative_risk_threshold: -6.0
+    nominal_class: "sim.vehicles.highway.AggressiveParams"
+    conservative_class: "sim.vehicles.highway.ConservativeParams"

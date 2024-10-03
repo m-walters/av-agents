@@ -35,7 +35,7 @@ def main(cfg: DictConfig):
     if run_params['world_draws'] > 1:
         raise ValueError("world_draws > 1 not configured for multiagent")
 
-    ds = run.init_multiagent_results_dataset(
+    ds, behavior_index = run.init_multiagent_results_dataset(
         run_params['world_draws'], run_params['duration'], run_params['mc_steps'],
         run_params['n_montecarlo'], cfg.gatekeeper['n_controlled']
     )
@@ -81,6 +81,9 @@ def main(cfg: DictConfig):
     if use_mp:
         with multiprocessing.Pool(cfg.get('multiprocessing_cpus', 8), maxtasksperchild=100) as pool:
             for step in tqdm(range(run_params['duration']), desc="Steps"):
+                # First, record the gatekeeper behavior states
+                ds["behavior_mode"][0, step, :] = gk_cmd.collect_behaviors()
+
                 # We'll use the gatekeeper params for montecarlo control
                 if step >= run_params['warmup_steps']:
                     if step % gk_cmd.mc_period == 0:
@@ -106,8 +109,8 @@ def main(cfg: DictConfig):
                 # Record the actuals
                 ds["reward"][0, step, :] = reward
                 ds["crashed"][0, step, :] = crashed
-                # ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
-                # ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
+                ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
+                ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
 
                 # Print which, if any, av-IDs have crashed
                 crashed_ids = np.argwhere(crashed)
@@ -125,6 +128,9 @@ def main(cfg: DictConfig):
     else:
         # No Multiprocessing
         for step in tqdm(range(run_params['duration']), desc="Steps"):
+            # First, record the gatekeeper behavior states
+            ds["behavior_mode"][0, step, :] = gk_cmd.collect_behaviors()
+
             # We'll use the gatekeeper params for montecarlo control
             if step >= run_params['warmup_steps']:
                 if step % gk_cmd.mc_period == 0:
@@ -150,8 +156,8 @@ def main(cfg: DictConfig):
             # Record the actuals
             ds["reward"][0, step, :] = reward
             ds["crashed"][0, step, :] = crashed
-            # ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
-            # ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
+            ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
+            ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
 
             # Print which, if any, av-IDs have crashed
             crashed_ids = np.argwhere(crashed)
@@ -179,6 +185,8 @@ def main(cfg: DictConfig):
     # Automatically save latest
     logger.info("Saving results")
     utils.Results.save_ds(ds, f"{LATEST_DIR}/results.nc")
+    # Save behavior index
+    utils.Results.save_json(behavior_index, f"{LATEST_DIR}/behavior_index.json")
 
     # If a name is provided, copy results over
     if "name" in cfg:

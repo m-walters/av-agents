@@ -3,6 +3,7 @@ Gatekeeper module
 """
 import copy
 import logging
+from enum import Enum
 import multiprocessing
 from typing import Dict, List, Optional, TypedDict, Union
 
@@ -18,16 +19,38 @@ from sim.vehicles.highway import AVVehicleType, VehicleBase
 logger = logging.getLogger("av-sim")
 
 
+class Behaviors(Enum):
+    NOMINAL = "nominal"
+    CONSERVATIVE = "conservative"
+
+
+def behavior_to_num(behavior: Behaviors) -> int:
+    if behavior == Behaviors.NOMINAL:
+        return 0
+    elif behavior == Behaviors.CONSERVATIVE:
+        return 1
+
+
+class BehaviorConfig(TypedDict):
+    enable: bool
+    nominal_class: str
+    nominal_risk_threshold: float
+    conservative_class: str
+    conservative_risk_threshold: float
+
+
 class GatekeeperConfig(TypedDict):
-    multiprocessing_cpus: int | None
     n_controlled: int
-    risk_threshold: float
     n_montecarlo: int
     mc_horizon: int
     mc_period: int
     # Models
     preference_prior: dict
     risk_model: dict
+    # Risk and behavior
+    nominal_risk_threshold: float
+    conservative_risk_threshold: float
+    behavior_cfg: BehaviorConfig
 
 
 class Gatekeeper:
@@ -40,13 +63,12 @@ class Gatekeeper:
         self,
         gk_idx: int,
         vehicle: AVVehicleType,
-        risk_threshold: float,
+        behavior_cfg: BehaviorConfig,
         seed: int,
     ):
         self.gk_idx = gk_idx  # Tracks this gatekeepers index in the results array for the GKCommand
         # Don't store the vehicle object because env duplicating will change the memory address during MC
         self.vehicle_id = vehicle.av_id
-        self.risk_threshold: float = risk_threshold
         self.rkey = JaxRKey(seed)
 
         # See AVHighway class for types
@@ -56,6 +78,15 @@ class Gatekeeper:
             "speed_reward",
             "crash_reward",
         ]
+
+        # Behavior control logic
+        self.behavior_ctrl_enabled = behavior_cfg["enable"]
+        self.behavior = Behaviors.NOMINAL
+        if self.behavior_ctrl_enabled:
+            self.nominal_behavior = utils.class_from_path(behavior_cfg["nominal_class"])
+            self.nominal_risk_threshold = behavior_cfg["nominal_risk_threshold"]
+            self.conservative_behavior = utils.class_from_path(behavior_cfg["conservative_class"])
+            self.conservative_risk_threshold = behavior_cfg["conservative_risk_threshold"]
 
     def get_vehicle(self, env):
         return env.vehicle_lookup[self.vehicle_id]
@@ -89,12 +120,22 @@ class Gatekeeper:
 
         return reward
 
-    def update_policy(self, nbrhood_cre):
+    def update_policy(self, nbrhood_cre, env):
         """
         Update policy based on nbrhood cre
         """
-        if nbrhood_cre > self.risk_threshold:
-            ...
+        if not self.behavior_ctrl_enabled:
+            return
+
+        if self.behavior == Behaviors.NOMINAL and nbrhood_cre > self.nominal_risk_threshold:
+            # Get the vehicle and change its policy
+            vehicle = self.get_vehicle(env)
+            vehicle.set_behavior_params(self.conservative_behavior)
+            self.behavior = Behaviors.CONSERVATIVE
+        elif self.behavior == Behaviors.CONSERVATIVE and nbrhood_cre < self.conservative_risk_threshold:
+            vehicle = self.get_vehicle(env)
+            vehicle.set_behavior_params(self.nominal_behavior)
+            self.behavior = Behaviors.NOMINAL
 
     def __str__(self):
         return f"Gatekeeper[{self.gk_idx} | {self.vehicle_id}]"
@@ -141,7 +182,7 @@ class GatekeeperCommand:
         self.gatekeepers: List["Gatekeeper"] = []
         self.gatekeeper_lookup: Dict[int, Gatekeeper] = {}
         for i, v in enumerate(control_vehicles):
-            self._spawn_gatekeeper(v, i)
+            self._spawn_gatekeeper(v, i, gk_cfg.behavior_cfg)
 
     @property
     def gatekept_vehicles(self):
@@ -157,13 +198,17 @@ class GatekeeperCommand:
         self.risk_model = getattr(models, gk_cfg.risk_model.model)(
             preference_prior=self.preference_prior, **gk_cfg.risk_model, seed=self.seed
         )
-        self.risk_threshold: float = gk_cfg.risk_model.threshold
 
-    def _spawn_gatekeeper(self, vehicle: AVVehicleType, gk_idx):
+    def _spawn_gatekeeper(self, vehicle: AVVehicleType, gk_idx, behavior_cfg):
         """
         Spawn a gatekeeper for a vehicle
         """
-        gk = Gatekeeper(gk_idx, vehicle, self.risk_threshold, self.rkey.next_seed())
+        gk = Gatekeeper(
+            gk_idx,
+            vehicle,
+            behavior_cfg,
+            self.rkey.next_seed()
+        )
         self.gatekeepers.append(gk)
         self.gatekeeper_lookup[vehicle.av_id] = gk
 
@@ -265,14 +310,16 @@ class GatekeeperCommand:
             # Average the CRE for the nbrhood
             # Convert GKs to their 0-based indices
             nbrhood_idx = np.array([_gk.gk_idx for _gk in nbrhood])
-            nbrhood_cre = risk[nbrhood_idx].mean()
+            nbrhood_cre = np.array(risk[nbrhood_idx].mean())
 
             # Update the risk value for the nbrhood
-            risk[nbrhood_idx] = nbrhood_cre
+            # JAX arrays are immutable. Instead of ``x[idx] = y``, use ``x = x.at[idx].set(y)`` or another
+            # .at[] method: https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.ndarray.at.html
+            risk = risk.at[nbrhood_idx].set(nbrhood_cre)
 
             # Update the policies
             for gk in nbrhood:
-                gk.update_policy(nbrhood_cre)
+                gk.update_policy(nbrhood_cre, self.env)
 
         return {
             "losses": losses,
@@ -304,3 +351,6 @@ class GatekeeperCommand:
                 found_gks = self._discover_neighborhood(nbr_gk, found_gks)
 
         return found_gks
+
+    def collect_behaviors(self):
+        return np.array([behavior_to_num(gk.behavior) for gk in self.gatekeepers])
