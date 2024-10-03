@@ -152,7 +152,6 @@ def main(cfg: DictConfig):
             action = env.action_space.sample()
             # action = tuple(np.ones_like(action))
             obs, reward, crashed, truncated, info = env.step(action)
-            print(f"MW CRASHED -- {crashed}")
 
             # Record the actuals
             ds["reward"][0, step, :] = reward
