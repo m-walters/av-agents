@@ -12,122 +12,9 @@ for plotting with xarray objects
 """
 
 
-class Plotter:
+class AVPlotter:
     """
-    Plotting util for xArray Datasets
-    """
-
-    def __init__(
-        self,
-        ds_or_path: Union[xr.Dataset, str],
-        sns_context: str = "notebook",  # or "paper", "talk", "poster"
-    ):
-        if isinstance(ds_or_path, xr.Dataset):
-            self.ds = ds_or_path
-        else:
-            self.ds = xr.open_dataset(ds_or_path)
-
-        # Initialize seaborn
-        sns.set()
-        sns.set_context(sns_context)
-        sns.set_palette("colorblind")
-
-    @staticmethod
-    def get_color_wheel():
-        """
-        Return a color generator for the current seaborn palette
-        """
-        return iter(sns.color_palette())
-
-    @staticmethod
-    def subplots(nrow, ncol, **kwargs):
-        return plt.subplots(nrow, ncol, **kwargs)
-
-
-class AVPlotter(Plotter):
-    """
-    Plotter for run results
-    """
-
-    def quad_plot(
-        self, fig=None, axs=None, save_path=None, plot_kwargs: dict | None = None,
-        shadow: bool = False
-    ):
-        """
-        Generate a 2x2 plot with Energy, Entropy, Loss, Risk
-        In each plot, we reduce across the world draw axis
-
-        'shadow' param toggles whether the plot does shadow error bars, or individual lines across world draws
-        """
-        plot_kwargs = plot_kwargs or {}
-
-        if axs is None:
-            plot_kwargs['figsize'] = plot_kwargs.get('figsize', (12, 6))
-            fig, axs = self.subplots(2, 2, sharex=True, **plot_kwargs)
-            plt.subplots_adjust(wspace=0.4)
-
-        # Note: match keys the dataset variable names
-        ax_map = {
-            'energy': axs[0, 0],
-            'entropy': axs[0, 1],
-            'loss_mean': axs[1, 0],
-            'risk': axs[1, 1],
-        }
-        labels = {
-            'energy': 'E',
-            'entropy': 'H',
-            'loss_mean': 'Loss',
-            'risk': 'Risk',
-        }
-
-        colors = self.get_color_wheel()
-        color = next(colors)
-        ls = "-"
-        for i, var in enumerate(ax_map):
-            # This produces a pivot table with time as index and batch as columns
-            pivot = self.ds[var].to_pandas()
-            # label = f"w={np.round(omega.values, 2)}"
-
-            if shadow:
-                # Melt it to go from wide to long form, with world as a variable, and our var as value
-                melted = pivot.T.melt(var_name='world', value_name=var, ignore_index=False)
-                sns.lineplot(
-                    x="step", y=var, data=melted, color=color, ls=ls, ax=ax_map[var], legend=False,
-                    label=None,
-                )
-            else:
-                # Plot each world draw as a separate line; same color though
-                data = pivot.T
-                for world in self.ds.world:
-                    # ax_map[var].plot(pivot.index, pivot[world], color=color, alpha=0.3, label=f'World {world}')
-                    sns.lineplot(
-                        x=data.index.values, y=data[int(world)], color=color, alpha=0.3, ls=ls, ax=ax_map[var],
-                        legend=False, label=None,
-                    )
-
-            # Set ax title
-            ax_map[var].set_ylabel(labels[var])
-
-        # Title
-        # fig.suptitle('')
-
-        for i in range(2):
-            lower_ax = axs[1, i]
-            lower_ax.set_xlabel("Step")
-            lower_ax.xaxis.get_major_locator().set_params(integer=True)
-
-        # Trim the whitespace around the image
-        plt.tight_layout()
-
-        if save_path:
-            plt.savefig(save_path)
-
-        return fig, axs
-
-
-class TrackerPlotter:
-    """
-    For plotting data in tandem during a sim recording
+    Plotting class for standard plots, multiagent plots, animation plots, etc.
     """
 
     def __init__(
@@ -139,6 +26,14 @@ class TrackerPlotter:
         sns.set_context(sns_context)
         sns.set_palette("colorblind")
 
+        # Custom metric processing override methods
+        # Keys are the plot labels, permitting Dataset metric keys to not be confined to a single processor
+        # We have different sets based on different contexts
+        self.GK_METRIC_PROCESSORS = {
+            "Crashed": self.process_multiagent_crashed,
+            "Number in Conservative": self.process_multiagent_behaviors,
+        }
+
     @staticmethod
     def get_color_wheel():
         """
@@ -149,6 +44,25 @@ class TrackerPlotter:
     @staticmethod
     def subplots(nrow, ncol, **kwargs):
         return plt.subplots(nrow, ncol, **kwargs)
+
+    @classmethod
+    def process_multiagent_crashed(cls, var_dataset: xr.Dataset) -> np.ndarray:
+        """
+        Specialized function for the 'crashed' multiagent Dataset variable
+
+        :param var_dataset: The filtered dataset on the 'crashed' variable
+        """
+        # return var_dataset.sum(dim='ego').values
+        return var_dataset.sum(dim='ego').values  # Pycharm flags as wrong return type but it's correct
+
+    @classmethod
+    def process_multiagent_behaviors(cls, var_dataset: xr.Dataset) -> np.ndarray:
+        """
+        Specialized function for the 'behavior_mode' multiagent Dataset variable
+
+        :param var_dataset: The filtered dataset on the 'behavior_mode' variable
+        """
+        return var_dataset.sum(dim='ego').values  # Pycharm flags as wrong return type but it's correct
 
     def create_animation(
         self,
@@ -667,23 +581,29 @@ class TrackerPlotter:
 
         nrow, ncol = axes_shape
         tick_plots = [None] * ncol  # Those which show the ticks
-        # Determine the tick plot labels
-        # for i, row in enumerate(axes_layout):
-        #     for j, label in enumerate(row):
-        #         if label is not None:
-        #             tick_plots[j] = label
-        tick_plots = ["E[Entropy]", "Risk"]
+        # The bottom plots of each column have the ticks
+        # Work backwards from the bottom
+        i = 0
+        while not all(tick_plots):
+            i -= 1
+            for c, lbl in enumerate(axes_layout[i]):
+                if tick_plots[c] is None and lbl:
+                    tick_plots[c] = lbl
 
         fig, axs = self.subplots(nrow, ncol, figsize=(6.4 * ncol, nrow * 1.6))
-        # Disable/clear [-1, -1] axis
-        axs[-1, -1].axis('off')
+
+        # Disable/clear any 'None' axes
+        for i, row in enumerate(axes_layout):
+            for j, lbl in enumerate(row):
+                if not lbl:
+                    axs[i, j].axis('off')
 
         # Create label-to-axis map
-        def label2axis(lbl):
-            for i, row in enumerate(axes_layout):
-                if lbl in row:
-                    return axs[i, row.index(lbl)]
-            raise ValueError(f"Label {lbl} not found in axes_layout")
+        def label2axis(_lbl):
+            for i, _row in enumerate(axes_layout):
+                if _lbl in _row:
+                    return axs[i, _row.index(_lbl)]
+            raise ValueError(f"Label {_lbl} not found in axes_layout")
 
         # Make ticks nice
         if duration < 20:
@@ -712,24 +632,32 @@ class TrackerPlotter:
             data1 = ds1[var].sel(world=0)
             data2 = ds2[var].sel(world=0)
 
-            y_lines = {}
+            # Call custom methods if they exist
+            if label in self.GK_METRIC_PROCESSORS:
+                y1 = self.GK_METRIC_PROCESSORS[label](data1)
+                y2 = self.GK_METRIC_PROCESSORS[label](data2)
+            else:
+                # Default to mean
+                y1 = data1.mean(dim='ego').values
+                y2 = data2.mean(dim='ego').values
+
             # Some plots use world steps, others mc-steps
             if 'mc_step' in ds1[var].dims:
                 x = mc_steps
-                y_mean1 = data1.mean(dim='ego').values[left_mc_steps_idx:right_mc_steps_idx + 1]
-                y_mean2 = data2.mean(dim='ego').values[left_mc_steps_idx:right_mc_steps_idx + 1]
+                y1 = y1[left_mc_steps_idx:right_mc_steps_idx + 1]
+                y2 = y2[left_mc_steps_idx:right_mc_steps_idx + 1]
             else:
                 x = steps
-                y_mean1 = data1.mean(dim='ego').values[left_steps_idx:right_steps_idx + 1]
-                y_mean2 = data2.mean(dim='ego').values[left_steps_idx:right_steps_idx + 1]
+                y1 = y1[left_steps_idx:right_steps_idx + 1]
+                y2 = y2[left_steps_idx:right_steps_idx + 1]
 
             ax = label2axis(label)
             sns.lineplot(
-                x=x, y=y_mean1, color=cols[0], ax=ax,
+                x=x, y=y1, color=cols[0], ax=ax,
                 legend=True, label=ds1_name,
             )
             sns.lineplot(
-                x=x, y=y_mean2, color=cols[1], ax=ax,
+                x=x, y=y2, color=cols[1], ax=ax,
                 legend=True, label=ds2_name,
             )
 
@@ -747,6 +675,7 @@ class TrackerPlotter:
                 ax.set_xlabel("Step")
 
         if save_path:
+            print(f"Saving to {save_path}")
             plt.savefig(save_path)
 
         plt.show()
