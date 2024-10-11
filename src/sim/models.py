@@ -125,22 +125,26 @@ class ExponentialPreferencePrior(ModelBase):
             return jnp.exp(-self.k * Lt)
 
 
-class RiskModel(ModelBase):
-    def __init__(self, preference_prior, min_risk: Number = 0, *args, **kwargs):
+class EFERiskModel(ModelBase):
+    def __init__(self, preference_prior, beta=1.0, *args, **kwargs):
         """
-        Risk model
-        Takes a preference prior and optionally a minimum risk to be subtracted from values for normalization
+        Expected Free Energy Risk Model
+        An inverse temperature parameter beta is used to control the tradeoff between entropy and energy
+        We use a low-entropy optimization
         """
         super().__init__(*args, **kwargs)
+        if beta < 0.01:
+            raise ValueError("Temperature parameter beta must be greater than 0.01")
+
         self.preference_prior = preference_prior
-        self.min_risk = min_risk
+        self.beta = beta
 
     def compute_entropy(self, Lt, Lt_logprob):
         raise NotImplementedError
 
     def __call__(self, Lt: Array, Lt_logprob: Array) -> Tuple[Array, Array, Array]:
         """
-        Compute an array of risk values at a given timestep
+        Compute an array of risk values
         Arrays have shape [n_montecarlo, world_draws]
         """
         # Note that the value computed here, the mean of the log of the preference model,
@@ -149,11 +153,18 @@ class RiskModel(ModelBase):
 
         entropy = self.compute_entropy(Lt, Lt_logprob)
         # Gt = - entropy - log_pref_mean
-        Gt = entropy - log_pref_mean
+        Gt = - log_pref_mean + (1 / self.beta) * entropy
         return Gt, entropy, log_pref_mean
 
+    def compute_entropy(self, Lt: Array, Lt_logprob: Array) -> Array:
+        """
+        Compute the KL divergence between the preference prior and the loss distribution
+        """
+        pref = self.preference_prior(Lt, take_log=False)
+        return jnp.sum(pref * Lt_logprob, axis=0)
 
-class DifferentialEntropyRiskModel(RiskModel):
+
+class DifferentialEntropyRiskModel(EFERiskModel):
     def compute_entropy(self, Lt: Array, Lt_logprob: Array) -> Array:
         """
         Compute the differential entropy of the loss distribution
@@ -168,7 +179,7 @@ class DifferentialEntropyRiskModel(RiskModel):
         return ent
 
 
-class MonteCarloRiskModel(RiskModel):
+class MonteCarloRiskModel(EFERiskModel):
     def compute_entropy(self, Lt: Array, Lt_logprob: Array) -> Array:
         """
         Compute the Monte Carlo estimate of the entropy of the loss distribution
@@ -178,7 +189,7 @@ class MonteCarloRiskModel(RiskModel):
         return Lt_logprob.mean(axis=0)
 
 
-class NullEntropy(RiskModel):
+class NullEntropy(EFERiskModel):
     def compute_entropy(self, Lt: Array, Lt_logprob: Array) -> Array:
         """
         Zero out the entropy term
