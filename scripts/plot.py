@@ -78,13 +78,13 @@ def multiagent_plot():
 def gatekeep_compare():
     # Gatekeep comparing
     RESULTS_DIR = "../results"
-    run_dir = RESULTS_DIR + "/multiagent"
-    run_dir2 = RESULTS_DIR + "/multiagent_gk"
+    no_gk_dir = RESULTS_DIR + "/freezer/multiagent"
+    gk_dir = RESULTS_DIR + "/freezer/multiagent_gk"
 
-    ds1 = xr.open_dataset(run_dir + "/results.nc")
-    ds1_label = "No GK"
-    ds2 = xr.open_dataset(run_dir2 + "/results.nc")
-    ds2_label = "GK"
+    data_tups = [
+        (xr.open_dataset(no_gk_dir + "/results.nc"), "No GK"),
+        (xr.open_dataset(gk_dir + "/results.nc"), "GK"),
+    ]
 
     labels = [
         "R_Def",
@@ -110,14 +110,79 @@ def gatekeep_compare():
 
     avplot = plotting.AVPlotter()
     avplot.multiagent_comparison_plot(
-        f"{run_dir}/gatekeep_compare.png",
-        ds1,
-        ds1_label,
-        ds2,
-        ds2_label,
+        f"{gk_dir}/gatekeep_compare.png",
+        data_tups,
         metric_label_map,
         axes_layout=axes_layout,
         # truncate = 0,
+    )
+
+
+def temperature_compare():
+    """
+    Comparing different beta temperature values
+    """
+    title = "Temperature Comparison"
+
+    RESULTS_DIR = "../results"
+    save_dir = RESULTS_DIR + "/"
+    data_tups = [
+        # (xr.open_dataset(RESULTS_DIR + "/beta_10/results.nc"), r'$\beta = 10$'),
+        # (xr.open_dataset(RESULTS_DIR + "/beta_2/results.nc"), r'$\beta = 2$'),
+        # (xr.open_dataset(RESULTS_DIR + "/beta_1/results.nc"), r'$\beta = 1$'),
+        # (xr.open_dataset(RESULTS_DIR + "/beta_0p5/results.nc"), r'$\beta = 0.5$'),
+        # (xr.open_dataset(RESULTS_DIR + "/beta_0p1/results.nc"), r'$\beta = 0.1$'),
+        # (xr.open_dataset(RESULTS_DIR + "/beta_10_bscale/results.nc"), r'$\beta = 10$'),
+        (xr.open_dataset(RESULTS_DIR + "/beta_2_bscale/results.nc"), r'$\beta = 2$'),
+        # (xr.open_dataset(RESULTS_DIR + "/beta_1_bscale/results.nc"), r'$\beta = 1$'),
+        (xr.open_dataset(RESULTS_DIR + "/beta_1_bscale_120/results.nc"), r'$\beta = 1$'),
+        (xr.open_dataset(RESULTS_DIR + "/beta_0p5_bscale/results.nc"), r'$\beta = 0.5$'),
+        # (xr.open_dataset(RESULTS_DIR + "/beta_0p1_bscale/results.nc"), r'$\beta = 0.1$'),
+
+    ]
+
+    truncate = 120
+
+    # save_dir = RESULTS_DIR + "/tmp"
+    # data_tups = [
+    #     (xr.open_dataset(RESULTS_DIR + "/tmp/results.nc"), r'$\beta = 10$'),
+    #     (xr.open_dataset(RESULTS_DIR + "/tmp/results.nc"), r'$\beta = 1$'),
+    # ]
+
+    labels = [
+        "R_Def",
+        "R_Spd",
+        "Actual Loss",
+        "E[Loss]",
+        "E[Energy]",
+        "E[Entropy]",
+        "E[Entropy] Adj.",
+        "Risk",
+        "Crashed",
+        "Number in Conservative",
+    ]
+    metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
+
+    # 4 rows, 2 columns
+    axes_layout = [
+        ["R_Def", "Actual Loss"],
+        ["R_Spd", "E[Loss]"],
+        ["E[Energy]", "Risk"],
+        ["E[Entropy]", "Crashed"],
+        ["E[Entropy] Adj.", "Number in Conservative"],
+    ]
+    ylog_plots = [
+        "E[Entropy] Adj.",
+    ]
+
+    avplot = plotting.AVPlotter()
+    avplot.multiagent_comparison_plot(
+        f"{save_dir}/temp_compare.png",
+        data_tups,
+        metric_label_map,
+        axes_layout=axes_layout,
+        ylog_plots=ylog_plots,
+        truncate=truncate,
     )
 
 

@@ -3,8 +3,8 @@ Gatekeeper module
 """
 import copy
 import logging
-from enum import Enum
 import multiprocessing
+from enum import Enum
 from typing import Dict, List, Optional, TypedDict, Union
 
 import numpy as np

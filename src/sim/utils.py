@@ -1,7 +1,7 @@
+import json
 from collections import namedtuple
 from enum import Enum
 from typing import Generator, List, Optional, TypedDict, Union
-import json
 
 import jax
 import jax.numpy as jnp

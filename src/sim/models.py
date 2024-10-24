@@ -125,22 +125,47 @@ class ExponentialPreferencePrior(ModelBase):
             return jnp.exp(-self.k * Lt)
 
 
+class SatisficingPreferencePrior(ModelBase):
+    """
+    Preference prior similar to Exponential, but with a max at L < 0
+    which provides a satisficing condition
+    """
+
+    def __init__(
+        self,
+        p_star: Number,
+        l_star: Number,
+        *args, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.p_star = p_star
+        self.l_star = l_star
+
+    @property
+    def k(self):
+        return -jnp.log(self.p_star) / self.l_star
+
+    def __call__(self, Lt: Array, take_log: bool = True) -> Array:
+        """
+        Compute the satisficing exponential preference prior
+        By default, we take the logarithm, for use in the risk calculation
+        Returns an array of shape [m, world_draws]
+        """
+        if take_log:
+            return -self.k * jnp.maximum(0, Lt)
+        else:
+            return jnp.exp(-self.k * jnp.maximum(0, Lt))
+
+
 class EFERiskModel(ModelBase):
-    def __init__(self, preference_prior, beta=1.0, *args, **kwargs):
+    def __init__(self, preference_prior, *args, **kwargs):
         """
         Expected Free Energy Risk Model
         An inverse temperature parameter beta is used to control the tradeoff between entropy and energy
         We use a low-entropy optimization
         """
         super().__init__(*args, **kwargs)
-        if beta < 0.01:
-            raise ValueError("Temperature parameter beta must be greater than 0.01")
-
         self.preference_prior = preference_prior
-        self.beta = beta
-
-    def compute_entropy(self, Lt, Lt_logprob):
-        raise NotImplementedError
 
     def __call__(self, Lt: Array, Lt_logprob: Array) -> Tuple[Array, Array, Array]:
         """
@@ -152,16 +177,11 @@ class EFERiskModel(ModelBase):
         log_pref_mean = self.preference_prior(Lt, take_log=True).mean(axis=0)
 
         entropy = self.compute_entropy(Lt, Lt_logprob)
-        # Gt = - entropy - log_pref_mean
-        Gt = - log_pref_mean + (1 / self.beta) * entropy
+        Gt = - log_pref_mean - entropy
         return Gt, entropy, log_pref_mean
 
     def compute_entropy(self, Lt: Array, Lt_logprob: Array) -> Array:
-        """
-        Compute the KL divergence between the preference prior and the loss distribution
-        """
-        pref = self.preference_prior(Lt, take_log=False)
-        return jnp.sum(pref * Lt_logprob, axis=0)
+        raise NotImplementedError("Subclasses must implement this method")
 
 
 class DifferentialEntropyRiskModel(EFERiskModel):
@@ -189,7 +209,7 @@ class MonteCarloRiskModel(EFERiskModel):
         return Lt_logprob.mean(axis=0)
 
 
-class NullEntropy(EFERiskModel):
+class NullEntropyRiskModel(EFERiskModel):
     def compute_entropy(self, Lt: Array, Lt_logprob: Array) -> Array:
         """
         Zero out the entropy term
