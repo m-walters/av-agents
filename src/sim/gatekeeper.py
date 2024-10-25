@@ -107,7 +107,7 @@ class Gatekeeper:
         rewards = {
             reward: getattr(env, reward)(vehicle) for reward in self.reward_types
         }
-        pre_r = reward = sum(rewards.values())
+        reward = sum(rewards.values())
         if env.config["normalize_reward"]:
             # Best is 1 for the normalized speed reward
             # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
@@ -118,7 +118,9 @@ class Gatekeeper:
                 [worst, best],
                 [0, 1]
             )
-        # print(f"MW REWARD PRE / POST -- {pre_r} / {reward}")
+
+            # Assert numpy array values are in range [0, 1]
+            assert np.all(0 <= reward) and np.all(reward <= 1)
 
         return reward
 
@@ -254,8 +256,7 @@ class GatekeeperCommand:
                 if crashed:
                     collisions[i_gk] = 1
                 reward = gk.calculate_reward(env)
-                # We add reward_range_below_zero to put loss in the range [0, reward_max]
-                losses[i_gk] = -reward + env.reward_range_below_zero
+                losses[i_gk] = 1 - reward
 
         return losses, collisions
 

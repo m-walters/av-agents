@@ -9,19 +9,19 @@ def run_multiagent_sequence():
             "name": "pstar-0p01",
             "use_mp": True,
             "gatekeeper.preference_prior.p_star": 0.01,
-            "gatekeeper.preference_prior.l_star": 0.1,
+            "gatekeeper.preference_prior.l_star": 0.2,
         },
         {
             "name": "pstar-0p1",
             "use_mp": True,
             "gatekeeper.preference_prior.p_star": 0.1,
-            "gatekeeper.preference_prior.l_star": 0.1,
+            "gatekeeper.preference_prior.l_star": 0.2,
         },
         {
             "name": "pstar-0p9",
             "use_mp": True,
             "gatekeeper.preference_prior.p_star": 0.9,
-            "gatekeeper.preference_prior.l_star": 0.1,
+            "gatekeeper.preference_prior.l_star": 0.2,
         },
         # {
         #     "name": "pstar-0p01_lstar-0p1",

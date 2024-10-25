@@ -116,17 +116,13 @@ class AVRacetrack(RacetrackEnv):
 
         return self.controlled_vehicles[0] if self.controlled_vehicles else None
 
-    @property
-    def reward_range_below_zero(self) -> float:
-        if self.config["normalize_reward"]:
-            return 2  # For two neg reward items, each normalized to -1.
-        else:
-            return - self.config['max_defensive_reward'] - self.config['crash_penalty']
-
     def _reset(self) -> None:
         """
         Init road and vehicles
         """
+        if not self.config["normalize_reward"]:
+            raise ValueError("Only normalized rewards configured")
+
         # Lanes-count must be 3
         if self.config["lanes_count"] != 3:
             raise ValueError("AVRacetrack only supports 3 lanes")
@@ -309,7 +305,8 @@ class AVRacetrack(RacetrackEnv):
 
         if self.config['normalize_reward']:
             max_score = self.config['alpha']
-            return score / max_score
+            score /= max_score
+            assert 0 <= score <= 1
 
         return score
 
@@ -399,7 +396,9 @@ class AVRacetrack(RacetrackEnv):
 
         if self.config['normalize_reward']:
             # Penalty is in range [0, -max_defensive_penalty], return in range [0,-1]
-            return -penalty / abs(self.config['max_defensive_penalty'])
+            reward = -penalty / abs(self.config['max_defensive_penalty'])
+            assert -1 <= reward <= 0
+            return reward
 
         return -penalty
 
@@ -444,6 +443,8 @@ class AVRacetrack(RacetrackEnv):
                     [0, 1]
                 )
 
+                assert 0 <= reward <= 1
+
             return reward
 
         # Mutli-agent rewards
@@ -466,6 +467,8 @@ class AVRacetrack(RacetrackEnv):
                 [worst, best],
                 [0, 1]
             )
+            # Assert numpy array values are in range [0, 1]
+            assert np.all(0 <= reward) and np.all(reward <= 1)
 
         return reward
 

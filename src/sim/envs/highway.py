@@ -104,17 +104,13 @@ class AVHighway(HighwayEnv):
 
         return self.controlled_vehicles[0] if self.controlled_vehicles else None
 
-    @property
-    def reward_range_below_zero(self) -> float:
-        if self.config["normalize_reward"]:
-            return 1
-        else:
-            return self.config['alpha'] - self.config['max_defensive_reward'] - self.config['crash_penalty']
-
     def _reset(self) -> None:
         """
         Init road and vehicles
         """
+        if not self.config["normalize_reward"]:
+            raise ValueError("Only normalized rewards configured")
+
         # Clear the vehicle lookup
         self.vehicle_lookup = {}
 
@@ -262,7 +258,8 @@ class AVHighway(HighwayEnv):
 
         if self.config['normalize_reward']:
             max_score = self.config['alpha']
-            return score / max_score
+            score /= max_score
+            assert 0 <= score <= 1
 
         return score
 
@@ -348,8 +345,10 @@ class AVHighway(HighwayEnv):
             penalty = -self.config['max_defensive_penalty']
 
         if self.config['normalize_reward']:
-            # Penalty is in range [0, -max_defensive_penalty]
-            return -penalty / abs(self.config['max_defensive_penalty'])
+            # Penalty is in range [0, -max_defensive_penalty], return in range [0,-1]
+            reward = -penalty / abs(self.config['max_defensive_penalty'])
+            assert -1 <= reward <= 0
+            return reward
 
         return -penalty
 
@@ -419,6 +418,8 @@ class AVHighway(HighwayEnv):
                     [0, 1]
                 )
 
+                assert 0 <= reward <= 1
+
             return reward
 
         # Mutli-agent rewards
@@ -441,6 +442,8 @@ class AVHighway(HighwayEnv):
                 [worst, best],
                 [0, 1]
             )
+            # Assert numpy array values are in range [0, 1]
+            assert np.all(0 <= reward) and np.all(reward <= 1)
 
         return reward
 
@@ -532,8 +535,7 @@ class AVHighway(HighwayEnv):
                         collisions[i] = 1
                     break
 
-            # We add reward_range_below_zero to put loss in the range [0, reward_max]
-            losses[i] = -reward + self.reward_range_below_zero
+            losses[i] = 1 - reward
 
         # The uncertainty in the loss essentially
         # For now, we assume no uncertainty though, and set as a low value
