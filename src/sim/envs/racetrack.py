@@ -7,13 +7,11 @@ from gymnasium.utils import seeding
 from highway_env import utils
 from highway_env.envs.common.action import Action
 from highway_env.envs.racetrack_env import RacetrackEnv
-from highway_env.road.lane import CircularLane, LineType, StraightLane
-from highway_env.road.road import Road, RoadNetwork
 from omegaconf import DictConfig
 
+from sim.envs.racetrack_road import racetrack_road1
 from sim.utils import Array
 from sim.vehicles.highway import IDMVehicle, MetaActionVehicle
-from sim.envs.racetrack_road import racetrack_road1
 
 logger = logging.getLogger("av-sim")
 
@@ -329,6 +327,8 @@ class AVRacetrack(RacetrackEnv):
         """
         vehicle = vehicle or self.vehicle
         if vehicle.crashed:
+            if self.config['normalize_reward']:
+                return -1
             return self.config['max_defensive_penalty']
 
         # See our AV Project, "Vehicle Agent" section for derivation

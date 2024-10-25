@@ -127,17 +127,12 @@ def compare_plot():
     RESULTS_DIR = "../results"
     save_dir = RESULTS_DIR + "/"
     data_tups = [
-        # (xr.open_dataset(RESULTS_DIR + "/beta_10/results.nc"), r'$\beta = 10$'),
-        # (xr.open_dataset(RESULTS_DIR + "/beta_2/results.nc"), r'$\beta = 2$'),
-        # (xr.open_dataset(RESULTS_DIR + "/beta_1/results.nc"), r'$\beta = 1$'),
-        # (xr.open_dataset(RESULTS_DIR + "/beta_0p5/results.nc"), r'$\beta = 0.5$'),
-        # (xr.open_dataset(RESULTS_DIR + "/beta_0p1/results.nc"), r'$\beta = 0.1$'),
-        (xr.open_dataset(RESULTS_DIR + "/pstar-0p01/results.nc"), r'$p^* = 0.01, L^*=0.9$'),
-        (xr.open_dataset(RESULTS_DIR + "/pstar-0p1/results.nc"), r'$p^* = 0.1, L^*=0.9$'),
-        (xr.open_dataset(RESULTS_DIR + "/pstar-0p9/results.nc"), r'$p^* = 0.9, L^*=0.9$'),
+        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p01/results.nc"), r'$p^* = 0.01, L^*=0.2$'),
+        (xr.open_dataset(RESULTS_DIR + "/pstar-0p1/results.nc"), r'$p^* = 0.1, L^*=0.2$'),
+        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p9/results.nc"), r'$p^* = 0.9, L^*=0.2$'),
         # (xr.open_dataset(RESULTS_DIR + "/pstar-0p01_lstar-0p1/results.nc"), r'$p^* = 0.01, L^*=0.1$'),
-        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p1_lstar-0p1/results.nc"), r'$p^* = 0.01, L^*=0.1$'),
-        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p9_lstar-0p1/results.nc"), r'$p^* = 0.01, L^*=0.1$'),
+        (xr.open_dataset(RESULTS_DIR + "/pstar-0p1_lstar-0p1/results.nc"), r'$p^* = 0.1, L^*=0.1$'),
+        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p9_lstar-0p1/results.nc"), r'$p^* = 0.9, L^*=0.1$'),
 
     ]
 

@@ -187,9 +187,10 @@ class GatekeeperCommand:
         #   (0.1, 2.3)
         #   (0.2, 1.6)
         #   (0.9, 0.11)
+        # This quantity here has the nice property that it is L* fraction of the max normalized risk,
+        # which in the Loss-normalized [0,1] case, the max risk is k = -log(p_star)/l_star
         nominal_rstar = -np.log(gk_cfg['preference_prior']['p_star']) * 1.1
         conservative_rstar = nominal_rstar * 0.9 / 1.1
-        print(f"MW NOMINAL / CONSERVATIVE RSTAR -- {nominal_rstar} / {conservative_rstar}")
 
         # Init GKs
         self.nbr_distance = VehicleBase.MAX_SPEED * 0.7  # For GK neighborhood discovery

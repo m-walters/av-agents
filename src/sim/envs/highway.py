@@ -279,6 +279,8 @@ class AVHighway(HighwayEnv):
         """
         vehicle = vehicle or self.vehicle
         if vehicle.crashed:
+            if self.config['normalize_reward']:
+                return -1
             return self.config['max_defensive_penalty']
 
         # See our AV Project, "Vehicle Agent" section for derivation
