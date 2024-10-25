@@ -180,7 +180,8 @@ def main(cfg: DictConfig):
             np.save(f"{LATEST_DIR}/frames.npy", env.video_recorder.recorded_frames)
 
     # Append an extra data array "real_loss" to our dataset that is the negative of reward
-    ds["real_loss"] = -ds["reward"]
+    # Reward is normalized to [0,1]
+    ds["real_loss"] = 1 - ds["reward"]
 
     # Automatically save latest
     logger.info("Saving results")

@@ -7,10 +7,9 @@ from gymnasium.utils import seeding
 from highway_env import utils
 from highway_env.envs.common.action import Action
 from highway_env.envs.racetrack_env import RacetrackEnv
-from highway_env.road.lane import CircularLane, LineType, StraightLane
-from highway_env.road.road import Road, RoadNetwork
 from omegaconf import DictConfig
 
+from sim.envs.racetrack_road import racetrack_road1
 from sim.utils import Array
 from sim.vehicles.highway import IDMVehicle, MetaActionVehicle
 
@@ -119,6 +118,9 @@ class AVRacetrack(RacetrackEnv):
         """
         Init road and vehicles
         """
+        if not self.config["normalize_reward"]:
+            raise ValueError("Only normalized rewards configured")
+
         # Lanes-count must be 3
         if self.config["lanes_count"] != 3:
             raise ValueError("AVRacetrack only supports 3 lanes")
@@ -169,450 +171,7 @@ class AVRacetrack(RacetrackEnv):
         return obs, info
 
     def _make_road(self) -> None:
-        net = RoadNetwork()
-        w = 5
-        w2 = 2 * w
-        default_speedlimit = self.config['speed_limit']
-
-        # Initialise First Lane
-        lane = StraightLane(
-            [42, 0],
-            [200, 0],
-            line_types=(LineType.CONTINUOUS, LineType.STRIPED),
-            width=w,
-            speed_limit=default_speedlimit,
-        )
-        self.lane = lane
-
-        # Add Lanes to Road Network - Straight Section
-        net.add_lane("a", "b", lane)
-        net.add_lane(
-            "a",
-            "b",
-            StraightLane(
-                [42, w],
-                [200, w],
-                line_types=(LineType.STRIPED, LineType.STRIPED),
-                width=w,
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "a",
-            "b",
-            StraightLane(
-                [42, w2],
-                [200, w2],
-                line_types=(LineType.NONE, LineType.CONTINUOUS),
-                width=w,
-                speed_limit=default_speedlimit,
-            ),
-        )
-
-        # 2 - Circular Arc #1
-        center1 = [200, -20]
-        radii1 = 20
-        net.add_lane(
-            "b",
-            "c",
-            CircularLane(
-                center1,
-                radii1,
-                np.deg2rad(90),
-                np.deg2rad(-1),
-                width=w,
-                clockwise=False,
-                line_types=(LineType.CONTINUOUS, LineType.NONE),
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "b",
-            "c",
-            CircularLane(
-                center1,
-                radii1 + w,
-                np.deg2rad(90),
-                np.deg2rad(-1),
-                width=w,
-                clockwise=False,
-                line_types=(LineType.STRIPED, LineType.STRIPED),
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "b",
-            "c",
-            CircularLane(
-                center1,
-                radii1 + w2,
-                np.deg2rad(90),
-                np.deg2rad(-1),
-                width=w,
-                clockwise=False,
-                line_types=(LineType.NONE, LineType.CONTINUOUS),
-                speed_limit=default_speedlimit,
-            ),
-        )
-
-        # 3 - Vertical Straight
-        delta_extension = -1.  # Better join
-        net.add_lane(
-            "c",
-            "d",
-            StraightLane(
-                [220, -20],
-                [220, -60 + delta_extension],
-                line_types=(LineType.CONTINUOUS, LineType.NONE),
-                width=w,
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "c",
-            "d",
-            StraightLane(
-                [220 + w, -20],
-                [220 + w, -60 + delta_extension],
-                line_types=(LineType.STRIPED, LineType.STRIPED),
-                width=w,
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "c",
-            "d",
-            StraightLane(
-                [220 + w2, -20],
-                [220 + w2, -60 + delta_extension],
-                line_types=(LineType.NONE, LineType.CONTINUOUS),
-                width=w,
-                speed_limit=default_speedlimit,
-            ),
-        )
-
-        # 4 - Circular Arc #2
-        center4 = [205, -60]
-        radii4 = 15
-        net.add_lane(
-            "d",
-            "e",
-            CircularLane(
-                center4,
-                radii4,
-                np.deg2rad(0),
-                np.deg2rad(-181),
-                width=w,
-                clockwise=False,
-                line_types=(LineType.CONTINUOUS, LineType.NONE),
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "d",
-            "e",
-            CircularLane(
-                center4,
-                radii4 + w,
-                np.deg2rad(0),
-                np.deg2rad(-181),
-                width=w,
-                clockwise=False,
-                line_types=(LineType.STRIPED, LineType.STRIPED),
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "d",
-            "e",
-            CircularLane(
-                center4,
-                radii4 + w2,
-                np.deg2rad(0),
-                np.deg2rad(-181),
-                width=w,
-                clockwise=False,
-                line_types=(LineType.NONE, LineType.CONTINUOUS),
-                speed_limit=default_speedlimit,
-            ),
-        )
-
-        # 5 - Circular Arc #3
-        center5 = [170, -60]
-        radii5 = 15
-        net.add_lane(
-            "e",
-            "f",
-            CircularLane(
-                center5,
-                radii5 + 5,
-                np.deg2rad(0),
-                np.deg2rad(136),
-                width=w,
-                clockwise=True,
-                line_types=(LineType.CONTINUOUS, LineType.NONE),
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "e",
-            "f",
-            CircularLane(
-                center5,
-                radii5,
-                np.deg2rad(0),
-                np.deg2rad(137),
-                width=w,
-                clockwise=True,
-                line_types=(LineType.STRIPED, LineType.STRIPED),
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "e",
-            "f",
-            CircularLane(
-                center5,
-                radii5 - w,
-                np.deg2rad(0),
-                np.deg2rad(137),
-                width=w,
-                clockwise=True,
-                line_types=(LineType.NONE, LineType.CONTINUOUS),
-                speed_limit=default_speedlimit,
-            ),
-        )
-
-        # 6 - Slant
-        # Extending [-30,-30]
-        extend = np.array([-30, -30])
-        start6 = np.array([155.7, -45.7])
-        end6 = np.array([135.7, -65.7]) + extend
-        net.add_lane(
-            "f",
-            "g",
-            StraightLane(
-                start6,
-                end6,
-                line_types=(LineType.CONTINUOUS, LineType.NONE),
-                width=w,
-                speed_limit=default_speedlimit,
-            ),
-        )
-        start6_2 = np.array([159.3934, -49.2])
-        end6_2 = np.array([139.3934, -69.2]) + extend
-        net.add_lane(
-            "f",
-            "g",
-            StraightLane(
-                start6_2,
-                end6_2,
-                line_types=(LineType.STRIPED, LineType.STRIPED),
-                width=w,
-                speed_limit=default_speedlimit,
-            ),
-        )
-        start6_3 = np.array(
-            [
-                start6[0] + 2 * (start6_2[0] - start6[0]),
-                start6[1] + 2 * (start6_2[1] - start6[1])
-            ]
-        )
-        end6_3 = np.array(
-            [
-                end6[0] + 2 * (end6_2[0] - end6[0]),
-                end6[1] + 2 * (end6_2[1] - end6[1]),
-            ]
-        )
-        net.add_lane(
-            "f",
-            "g",
-            StraightLane(
-                start6_3,
-                end6_3,
-                line_types=(LineType.NONE, LineType.CONTINUOUS),
-                width=w,
-                speed_limit=default_speedlimit,
-            ),
-        )
-
-        # 7 - Circular Arc #4
-        # Reflect it with the slant
-        center7 = np.array([118.1, -48.1]) + extend
-        radii7 = 25
-        theta7 = 317
-        # theta7_end = 270 - (theta7 - 270) - 10
-        theta7_end = 205
-        net.add_lane(
-            "g",
-            "h",
-            CircularLane(
-                center7,
-                radii7,
-                np.deg2rad(theta7),
-                np.deg2rad(theta7_end - 3),  # nicer
-                width=w,
-                clockwise=False,
-                line_types=(LineType.CONTINUOUS, LineType.NONE),
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "g",
-            "h",
-            CircularLane(
-                center7,
-                radii7 + 5,
-                np.deg2rad(theta7),
-                np.deg2rad(theta7_end),
-                width=w,
-                clockwise=False,
-                line_types=(LineType.STRIPED, LineType.STRIPED),
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "g",
-            "h",
-            CircularLane(
-                center7,
-                radii7 + w2,
-                np.deg2rad(theta7),
-                np.deg2rad(theta7_end),
-                width=w,
-                clockwise=False,
-                line_types=(LineType.NONE, LineType.CONTINUOUS),
-                speed_limit=default_speedlimit,
-            ),
-        )
-
-        # 8 - Next slant
-        # Reflected from the last arc's center
-        start8 = np.array(
-            [
-                center7[0] + radii7 * np.cos(np.deg2rad(theta7_end)),
-                center7[1] + radii7 * np.sin(np.deg2rad(theta7_end))
-            ]
-        )
-        start8_2 = np.array(
-            [
-                center7[0] + (radii7 + w) * np.cos(np.deg2rad(theta7_end)),
-                center7[1] + (radii7 + w) * np.sin(np.deg2rad(theta7_end))
-            ]
-        )
-        start8_3 = np.array(
-            [
-                center7[0] + (radii7 + w2) * np.cos(np.deg2rad(theta7_end)),
-                center7[1] + (radii7 + w2) * np.sin(np.deg2rad(theta7_end))
-            ]
-        )
-
-        # We preemptively take section 9's radius to make a nice join.
-        radii9 = 15
-        rad = np.deg2rad(30)
-        end8 = np.array(
-            [
-                42 - radii9 * np.cos(rad),
-                -radii9 - radii9 * np.sin(rad)
-            ]
-        )
-        end8_2 = np.array(
-            [
-                42 - (radii9 + w) * np.cos(rad),
-                -radii9 - (radii9 + w) * np.sin(rad)
-            ]
-        )
-        end8_3 = np.array(
-            [
-                42 - (radii9 + w2) * np.cos(rad),
-                -radii9 - (radii9 + w2) * np.sin(rad)
-            ]
-        )
-        net.add_lane(
-            "h",
-            "i",
-            StraightLane(
-                start8,
-                end8,
-                line_types=(LineType.CONTINUOUS, LineType.NONE),
-                width=w,
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "h",
-            "i",
-            StraightLane(
-                start8_2,
-                end8_2,
-                line_types=(LineType.STRIPED, LineType.STRIPED),
-                width=w,
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "h",
-            "i",
-            StraightLane(
-                start8_3,
-                end8_3,
-                line_types=(LineType.NONE, LineType.CONTINUOUS),
-                width=w,
-                speed_limit=default_speedlimit,
-            ),
-        )
-
-        # 9 - Circular arc 7, end
-        # Since y2 = 0...
-        center9 = np.array([42, -radii9])
-        net.add_lane(
-            "i",
-            "a",
-            CircularLane(
-                center9,
-                radii9,
-                np.deg2rad(210),
-                np.deg2rad(88),
-                width=w,
-                clockwise=False,
-                line_types=(LineType.CONTINUOUS, LineType.NONE),
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "i",
-            "a",
-            CircularLane(
-                center9,
-                radii9 + w,
-                np.deg2rad(210),
-                np.deg2rad(90),
-                width=w,
-                clockwise=False,
-                line_types=(LineType.STRIPED, LineType.STRIPED),
-                speed_limit=default_speedlimit,
-            ),
-        )
-        net.add_lane(
-            "i",
-            "a",
-            CircularLane(
-                center9,
-                radii9 + w2,
-                np.deg2rad(212),
-                np.deg2rad(88),  # nicer join
-                width=w,
-                clockwise=False,
-                line_types=(LineType.NONE, LineType.CONTINUOUS),
-                speed_limit=default_speedlimit,
-            ),
-        )
-
-        self.road = Road(
-            network=net,
-            np_random=self.np_random,
-            record_history=self.config["show_trajectories"],
-        )
+        self.road = racetrack_road1(self)
 
     def _make_vehicles(self) -> None:
         rng = self.np_random
@@ -744,7 +303,8 @@ class AVRacetrack(RacetrackEnv):
 
         if self.config['normalize_reward']:
             max_score = self.config['alpha']
-            return score / max_score
+            score /= max_score
+            assert 0 <= score <= 1
 
         return score
 
@@ -753,6 +313,9 @@ class AVRacetrack(RacetrackEnv):
         Negative penalty for crashing
         """
         vehicle = vehicle or self.vehicle
+        if self.config['normalize_reward']:
+            return -1 if vehicle.crashed else 0
+
         return self.config['crash_penalty'] if vehicle.crashed else 0
 
     def defensive_reward(self, vehicle: AVVehicle | None = None) -> float:
@@ -764,6 +327,8 @@ class AVRacetrack(RacetrackEnv):
         """
         vehicle = vehicle or self.vehicle
         if vehicle.crashed:
+            if self.config['normalize_reward']:
+                return -1
             return self.config['max_defensive_penalty']
 
         # See our AV Project, "Vehicle Agent" section for derivation
@@ -826,8 +391,14 @@ class AVRacetrack(RacetrackEnv):
         # penalty /= n_nbr if n_nbr > 0 else 1
 
         if -penalty < self.config['max_defensive_penalty']:
-            logger.warning(f"MAX DEFENSIVE PENALTY EXCEEDED: {-penalty}")
-            return self.config['max_defensive_penalty']
+            logger.debug(f"MAX DEFENSIVE PENALTY EXCEEDED: {-penalty}")
+            penalty = -self.config['max_defensive_penalty']
+
+        if self.config['normalize_reward']:
+            # Penalty is in range [0, -max_defensive_penalty], return in range [0,-1]
+            reward = -penalty / abs(self.config['max_defensive_penalty'])
+            assert -1 <= reward <= 0
+            return reward
 
         return -penalty
 
@@ -862,15 +433,17 @@ class AVRacetrack(RacetrackEnv):
             reward = sum(rewards.values())
 
             if self.config["normalize_reward"]:
-                # Best is 1
-                # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_penalty
+                # Best is 1 for the normalized speed reward
+                # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
                 best = 1
-                worst = self.config['crash_penalty'] + self.config['max_defensive_penalty']
+                worst = -2
                 reward = utils.lmap(
                     reward,
                     [worst, best],
                     [0, 1]
                 )
+
+                assert 0 <= reward <= 1
 
             return reward
 
@@ -885,15 +458,17 @@ class AVRacetrack(RacetrackEnv):
             ]
         )
         if self.config["normalize_reward"]:
-            # Best is 1
-            # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_penalty
+            # Best is 1 for the normalized speed reward
+            # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
             best = 1
-            worst = self.config['crash_penalty'] + self.config['max_defensive_penalty']
+            worst = -2
             reward = utils.lmap(
                 reward,
                 [worst, best],
                 [0, 1]
             )
+            # Assert numpy array values are in range [0, 1]
+            assert np.all(0 <= reward) and np.all(reward <= 1)
 
         return reward
 

@@ -108,6 +108,9 @@ class AVHighway(HighwayEnv):
         """
         Init road and vehicles
         """
+        if not self.config["normalize_reward"]:
+            raise ValueError("Only normalized rewards configured")
+
         # Clear the vehicle lookup
         self.vehicle_lookup = {}
 
@@ -255,7 +258,8 @@ class AVHighway(HighwayEnv):
 
         if self.config['normalize_reward']:
             max_score = self.config['alpha']
-            return score / max_score
+            score /= max_score
+            assert 0 <= score <= 1
 
         return score
 
@@ -275,6 +279,8 @@ class AVHighway(HighwayEnv):
         """
         vehicle = vehicle or self.vehicle
         if vehicle.crashed:
+            if self.config['normalize_reward']:
+                return -1
             return self.config['max_defensive_penalty']
 
         # See our AV Project, "Vehicle Agent" section for derivation
@@ -338,7 +344,13 @@ class AVHighway(HighwayEnv):
 
         if -penalty < self.config['max_defensive_penalty']:
             logger.warning(f"MAX DEFENSIVE PENALTY EXCEEDED: {-penalty}")
-            return self.config['max_defensive_penalty']
+            penalty = -self.config['max_defensive_penalty']
+
+        if self.config['normalize_reward']:
+            # Penalty is in range [0, -max_defensive_penalty], return in range [0,-1]
+            reward = -penalty / abs(self.config['max_defensive_penalty'])
+            assert -1 <= reward <= 0
+            return reward
 
         return -penalty
 
@@ -398,15 +410,17 @@ class AVHighway(HighwayEnv):
             reward = sum(rewards.values())
 
             if self.config["normalize_reward"]:
-                # Best is 1
-                # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_penalty
+                # Best is 1 for the normalized speed reward
+                # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
                 best = 1
-                worst = self.config['crash_penalty'] + self.config['max_defensive_penalty']
+                worst = -2
                 reward = utils.lmap(
                     reward,
                     [worst, best],
                     [0, 1]
                 )
+
+                assert 0 <= reward <= 1
 
             return reward
 
@@ -421,15 +435,17 @@ class AVHighway(HighwayEnv):
             ]
         )
         if self.config["normalize_reward"]:
-            # Best is 1
-            # Worst is about -3. defensive_reward technically [-inf,0], but usually > -2. -1 for crash_penalty
+            # Best is 1 for the normalized speed reward
+            # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
             best = 1
-            worst = self.config['crash_penalty'] + self.config['max_defensive_penalty']
+            worst = -2
             reward = utils.lmap(
                 reward,
                 [worst, best],
                 [0, 1]
             )
+            # Assert numpy array values are in range [0, 1]
+            assert np.all(0 <= reward) and np.all(reward <= 1)
 
         return reward
 
@@ -521,7 +537,7 @@ class AVHighway(HighwayEnv):
                         collisions[i] = 1
                     break
 
-            losses[i] = -reward
+            losses[i] = 1 - reward
 
         # The uncertainty in the loss essentially
         # For now, we assume no uncertainty though, and set as a low value

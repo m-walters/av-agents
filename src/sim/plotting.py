@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import Union
 
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
@@ -501,49 +501,46 @@ class AVPlotter:
     def multiagent_comparison_plot(
         self,
         save_path: str,
-        ds1: Union[xr.Dataset, str],
-        ds1_name: str,
-        ds2: Union[xr.Dataset, str],
-        ds2_name: str,
+        datasets: list[tuple[Union[xr.Dataset, str], str]],
         metric_label_map: dict,
-        axes_layout: List[List[str]] | None = None,
+        axes_layout: list[list[str]] | None = None,
+        ylog_plots: list[str] | None = None,
         truncate: Union[int, range, list] | None = None,
     ):
         """
-        Plot to compare two datasets
-        Datasets should have the same egos and steps
-        Plotted values are the averages across egos
+        Plot to compare multiple datasets.
+        Datasets should have the same egos and steps.
+        Plotted values are the averages across egos.
 
         :param save_path: Save path
-        :param ds1: Dataset or Dataset path
-        :param ds1_name: Name for first dataset
-        :param ds2: Dataset or Dataset path
-        :param ds2_name: Name for second dataset
+        :param datasets: List of (Dataset or Dataset path, Name) tuples
         :param metric_label_map: Map of plot labels to Dataset keys
         :param axes_layout: Optional 2D layout of axes labels
+        :param ylog_plots: Optional list of labels to plot on a log scale
         :param truncate: Optionally limit the plotting range by simulation step.
             Provide an int for an end limit or an inclusive window range
         """
-        if isinstance(ds1, xr.Dataset):
-            ds1 = ds1
-        else:
-            ds1 = xr.open_dataset(ds1)
-        if isinstance(ds2, xr.Dataset):
-            ds2 = ds2
-        else:
-            ds2 = xr.open_dataset(ds2)
+        # Compile datasets
+        datasets = [(xr.open_dataset(ds) if isinstance(ds, str) else ds, name) for ds, name in datasets]
+
+        # Extract the first dataset to use as a reference
+        ref_ds = datasets[0][0]
 
         y_labels = list(metric_label_map)
-        egos = ds1.coords['ego'].values
-        # Check that these datasets have the same egos
-        assert np.array_equal(egos, ds2.coords['ego'].values)
+        egos = ref_ds.coords['ego'].values
+        steps = ref_ds.coords['step'].values
+        mc_steps = ref_ds.coords['mc_step'].values
 
-        steps = ds1.coords['step'].values
-        mc_steps = ds1.coords['mc_step'].values
-        # Assert that ds1 and ds2 have the same steps/mc_steps
-        assert np.array_equal(steps, ds2.coords['step'].values)
-        assert np.array_equal(mc_steps, ds2.coords['mc_step'].values)
+        # Check that all datasets have the same egos, steps, and mc_steps
+        for ds, name in datasets:
+            assert np.array_equal(egos, ds.coords['ego'].values), \
+                f"Egos do not match for dataset {name}"
+            assert np.array_equal(steps, ds.coords['step'].values), \
+                f"Steps do not match for dataset {name}"
+            assert np.array_equal(mc_steps, ds.coords['mc_step'].values), \
+                f"MC steps do not match for dataset {name}"
 
+        # Handle truncation
         if isinstance(truncate, int):
             steps = steps[steps <= truncate]
             mc_steps = mc_steps[mc_steps <= truncate]
@@ -552,8 +549,8 @@ class AVPlotter:
             mc_steps = mc_steps[truncate[0] <= mc_steps <= truncate[1]]
 
         # Determine these indices for filtering our y-value data for plotting
-        _steps = ds1.coords['step'].values
-        _mc_steps = ds1.coords['mc_step'].values
+        _steps = ref_ds.coords['step'].values
+        _mc_steps = ref_ds.coords['mc_step'].values
         left_steps_idx = int(np.argwhere(_steps == steps[0])[0][0])
         right_steps_idx = int(np.argwhere(_steps == steps[-1])[0][0])
         left_mc_steps_idx = int(np.argwhere(_mc_steps == mc_steps[0])[0][0])
@@ -561,7 +558,7 @@ class AVPlotter:
 
         duration = steps[-1] - steps[0] + 1
         col_wheel = self.get_color_wheel()
-        cols = [next(col_wheel), next(col_wheel)]
+        cols = [next(col_wheel) for _ in datasets]
 
         num_ax = len(y_labels)
         if axes_layout is None:
@@ -569,14 +566,11 @@ class AVPlotter:
             if num_ax % 2 == 0:
                 axes_shape = (num_ax // 2, 2)
                 axes_layout = [[y_labels[i], y_labels[i + 1]] for i in range(0, num_ax, 2)]
-                # Bottom two plots have ticks
             else:
-                # Odd number of axes
                 axes_shape = ((num_ax + 1) // 2, 2)
                 axes_layout = [[y_labels[i], y_labels[i + 1]] for i in range(0, num_ax - 1, 2)]
                 axes_layout.append([y_labels[-1], None])
         else:
-            # Get the axes_shape from the layout
             axes_shape = (len(axes_layout), 2)
 
         nrow, ncol = axes_shape
@@ -627,52 +621,54 @@ class AVPlotter:
         # Tighten up
         plt.subplots_adjust(hspace=0.1, bottom=0.05, right=0.95, top=0.98)
 
-        for i, label in enumerate(y_labels):
+        for label in y_labels:
             var = metric_label_map[label]
-            data1 = ds1[var].sel(world=0)
-            data2 = ds2[var].sel(world=0)
-
-            # Call custom methods if they exist
-            if label in self.GK_METRIC_PROCESSORS:
-                y1 = self.GK_METRIC_PROCESSORS[label](data1)
-                y2 = self.GK_METRIC_PROCESSORS[label](data2)
-            else:
-                # Default to mean
-                y1 = data1.mean(dim='ego').values
-                y2 = data2.mean(dim='ego').values
-
-            # Some plots use world steps, others mc-steps
-            if 'mc_step' in ds1[var].dims:
-                x = mc_steps
-                y1 = y1[left_mc_steps_idx:right_mc_steps_idx + 1]
-                y2 = y2[left_mc_steps_idx:right_mc_steps_idx + 1]
-            else:
-                x = steps
-                y1 = y1[left_steps_idx:right_steps_idx + 1]
-                y2 = y2[left_steps_idx:right_steps_idx + 1]
-
             ax = label2axis(label)
-            sns.lineplot(
-                x=x, y=y1, color=cols[0], ax=ax,
-                legend=True, label=ds1_name,
-            )
-            sns.lineplot(
-                x=x, y=y2, color=cols[1], ax=ax,
-                legend=True, label=ds2_name,
-            )
+
+            for idx, (ds, ds_name) in enumerate(datasets):
+                data = ds[var].sel(world=0)
+
+                # Call custom methods if they exist
+                if label in self.GK_METRIC_PROCESSORS:
+                    y = self.GK_METRIC_PROCESSORS[label](data)
+                else:
+                    # Default to mean
+                    y = data.mean(dim='ego').values
+
+                if 'mc_step' in ds[var].dims:
+                    x = mc_steps
+                    y = y[left_mc_steps_idx:right_mc_steps_idx + 1]
+                else:
+                    x = steps
+                    y = y[left_steps_idx:right_steps_idx + 1]
+
+                sns.lineplot(
+                    x=x, y=y, color=cols[idx], ax=ax,
+                    legend=False, label=ds_name,
+                )
 
             ax.set_ylabel(label)
-            # All have the tick lines
             ax.set_xticks(xticks)
             ax.set_xlim(steps[0] - 0.95, steps[-1] + 0.95)
+            if ylog_plots:
+                if label in ylog_plots:
+                    ax.set_yscale('log')
 
             if label not in tick_plots:
-                # Remove x-label
                 ax.set_xticklabels([])
                 ax.set_xlabel('')
             else:
-                # Set the final plot's label
                 ax.set_xlabel("Step")
+
+        # Add legend to the top row
+        for ax in axs[0]:
+            ax.legend(
+                # bbox_to_anchor=(1.05, 1),
+                # bbox_transform=axs[1, 1].transAxes,
+                # ncol=len(self.ds.omega),
+                # loc='center left',
+                title=None
+            )
 
         if save_path:
             print(f"Saving to {save_path}")

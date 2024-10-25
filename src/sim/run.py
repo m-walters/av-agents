@@ -50,6 +50,8 @@ def init_results_dataset(
             ### Data recorded every world step
             # Rewards
             "reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
+            # Record the realized loss
+            "real_loss": (("world", "step", "ego"), np.full((world_draws, duration), np.nan)),
             "defensive_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "speed_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "crash_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
@@ -93,6 +95,8 @@ def init_multiagent_results_dataset(
             ### Data recorded every world step
             # Rewards
             "reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
+            # Record the realized loss
+            "real_loss": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "defensive_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "speed_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "crashed": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
@@ -106,7 +110,8 @@ def init_multiagent_results_dataset(
             # Tracking the MC losses -- These are predicted losses
             "mc_loss": (
                 ("world", "mc_step", "sample", "ego"),
-                np.full((world_draws, num_mc_sweeps, n_montecarlo, n_controlled), np.nan)),
+                np.full((world_draws, num_mc_sweeps, n_montecarlo, n_controlled), np.nan)
+            ),
             "loss_mean": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
             # 5% percentile
             "loss_p5": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),

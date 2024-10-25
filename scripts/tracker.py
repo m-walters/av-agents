@@ -19,7 +19,7 @@ from sim import models, plotting, run, utils
 from sim.envs.highway import AVHighway
 
 # Name of file in configs, set this to your liking
-DEFAULT_CONFIG = "tmp"
+DEFAULT_CONFIG = "tracker"
 
 RESULTS_DIR = "../results"
 LATEST_DIR = f"{RESULTS_DIR}/latest"

@@ -3,8 +3,8 @@ Gatekeeper module
 """
 import copy
 import logging
-from enum import Enum
 import multiprocessing
+from enum import Enum
 from typing import Dict, List, Optional, TypedDict, Union
 
 import numpy as np
@@ -64,6 +64,7 @@ class Gatekeeper:
         gk_idx: int,
         vehicle: AVVehicleType,
         behavior_cfg: BehaviorConfig,
+        rstar_range: tuple[float, float],
         seed: int,
     ):
         self.gk_idx = gk_idx  # Tracks this gatekeepers index in the results array for the GKCommand
@@ -84,9 +85,9 @@ class Gatekeeper:
         self.behavior = Behaviors.NOMINAL
         if self.behavior_ctrl_enabled:
             self.nominal_behavior = utils.class_from_path(behavior_cfg["nominal_class"])
-            self.nominal_risk_threshold = behavior_cfg["nominal_risk_threshold"]
+            self.nominal_risk_threshold = rstar_range[0]
             self.conservative_behavior = utils.class_from_path(behavior_cfg["conservative_class"])
-            self.conservative_risk_threshold = behavior_cfg["conservative_risk_threshold"]
+            self.conservative_risk_threshold = rstar_range[1]
 
     def get_vehicle(self, env):
         return env.vehicle_lookup[self.vehicle_id]
@@ -108,15 +109,18 @@ class Gatekeeper:
         }
         reward = sum(rewards.values())
         if env.config["normalize_reward"]:
-            # Best is 1
-            # Worst is -3. defensive_reward clipped at -2; -1 for crash_penalty
+            # Best is 1 for the normalized speed reward
+            # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
             best = 1
-            worst = env.config['crash_penalty'] + env.config['max_defensive_penalty']
+            worst = -2
             reward = utils.lmap(
                 reward,
                 [worst, best],
                 [0, 1]
             )
+
+            # Assert numpy array values are in range [0, 1]
+            assert np.all(0 <= reward) and np.all(reward <= 1)
 
         return reward
 
@@ -177,12 +181,23 @@ class GatekeeperCommand:
         # Init models
         self._init_models(gk_cfg)
 
+        # Determine risk thresholds
+        # For reference as (p_star, r_star) tuples:
+        #   (0.01, 4.6)
+        #   (0.1, 2.3)
+        #   (0.2, 1.6)
+        #   (0.9, 0.11)
+        # This quantity here has the nice property that it is L* fraction of the max normalized risk,
+        # which in the Loss-normalized [0,1] case, the max risk is k = -log(p_star)/l_star
+        nominal_rstar = -np.log(gk_cfg['preference_prior']['p_star']) * 1.1
+        conservative_rstar = nominal_rstar * 0.9 / 1.1
+
         # Init GKs
         self.nbr_distance = VehicleBase.MAX_SPEED * 0.7  # For GK neighborhood discovery
         self.gatekeepers: List["Gatekeeper"] = []
         self.gatekeeper_lookup: Dict[int, Gatekeeper] = {}
         for i, v in enumerate(control_vehicles):
-            self._spawn_gatekeeper(v, i, gk_cfg.behavior_cfg)
+            self._spawn_gatekeeper(v, i, gk_cfg.behavior_cfg, (nominal_rstar, conservative_rstar))
 
     @property
     def gatekept_vehicles(self):
@@ -199,7 +214,7 @@ class GatekeeperCommand:
             preference_prior=self.preference_prior, **gk_cfg.risk_model, seed=self.seed
         )
 
-    def _spawn_gatekeeper(self, vehicle: AVVehicleType, gk_idx, behavior_cfg):
+    def _spawn_gatekeeper(self, vehicle: AVVehicleType, gk_idx, behavior_cfg, rstar_range):
         """
         Spawn a gatekeeper for a vehicle
         """
@@ -207,6 +222,7 @@ class GatekeeperCommand:
             gk_idx,
             vehicle,
             behavior_cfg,
+            rstar_range,
             self.rkey.next_seed()
         )
         self.gatekeepers.append(gk)
@@ -241,7 +257,7 @@ class GatekeeperCommand:
                 if crashed:
                     collisions[i_gk] = 1
                 reward = gk.calculate_reward(env)
-                losses[i_gk] -= reward
+                losses[i_gk] = 1 - reward
 
         return losses, collisions
 
