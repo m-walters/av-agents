@@ -24,19 +24,19 @@ highway_env:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: &mc_horizon 20
-  n_montecarlo: &n_montecarlo 40
-  duration: 200
-  normalize_reward: true
+  n_montecarlo: &n_montecarlo 20
+  duration: 120
+  normalize_reward: true  # Setting to false is not recommended
 #==============
 name: multiagent
 seed: 86777
 world_draws: 1
 warmup_steps: 0  # included within the duration
-mc_period: &mc_period 2   # real-world steps between MC issuances
+mc_period: &mc_period 20   # real-world steps between MC issuances
 
 # Multiprocessing configs
 use_mp: true
-multiprocessing_cpus: 16
+multiprocessing_cpus: 12
 
 gatekeeper:
   n_controlled: *n_controlled
@@ -46,14 +46,14 @@ gatekeeper:
   n_montecarlo: *n_montecarlo
   # Models
   preference_prior:
-    model: "SatisficingPreferencePrior"
+    model: "ExponentialPreferencePrior"
     p_star: 0.1
     l_star: 0.9
   risk_model:
     model: "NullEntropyRiskModel"
   behavior_cfg:
     enable: true
-    nominal_risk_threshold: 3.0
-    conservative_risk_threshold: 2.0
+#    nominal_risk_threshold: 3.0
+#    conservative_risk_threshold: 2.0
     nominal_class: "sim.vehicles.highway.AggressiveParams"
     conservative_class: "sim.vehicles.highway.ConservativeParams"

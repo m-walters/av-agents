@@ -118,11 +118,11 @@ def gatekeep_compare():
     )
 
 
-def temperature_compare():
+def compare_plot():
     """
-    Comparing different beta temperature values
+    Generic comparison plot
     """
-    title = "Temperature Comparison"
+    title = None
 
     RESULTS_DIR = "../results"
     save_dir = RESULTS_DIR + "/"
@@ -132,16 +132,16 @@ def temperature_compare():
         # (xr.open_dataset(RESULTS_DIR + "/beta_1/results.nc"), r'$\beta = 1$'),
         # (xr.open_dataset(RESULTS_DIR + "/beta_0p5/results.nc"), r'$\beta = 0.5$'),
         # (xr.open_dataset(RESULTS_DIR + "/beta_0p1/results.nc"), r'$\beta = 0.1$'),
-        # (xr.open_dataset(RESULTS_DIR + "/beta_10_bscale/results.nc"), r'$\beta = 10$'),
-        (xr.open_dataset(RESULTS_DIR + "/beta_2_bscale/results.nc"), r'$\beta = 2$'),
-        # (xr.open_dataset(RESULTS_DIR + "/beta_1_bscale/results.nc"), r'$\beta = 1$'),
-        (xr.open_dataset(RESULTS_DIR + "/beta_1_bscale_120/results.nc"), r'$\beta = 1$'),
-        (xr.open_dataset(RESULTS_DIR + "/beta_0p5_bscale/results.nc"), r'$\beta = 0.5$'),
-        # (xr.open_dataset(RESULTS_DIR + "/beta_0p1_bscale/results.nc"), r'$\beta = 0.1$'),
+        (xr.open_dataset(RESULTS_DIR + "/pstar-0p01/results.nc"), r'$p^* = 0.01, L^*=0.9$'),
+        (xr.open_dataset(RESULTS_DIR + "/pstar-0p1/results.nc"), r'$p^* = 0.1, L^*=0.9$'),
+        (xr.open_dataset(RESULTS_DIR + "/pstar-0p9/results.nc"), r'$p^* = 0.9, L^*=0.9$'),
+        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p01_lstar-0p1/results.nc"), r'$p^* = 0.01, L^*=0.1$'),
+        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p1_lstar-0p1/results.nc"), r'$p^* = 0.01, L^*=0.1$'),
+        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p9_lstar-0p1/results.nc"), r'$p^* = 0.01, L^*=0.1$'),
 
     ]
 
-    truncate = 120
+    truncate = None
 
     # save_dir = RESULTS_DIR + "/tmp"
     # data_tups = [
@@ -156,7 +156,6 @@ def temperature_compare():
         "E[Loss]",
         "E[Energy]",
         "E[Entropy]",
-        "E[Entropy] Adj.",
         "Risk",
         "Crashed",
         "Number in Conservative",
@@ -169,10 +168,7 @@ def temperature_compare():
         ["R_Spd", "E[Loss]"],
         ["E[Energy]", "Risk"],
         ["E[Entropy]", "Crashed"],
-        ["E[Entropy] Adj.", "Number in Conservative"],
-    ]
-    ylog_plots = [
-        "E[Entropy] Adj.",
+        [None, "Number in Conservative"],
     ]
 
     avplot = plotting.AVPlotter()
@@ -181,7 +177,6 @@ def temperature_compare():
         data_tups,
         metric_label_map,
         axes_layout=axes_layout,
-        ylog_plots=ylog_plots,
         truncate=truncate,
     )
 

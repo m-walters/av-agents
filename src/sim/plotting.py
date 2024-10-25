@@ -650,8 +650,9 @@ class AVPlotter:
             ax.set_ylabel(label)
             ax.set_xticks(xticks)
             ax.set_xlim(steps[0] - 0.95, steps[-1] + 0.95)
-            if label in ylog_plots:
-                ax.set_yscale('log')
+            if ylog_plots:
+                if label in ylog_plots:
+                    ax.set_yscale('log')
 
             if label not in tick_plots:
                 ax.set_xticklabels([])
