@@ -24,19 +24,19 @@ highway_env:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: &mc_horizon 20
-  n_montecarlo: &n_montecarlo 10
-  duration: 100
+  n_montecarlo: &n_montecarlo 100
+  duration: 200
   normalize_reward: true  # Setting to false is not recommended
 #==============
 name: multiagent
 seed: 86777
 world_draws: 1
 warmup_steps: 0  # included within the duration
-mc_period: &mc_period 20   # real-world steps between MC issuances
+mc_period: &mc_period 2   # real-world steps between MC issuances
 
 # Multiprocessing configs
 use_mp: true
-multiprocessing_cpus: 4
+multiprocessing_cpus: 16
 
 gatekeeper:
   n_controlled: *n_controlled

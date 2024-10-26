@@ -124,16 +124,13 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results"
+    RESULTS_DIR = "../results/freezer/seeds/seed-86777"
     save_dir = RESULTS_DIR + "/"
     data_tups = [
-        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p01/results.nc"), r'$p^* = 0.01, L^*=0.2$'),
-        (xr.open_dataset(RESULTS_DIR + "/pstar-0p1/results.nc"), r'$p^* = 0.1, L^*=0.2$'),
-        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p9/results.nc"), r'$p^* = 0.9, L^*=0.2$'),
-        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p01_lstar-0p1/results.nc"), r'$p^* = 0.01, L^*=0.1$'),
-        (xr.open_dataset(RESULTS_DIR + "/pstar-0p1_lstar-0p1/results.nc"), r'$p^* = 0.1, L^*=0.1$'),
-        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p9_lstar-0p1/results.nc"), r'$p^* = 0.9, L^*=0.1$'),
-
+        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p1/results.nc"), r'$L^*=0.1$'),
+        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p2/results.nc"), r'$L^*=0.2$'),
+        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p5/results.nc"), r'$L^*=0.5$'),
+        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p9/results.nc"), r'$L^*=0.9$'),
     ]
 
     truncate = None
