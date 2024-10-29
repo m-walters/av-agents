@@ -114,6 +114,13 @@ class AVRacetrack(RacetrackEnv):
 
         return self.controlled_vehicles[0] if self.controlled_vehicles else None
 
+    @property
+    def average_speed(self) -> float:
+        """
+        Return the average speed of all vehicles
+        """
+        return np.mean([v.speed for v in self.road.vehicles])
+
     def _reset(self) -> None:
         """
         Init road and vehicles
@@ -242,6 +249,12 @@ class AVRacetrack(RacetrackEnv):
                 ),
                 speed=0.7 * rng.normal(self.config["speed_limit"]),
             )
+
+            # For comparing the effects of varying the number of GKs,
+            # we need the target speed attribute of the various cars on the road to
+            # be invariant under this change.
+            vehicle.target_speed = self.config["reward_speed"]
+
             # Prevent early collisions
             for v in self.road.vehicles:
                 if np.linalg.norm(vehicle.position - v.position) < 12:
