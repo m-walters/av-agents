@@ -265,7 +265,7 @@ class AVRacetrack(RacetrackEnv):
                 if hasattr(vehicle, "randomize_behavior"):
                     vehicle.randomize_behavior()
 
-        logger.info(f"Created {len(self.road.vehicles)} vehicles")
+        logger.debug(f"Created {len(self.road.vehicles)} vehicles")
 
     def step(self, action: Action) -> Tuple[Observation, float, bool, bool, dict]:
         """

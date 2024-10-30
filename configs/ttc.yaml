@@ -24,19 +24,19 @@ highway_env:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: &mc_horizon 20
-  n_montecarlo: &n_montecarlo 20
-  duration: 10
+  n_montecarlo: &n_montecarlo 100
+  duration: 200
   normalize_reward: true
 #==============
-name: ttc_baseline
+name: ttc_conservative_baseline
 seed: 86777
-world_draws: 1
+world_draws: 500
 warmup_steps: 1e5  # included within the duration
 mc_period: &mc_period 1e5   # real-world steps between MC issuances
 
 # Multiprocessing configs
 use_mp: true
-multiprocessing_cpus: 4
+multiprocessing_cpus: 16
 
 gatekeeper:
   n_controlled: *n_controlled
