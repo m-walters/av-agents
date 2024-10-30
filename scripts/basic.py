@@ -73,7 +73,6 @@ def main(cfg: DictConfig):
     i_mc = 0
 
     for wdraw in range(run_params['world_draws']):
-        # obs, info = env.reset(seed=seed)
         obs, info = env.reset(seed=rkey.next_seed())
 
         # Run a world simulation

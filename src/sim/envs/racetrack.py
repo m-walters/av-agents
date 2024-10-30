@@ -159,15 +159,6 @@ class AVRacetrack(RacetrackEnv):
         np.random.seed(seed)
         # seeding.np_random(seed)
 
-        if options and "config" in options:
-            self.configure(options["config"])
-        self.update_metadata()
-        self.define_spaces()  # First, to set the controlled vehicle class depending on action space
-        self.time = self.steps = 0
-        self.done = False
-        self._reset()
-        self.define_spaces()  # Second, to link the obs and actions to the vehicles once the scene is created
-
         obs, info = super().reset(seed=seed, options=options)
         self.action_space.seed(seed)
 
@@ -185,9 +176,12 @@ class AVRacetrack(RacetrackEnv):
         control_vehicle_class = utils.class_from_path(self.config["control_vehicle_type"])
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
 
-        # Controlled vehicles
-        self.controlled_vehicles = []
-        self.alter_vehicles = []
+        # Clear vehicles
+        self.controlled_vehicles.clear()
+        self.alter_vehicles.clear()
+        self.vehicle_lookup.clear()
+        self.road.vehicles.clear()
+
         av_id = 1
         controlled_created = 0
         break_count = 1e3

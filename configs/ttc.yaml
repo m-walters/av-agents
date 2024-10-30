@@ -1,0 +1,57 @@
+# Special hydra param, inherit defaults
+defaults:
+  - _self_
+
+# Overrides for the env config
+# See AVHighway for defaults
+highway_env:
+  controlled_vehicles: &n_controlled 8  # Number of ego vehicles
+  control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
+  other_vehicles_type: "sim.vehicles.highway.AlterIDMVehicle"
+  vehicles_count: 24  # Number of alters
+  vehicles_density: 2
+  reward_speed: 40
+  speed_limit: 40
+  action:
+    type: "MultiAgentAction"
+    action_config:
+      type: "DiscreteMetaAction"
+      lateral: true
+      longitudinal: true
+  observation:
+    type: "MultiAgentObservation"
+    observation_config:
+      type: "Kinematics"
+#      features: ["presence", "x", "y", "vx", "vy"]
+  mc_horizon: &mc_horizon 20
+  n_montecarlo: &n_montecarlo 20
+  duration: 10
+  normalize_reward: true
+#==============
+name: ttc_baseline
+seed: 86777
+world_draws: 1
+warmup_steps: 1e5  # included within the duration
+mc_period: &mc_period 1e5   # real-world steps between MC issuances
+
+# Multiprocessing configs
+use_mp: true
+multiprocessing_cpus: 4
+
+gatekeeper:
+  n_controlled: *n_controlled
+  mc_period: *mc_period
+  # Montecarlo params
+  mc_horizon: *mc_horizon
+  n_montecarlo: *n_montecarlo
+  # Models
+  preference_prior:
+    model: "ExponentialPreferencePrior"
+    p_star: 0.1
+    l_star: 0.9
+  risk_model:
+    model: "NullEntropyRiskModel"
+  behavior_cfg:
+    enable: true
+    nominal_class: "sim.vehicles.highway.AggressiveParams"
+    conservative_class: "sim.vehicles.highway.ConservativeParams"

@@ -83,7 +83,11 @@ def init_multiagent_results_dataset(
     n_montecarlo: int,
     n_controlled: int,
 ) -> Tuple[xr.Dataset, dict]:
+    if not mc_steps:
+        # We need to initialize with something
+        mc_steps = np.array([0])
     num_mc_sweeps = len(mc_steps)
+
     # For mapping the 'beahvior_mode' results
     behavior_index = {
         0: Behaviors.NOMINAL.value,
@@ -100,6 +104,8 @@ def init_multiagent_results_dataset(
             "defensive_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "speed_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "crashed": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
+            # Record the step which saw the first vehicle collision
+            "time_to_collision": (("world",), np.full((world_draws,), np.nan)),
             # For gatekeeper analysis
             # 0 for nominal, 1 for conservative, etc...
             "behavior_mode": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
