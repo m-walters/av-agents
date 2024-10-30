@@ -171,12 +171,16 @@ class GatekeeperCommand:
 
         self.env = env
         self.seed = seed
+        self.rkey = JaxRKey(seed)
         self.config = gk_cfg.copy()
         self.n_montecarlo: int = gk_cfg.n_montecarlo
         self.mc_horizon: int = gk_cfg.mc_horizon
         self.mc_period: int = gk_cfg.mc_period
         self.n_controlled: int = gk_cfg.n_controlled
-        self.rkey = JaxRKey(seed)
+        # For time-discounted risk accumulation
+        self.enable_time_discounting = gk_cfg.enable_time_discounting
+        self.gamma = gk_cfg.gamma
+        self.risk_eval_period = gk_cfg.risk_eval_period
 
         # Init models
         self._init_models(gk_cfg)
@@ -239,8 +243,15 @@ class GatekeeperCommand:
 
         losses = np.zeros(self.n_controlled)
         collisions = np.zeros_like(losses)
+        collision_reward = 0  # Max penalty for a collision
+        discount = 1
+        discounted_rewards = [0] * self.n_controlled
+        n_discounted_per = 1
+        if self.enable_time_discounting:
+            n_discounted_per = self.mc_horizon // self.risk_eval_period
 
         for j in range(self.mc_horizon):
+            discount *= self.gamma
             # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
             action = env.action_space.sample()
 
@@ -248,16 +259,39 @@ class GatekeeperCommand:
             env.time += 1 / env.config["policy_frequency"]
             env._simulate(action)
 
-            if j + 1 < self.mc_horizon:
-                continue
-
-            # Else, last step so we take measurements
+            # Check for collisions
+            # We make the assertion of ignoring potential future rewards of
+            # the vehicle resuming driving after collision -- We treat it as always crashed after one
             for i_gk, gk in enumerate(self.gatekeepers):
-                crashed = gk.crashed(env)
-                if crashed:
-                    collisions[i_gk] = 1
-                reward = gk.calculate_reward(env)
-                losses[i_gk] = 1 - reward
+                collisions[i_gk] = collisions[i_gk] or gk.crashed(env)
+
+            if not self.enable_time_discounting:
+                if j + 1 < self.mc_horizon:
+                    # Only eval at end
+                    continue
+                for i_gk, gk in enumerate(self.gatekeepers):
+                    if collisions[i_gk]:
+                        # Add the crashed reward
+                        reward = collision_reward
+                    else:
+                        reward = gk.calculate_reward(env)
+                    losses[i_gk] = 1 - reward
+
+            else:
+                if j % self.risk_eval_period != 0:
+                    # Not an eval step
+                    continue
+
+                for i_gk, gk in enumerate(self.gatekeepers):
+                    if collisions[i_gk]:
+                        # Add the crashed reward
+                        reward = collision_reward
+                    else:
+                        reward = gk.calculate_reward(env)
+                    discounted_rewards[i_gk] += discount * reward / n_discounted_per
+
+        if self.enable_time_discounting:
+            losses[:] = 1 - np.array(discounted_rewards)
 
         return losses, collisions
 
