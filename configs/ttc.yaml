@@ -5,7 +5,7 @@ defaults:
 # Overrides for the env config
 # See AVHighway for defaults
 highway_env:
-  controlled_vehicles: &n_controlled 8  # Number of ego vehicles
+  controlled_vehicles: 1  # Number of ego vehicles
   control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
   other_vehicles_type: "sim.vehicles.highway.AlterIDMVehicle"
   vehicles_count: 24  # Number of alters
@@ -23,37 +23,32 @@ highway_env:
     observation_config:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
-  mc_horizon: &mc_horizon 20
-  n_montecarlo: &n_montecarlo 100
-  duration: 200
+  mc_horizon: 20
+  n_montecarlo: 20
+  duration: 100
   normalize_reward: true
 #==============
 
-name: tmp
+name: ttc-gk-nc1-quick
 seed: 86777
-world_draws: 1
+world_draws: 20
 warmup_steps: 0  # included within the duration
-mc_period: &mc_period 1   # real-world steps between MC issuances
+mc_period: &mc_period 10   # real-world steps between MC issuances
 
 # Multiprocessing configs
 use_mp: true
-multiprocessing_cpus: 4
+multiprocessing_cpus: 12
 
 gatekeeper:
-  n_controlled: *n_controlled
-  mc_period: *mc_period
-  # Montecarlo params
-  mc_horizon: *mc_horizon
-  n_montecarlo: *n_montecarlo
   # Time-discounting
-  enable_time_discounting: true
+  enable_time_discounting: false
   gamma: 0.96
   risk_eval_period: 5  # Every nth inner step, eval risk
   # Models
   preference_prior:
     model: "ExponentialPreferencePrior"
     p_star: 0.1
-    l_star: 0.9
+    l_star: 0.2
   risk_model:
     model: "NullEntropyRiskModel"
   behavior_cfg:

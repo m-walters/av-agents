@@ -172,6 +172,21 @@ def compare_plot():
         truncate=truncate,
     )
 
+def baseline_hist():
+    """
+    Plot the baseline histogram
+    """
+    RESULTS_DIR = "../results/freezer/"
+    save_dir = RESULTS_DIR + "/"
+
+    avplot = plotting.AVPlotter()
+    avplot.ttc_baselines_hist(
+        f"{save_dir}/ttc_baseline_hist.png",
+        nominal_ds=xr.open_dataset(RESULTS_DIR + "/ttc_nom_baseline/results.nc"),
+        conservative_ds=xr.open_dataset(RESULTS_DIR + "/ttc_conservative_baseline/results.nc"),
+    )
+
+
 
 if __name__ == '__main__':
     # Accept first argument as function name to be called

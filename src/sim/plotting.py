@@ -675,3 +675,45 @@ class AVPlotter:
             plt.savefig(save_path)
 
         plt.show()
+
+    def ttc_baselines_hist(
+        self,
+        save_path: str,
+        nominal_ds: xr.Dataset,
+        conservative_ds: xr.Dataset,
+    ):
+        """
+        Histogram of TTCs for the two baselines
+        """
+        nom_values: np.ndarray = nominal_ds['time_to_collision'].values
+        cons_values: np.ndarray = conservative_ds['time_to_collision'].values
+        # When no collision occurred, values are `inf`
+        # Filter these out
+        nom_values = nom_values[nom_values != np.inf]
+        cons_values = cons_values[cons_values != np.inf]
+
+        col_wheel = self.get_color_wheel()
+        nom_color = next(col_wheel)
+        cons_color = next(col_wheel)
+
+        # Plotting the distributions
+        sns.histplot(nom_values, bins=30, kde=True, label='Nominal', color=nom_color)
+        sns.histplot(cons_values, bins=30, kde=True, label='Cons.', color=cons_color)
+
+        # Adding vertical lines at the means
+        nom_mean = np.mean(nom_values)
+        cons_mean = np.mean(cons_values)
+        plt.axvline(nom_mean, color=nom_color, linestyle='dashed', linewidth=1)
+        plt.axvline(cons_mean, color=cons_color, linestyle='dashed', linewidth=1)
+
+        # Adding titles and labels
+        plt.title("")
+        plt.xlabel("Step")
+        plt.ylabel("")
+        plt.legend()
+
+        if save_path:
+            print(f"Saving to {save_path}")
+            plt.savefig(save_path)
+
+        plt.show()

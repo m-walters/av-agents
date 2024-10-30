@@ -31,13 +31,13 @@ def main(cfg: DictConfig):
     """
     Set the parameters and run the sim
     """
-    cfg, run_params = run.init(cfg, LATEST_DIR)
+    cfg, run_params, gk_cfg = run.init(cfg, LATEST_DIR)
     if run_params['world_draws'] > 1:
         raise ValueError("world_draws > 1 not configured for multiagent")
 
     ds, behavior_index = run.init_multiagent_results_dataset(
         run_params['world_draws'], run_params['duration'], run_params['mc_steps'],
-        run_params['n_montecarlo'], cfg.gatekeeper['n_controlled']
+        run_params['n_montecarlo'], gk_cfg['n_controlled']
     )
     seed = run_params['seed']
     env_cfg = cfg.highway_env
@@ -69,7 +69,7 @@ def main(cfg: DictConfig):
 
     # Init the gatekeeper
     gk_cmd = gatekeeper.GatekeeperCommand(
-        uenv, cfg.gatekeeper, uenv.controlled_vehicles, seed
+        uenv, gk_cfg, uenv.controlled_vehicles, seed
     )
 
     # Run world simulation

@@ -4,6 +4,7 @@ Multiagent Gatekeeper simulation for a Time-To-Collision mode
 import logging
 import multiprocessing
 import os
+import time
 import shutil
 
 import gymnasium as gym
@@ -31,11 +32,11 @@ def main(cfg: DictConfig):
     """
     Set the parameters and run the sim
     """
-    cfg, run_params = run.init(cfg, LATEST_DIR)
+    cfg, run_params, gk_cfg = run.init(cfg, LATEST_DIR)
 
     ds, behavior_index = run.init_multiagent_results_dataset(
         run_params['world_draws'], run_params['duration'], run_params['mc_steps'],
-        run_params['n_montecarlo'], cfg.gatekeeper['n_controlled']
+        run_params['n_montecarlo'], gk_cfg['n_controlled']
     )
     seed = run_params['seed']
     world_draws = run_params['world_draws']
@@ -66,6 +67,8 @@ def main(cfg: DictConfig):
 
     # If mc_steps is empty, this is a baseline run for collision testing
     # So we don't need to do multiprocessing
+    t_start = time.time()
+    world_loop_times = []
     if run_params['mc_steps'].size > 0:
         with multiprocessing.Pool(cfg.get('multiprocessing_cpus', 8), maxtasksperchild=100) as pool:
             i_world = -1  # tqdm doesn't handle the enumerate tuples well
@@ -78,9 +81,10 @@ def main(cfg: DictConfig):
 
                 # Init the gatekeeper
                 gk_cmd = gatekeeper.GatekeeperCommand(
-                    uenv, cfg.gatekeeper, uenv.controlled_vehicles, w_seed
+                    uenv, gk_cfg, uenv.controlled_vehicles, w_seed
                 )
 
+                t_wstart = time.time()
                 for step in tqdm(range(run_params['duration']), desc="Steps", leave=False):
                     # First, record the gatekeeper behavior states
                     ds["behavior_mode"][i_world, step, :] = gk_cmd.collect_behaviors()
@@ -126,6 +130,10 @@ def main(cfg: DictConfig):
                     if truncated:
                         # Times up
                         break
+
+                t_wend = time.time()
+                world_loop_times.append(t_wend - t_wstart)
+                logger.info(f"World Loop: {t_wend - t_wstart:.2f}s (Avg: {np.mean(world_loop_times):.2f}s)")
 
     else:
         # No Gatekeeper MC

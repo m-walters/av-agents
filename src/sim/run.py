@@ -9,10 +9,11 @@ from typing import Tuple, TypedDict
 
 import numpy as np
 import xarray as xr
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, open_dict
 
 from sim import utils
 from sim.gatekeeper import Behaviors
+from sim.gatekeeper import GatekeeperConfig
 
 logger = logging.getLogger("av-sim")
 
@@ -31,10 +32,6 @@ def validate_config(cfg: DictConfig) -> DictConfig:
     """
     Validate the config
     """
-    if cfg.get("gatekeeper"):
-        if cfg.gatekeeper["n_controlled"] > cfg.highway_env["controlled_vehicles"]:
-            raise ValueError("Cannot have gatekeepers control more ego vehicles than environment provided")
-
     return cfg
 
 
@@ -88,7 +85,7 @@ def init_multiagent_results_dataset(
         mc_steps = np.array([0])
     num_mc_sweeps = len(mc_steps)
 
-    # For mapping the 'beahvior_mode' results
+    # For mapping the 'behavior_mode' results
     behavior_index = {
         0: Behaviors.NOMINAL.value,
         1: Behaviors.CONSERVATIVE.value,
@@ -134,7 +131,7 @@ def init_multiagent_results_dataset(
     ), behavior_index
 
 
-def init(cfg: DictConfig, latest_dir: str) -> Tuple[DictConfig, "RunParams"]:
+def init(cfg: DictConfig, latest_dir: str) -> Tuple[DictConfig, "RunParams", DictConfig[GatekeeperConfig]]:
     """
     Process the config, set up some objects etc.
     """
@@ -183,6 +180,15 @@ def init(cfg: DictConfig, latest_dir: str) -> Tuple[DictConfig, "RunParams"]:
     mc_steps = np.arange(warmup_steps, duration, mc_period, dtype=int)
     n_montecarlo = env_cfg['n_montecarlo']
 
+    # Add to gatekeeper config
+    if "gatekeeper" in cfg:
+        OmegaConf.set_struct(cfg, True)
+        with open_dict(cfg):
+            cfg.gatekeeper.n_montecarlo = n_montecarlo
+            cfg.gatekeeper.mc_period = mc_period
+            cfg.gatekeeper.n_controlled = env_cfg['controlled_vehicles']
+            cfg.gatekeeper.mc_horizon = env_cfg['mc_horizon']
+
     # Convert to py-dict so we can record the seed in case this is a random run
     py_cfg = OmegaConf.to_container(cfg, resolve=True)
     py_cfg['seed'] = seed
@@ -198,4 +204,4 @@ def init(cfg: DictConfig, latest_dir: str) -> Tuple[DictConfig, "RunParams"]:
         "n_montecarlo": n_montecarlo,
     }
 
-    return cfg, run_params
+    return cfg, run_params, cfg.gatekeeper

@@ -5,36 +5,33 @@ import subprocess
 
 
 def run_multiagent_sequence():
-    seed = 86
+    seed = 86777
+    script = "ttc.py"
 
     configs = [
+        # {
+        #     "name": "quick-ttc-gk-nc-1",
+        #     "seed": seed,
+        #     "use_mp": True,
+        #     "highway_env.controlled_vehicles": 1,
+        # },
         {
-            "name": "gk-lstar-0p1",
+            "name": "quick-ttc-gk-nc-2",
             "seed": seed,
             "use_mp": True,
-            "gatekeeper.preference_prior.p_star": 0.1,
-            "gatekeeper.preference_prior.l_star": 0.1,
+            "highway_env.controlled_vehicles": 2,
         },
         {
-            "name": "gk-lstar-0p2",
+            "name": "quick-ttc-gk-nc-4",
             "seed": seed,
             "use_mp": True,
-            "gatekeeper.preference_prior.p_star": 0.1,
-            "gatekeeper.preference_prior.l_star": 0.2,
+            "highway_env.controlled_vehicles": 4,
         },
         {
-            "name": "gk-lstar-0p5",
+            "name": "quick-ttc-gk-nc-8",
             "seed": seed,
             "use_mp": True,
-            "gatekeeper.preference_prior.p_star": 0.1,
-            "gatekeeper.preference_prior.l_star": 0.5,
-        },
-        {
-            "name": "gk-lstar-0p9",
-            "seed": seed,
-            "use_mp": True,
-            "gatekeeper.preference_prior.p_star": 0.1,
-            "gatekeeper.preference_prior.l_star": 0.9,
+            "highway_env.controlled_vehicles": 8,
         },
         # {
         #     "name": "pstar-0p9",
@@ -65,7 +62,7 @@ def run_multiagent_sequence():
     for config in configs:
         # Convert the config dict into a string
         cfg_args = " ".join([f"{k}={v}" for k, v in config.items()])
-        command = f"python multiagent.py {cfg_args}"
+        command = f"python {script} {cfg_args}"
         print(f"Running: {command}")
         result = subprocess.run(command, shell=True)
         if result.returncode != 0:
