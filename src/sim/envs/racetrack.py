@@ -497,14 +497,19 @@ class AVRacetrack(RacetrackEnv):
                 "crash_reward": self.crash_reward(self.vehicle),
             }
 
+    def any_crashed(self) -> bool:
+        """
+        Check if any of the vehicles have crashed
+        """
+        return any([v.crashed for v in self.road.vehicles])
+
     def _is_terminated(self) -> bool | Array:
         """The episode is over if the ego vehicle crashed."""
         if not self.multiagent:
-            return (self.vehicle.crashed or
-                    self.config["offroad_terminal"] and not self.vehicle.on_road)
+            return self.vehicle.crashed
 
         return np.array(
-            [v.crashed or self.config["offroad_terminal"] and not v.on_road for v in self.controlled_vehicles],
+            [v.crashed for v in self.controlled_vehicles],
             dtype=int
         )
 

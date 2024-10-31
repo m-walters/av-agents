@@ -109,22 +109,19 @@ def main(cfg: DictConfig):
                     # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
                     action = env.action_space.sample()
                     # action = tuple(np.ones_like(action))
-                    obs, reward, crashed, truncated, info = env.step(action)
+                    obs, reward, controlled_crashed, truncated, info = env.step(action)
 
                     # Record the actuals
                     ds["reward"][i_world, step, :] = reward
-                    ds["crashed"][i_world, step, :] = crashed
+                    ds["crashed"][i_world, step, :] = controlled_crashed
                     ds["defensive_reward"][i_world, step, :] = info["rewards"]["defensive_reward"]
                     ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
 
-                    # Print which, if any, av-IDs have crashed
-                    crashed_ids = np.argwhere(crashed)
-                    if crashed_ids.any():
+                    # We are concerned with any collisions on the map so
+                    if env.any_crashed():
                         # Record the TTC crash and exit
-                        av_ids = np.array(info['av_ids'])
-                        crashed_set = set(av_ids[crashed_ids].flatten())
                         ds["time_to_collision"][i_world] = step
-                        logger.info(f"Crashed vehicles (Step {step}): {crashed_set}. Exiting.")
+                        logger.info(f"Crashed vehicles (Step {step}). Exiting.")
                         break
 
                     if truncated:
@@ -158,14 +155,11 @@ def main(cfg: DictConfig):
                 ds["defensive_reward"][i_world, step, :] = info["rewards"]["defensive_reward"]
                 ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
 
-                # Print which, if any, av-IDs have crashed
-                crashed_ids = np.argwhere(crashed)
-                if crashed_ids.any():
+                # We are concerned with any collisions on the map so
+                if env.any_crashed():
                     # Record the TTC crash and exit
-                    av_ids = np.array(info['av_ids'])
-                    crashed_set = set(av_ids[crashed_ids].flatten())
                     ds["time_to_collision"][i_world] = step
-                    logger.info(f"Crashed vehicles (Step {step}): {crashed_set}. Exiting.")
+                    logger.info(f"Crashed vehicles (Step {step}). Exiting.")
                     break
 
                 if truncated:

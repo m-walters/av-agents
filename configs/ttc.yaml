@@ -29,7 +29,7 @@ highway_env:
   normalize_reward: true
 #==============
 
-name: ttc-gk-nc1-quick
+name: ttc
 seed: 86777
 world_draws: 20
 warmup_steps: 0  # included within the duration

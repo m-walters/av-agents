@@ -172,6 +172,7 @@ def compare_plot():
         truncate=truncate,
     )
 
+
 def baseline_hist():
     """
     Plot the baseline histogram
@@ -186,6 +187,27 @@ def baseline_hist():
         conservative_ds=xr.open_dataset(RESULTS_DIR + "/ttc_conservative_baseline/results.nc"),
     )
 
+
+def ttc_vs_gk():
+    """
+    Time-to-Collision vs Number controlled by GK
+    """
+    title = None
+
+    RESULTS_DIR = "../results/freezer"
+    save_dir = RESULTS_DIR + "/"
+    data = [
+        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-1/results.nc"),
+        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-2/results.nc"),
+        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-4/results.nc"),
+        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-8/results.nc"),
+    ]
+
+    avplot = plotting.AVPlotter()
+    avplot.ttc_vs_num_gk(
+        f"{save_dir}/ttc-vs-gk.png",
+        data
+    )
 
 
 if __name__ == '__main__':

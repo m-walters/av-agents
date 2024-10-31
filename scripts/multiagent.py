@@ -104,16 +104,16 @@ def main(cfg: DictConfig):
                 # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
                 action = env.action_space.sample()
                 # action = tuple(np.ones_like(action))
-                obs, reward, crashed, truncated, info = env.step(action)
+                obs, reward, controlled_crashed, truncated, info = env.step(action)
 
                 # Record the actuals
                 ds["reward"][0, step, :] = reward
-                ds["crashed"][0, step, :] = crashed
+                ds["crashed"][0, step, :] = controlled_crashed
                 ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
                 ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
 
                 # Print which, if any, av-IDs have crashed
-                crashed_ids = np.argwhere(crashed)
+                crashed_ids = np.argwhere(controlled_crashed)
                 if crashed_ids.any():
                     av_ids = np.array(info['av_ids'])
                     crashed_set = set(av_ids[crashed_ids].flatten())
@@ -151,16 +151,16 @@ def main(cfg: DictConfig):
             # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
             action = env.action_space.sample()
             # action = tuple(np.ones_like(action))
-            obs, reward, crashed, truncated, info = env.step(action)
+            obs, reward, controlled_crashed, truncated, info = env.step(action)
 
             # Record the actuals
             ds["reward"][0, step, :] = reward
-            ds["crashed"][0, step, :] = crashed
+            ds["crashed"][0, step, :] = controlled_crashed
             ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
             ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
 
             # Print which, if any, av-IDs have crashed
-            crashed_ids = np.argwhere(crashed)
+            crashed_ids = np.argwhere(controlled_crashed)
             if crashed_ids.any():
                 av_ids = np.array(info['av_ids'])
                 crashed_set = set(av_ids[crashed_ids].flatten())
