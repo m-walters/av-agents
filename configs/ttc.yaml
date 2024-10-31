@@ -2,7 +2,20 @@
 defaults:
   - _self_
 
-# Overrides for the env config
+# Note this can still be overridden with 'name' in the command line
+name: ttc/tmp
+run_dir: ../results/${name}
+
+hydra:
+  run:
+    dir: ${run_dir}
+  # Format the logging so that it overwrites instead of appending
+  job_logging:
+    handlers:
+      file:
+        filename: ${run_dir}/out.log
+        mode: w
+
 # See AVHighway for defaults
 highway_env:
   controlled_vehicles: 1  # Number of ego vehicles
@@ -25,13 +38,12 @@ highway_env:
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: 20
   n_montecarlo: 20
-  duration: 200
+  duration: 10
   normalize_reward: true
 #==============
 
-name: ttc
 seed: 86777
-world_draws: 200
+world_draws: 1
 warmup_steps: 0  # included within the duration
 mc_period: 10   # real-world steps between MC issuances
 
@@ -41,7 +53,7 @@ multiprocessing_cpus: 8
 
 gatekeeper:
   # Time-discounting
-  enable_time_discounting: false
+  enable_time_discounting: true
   gamma: 0.96
   risk_eval_period: 5  # Every nth inner step, eval risk
   # Models

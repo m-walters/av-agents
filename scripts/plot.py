@@ -201,7 +201,7 @@ def ttc_vs_gk():
         xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-1/results.nc"),
         xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-2/results.nc"),
         xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-4/results.nc"),
-        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-8/results.nc"),
+        # xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-8/results.nc"),
     ]
 
     avplot = plotting.AVPlotter()

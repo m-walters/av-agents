@@ -5,6 +5,7 @@ import logging
 import multiprocessing
 import os
 import shutil
+import time
 
 import gymnasium as gym
 import hydra
@@ -12,6 +13,7 @@ import numpy as np
 import pymc as pm
 from omegaconf import DictConfig
 from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 import sim.params as sim_params
 from sim import gatekeeper, recorder, run, utils
@@ -79,7 +81,56 @@ def main(cfg: DictConfig):
     crashed_vehicles = set()
 
     if use_mp:
-        with multiprocessing.Pool(cfg.get('multiprocessing_cpus', 8), maxtasksperchild=100) as pool:
+        with logging_redirect_tqdm():
+            with multiprocessing.Pool(cfg.get('multiprocessing_cpus', 8), maxtasksperchild=100) as pool:
+                for step in tqdm(range(run_params['duration']), desc="Steps"):
+                    # First, record the gatekeeper behavior states
+                    ds["behavior_mode"][0, step, :] = gk_cmd.collect_behaviors()
+
+                    # We'll use the gatekeeper params for montecarlo control
+                    if step >= run_params['warmup_steps']:
+                        if step % gk_cmd.mc_period == 0:
+                            # Returned dimensions are [n_controlled]
+                            results = gk_cmd.run(pool)
+
+                            # Record data
+                            ds["mc_loss"][0, i_mc, :, :] = results["losses"]
+                            ds["loss_mean"][0, i_mc, :] = np.mean(results["losses"], axis=0)
+                            ds["loss_p5"][0, i_mc, :] = np.percentile(results["losses"], 5, axis=0)
+                            ds["loss_p95"][0, i_mc, :] = np.percentile(results["losses"], 95, axis=0)
+                            ds["risk"][0, i_mc, :] = results["risk"]
+                            ds["entropy"][0, i_mc, :] = results["entropy"]
+                            ds["energy"][0, i_mc, :] = results["energy"]
+                            i_mc += 1
+
+                    # We do action after MC sim in case it informs actions
+                    # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
+                    action = env.action_space.sample()
+                    # action = tuple(np.ones_like(action))
+                    obs, reward, controlled_crashed, truncated, info = env.step(action)
+
+                    # Record the actuals
+                    ds["reward"][0, step, :] = reward
+                    ds["crashed"][0, step, :] = controlled_crashed
+                    ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
+                    ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
+
+                    # Print which, if any, av-IDs have crashed
+                    crashed_ids = np.argwhere(controlled_crashed)
+                    if crashed_ids.any():
+                        av_ids = np.array(info['av_ids'])
+                        crashed_set = set(av_ids[crashed_ids].flatten())
+                        if crashed_set - crashed_vehicles:
+                            logger.info(f"Crashed vehicles (Step {step}): {crashed_set}")
+                            crashed_vehicles.update(crashed_set)
+
+                    if truncated:
+                        # Times up
+                        break
+
+    else:
+        # No Multiprocessing
+        with logging_redirect_tqdm():
             for step in tqdm(range(run_params['duration']), desc="Steps"):
                 # First, record the gatekeeper behavior states
                 ds["behavior_mode"][0, step, :] = gk_cmd.collect_behaviors()
@@ -88,7 +139,7 @@ def main(cfg: DictConfig):
                 if step >= run_params['warmup_steps']:
                     if step % gk_cmd.mc_period == 0:
                         # Returned dimensions are [n_controlled]
-                        results = gk_cmd.run(pool)
+                        results = gk_cmd.run(None)
 
                         # Record data
                         ds["mc_loss"][0, i_mc, :, :] = results["losses"]
@@ -124,53 +175,6 @@ def main(cfg: DictConfig):
                 if truncated:
                     # Times up
                     break
-
-    else:
-        # No Multiprocessing
-        for step in tqdm(range(run_params['duration']), desc="Steps"):
-            # First, record the gatekeeper behavior states
-            ds["behavior_mode"][0, step, :] = gk_cmd.collect_behaviors()
-
-            # We'll use the gatekeeper params for montecarlo control
-            if step >= run_params['warmup_steps']:
-                if step % gk_cmd.mc_period == 0:
-                    # Returned dimensions are [n_controlled]
-                    results = gk_cmd.run(None)
-
-                    # Record data
-                    ds["mc_loss"][0, i_mc, :, :] = results["losses"]
-                    ds["loss_mean"][0, i_mc, :] = np.mean(results["losses"], axis=0)
-                    ds["loss_p5"][0, i_mc, :] = np.percentile(results["losses"], 5, axis=0)
-                    ds["loss_p95"][0, i_mc, :] = np.percentile(results["losses"], 95, axis=0)
-                    ds["risk"][0, i_mc, :] = results["risk"]
-                    ds["entropy"][0, i_mc, :] = results["entropy"]
-                    ds["energy"][0, i_mc, :] = results["energy"]
-                    i_mc += 1
-
-            # We do action after MC sim in case it informs actions
-            # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
-            action = env.action_space.sample()
-            # action = tuple(np.ones_like(action))
-            obs, reward, controlled_crashed, truncated, info = env.step(action)
-
-            # Record the actuals
-            ds["reward"][0, step, :] = reward
-            ds["crashed"][0, step, :] = controlled_crashed
-            ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
-            ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
-
-            # Print which, if any, av-IDs have crashed
-            crashed_ids = np.argwhere(controlled_crashed)
-            if crashed_ids.any():
-                av_ids = np.array(info['av_ids'])
-                crashed_set = set(av_ids[crashed_ids].flatten())
-                if crashed_set - crashed_vehicles:
-                    logger.info(f"Crashed vehicles (Step {step}): {crashed_set}")
-                    crashed_vehicles.update(crashed_set)
-
-            if truncated:
-                # Times up
-                break
 
         # Conclude the video
         env.close()

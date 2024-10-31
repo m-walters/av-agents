@@ -10,6 +10,7 @@ from typing import Tuple, TypedDict
 import numpy as np
 import xarray as xr
 from omegaconf import DictConfig, OmegaConf, open_dict
+import hydra
 
 from sim import utils
 from sim.gatekeeper import Behaviors
@@ -48,7 +49,7 @@ def init_results_dataset(
             # Rewards
             "reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             # Record the realized loss
-            "real_loss": (("world", "step", "ego"), np.full((world_draws, duration), np.nan)),
+            "real_loss": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "defensive_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "speed_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
             "crash_reward": (("world", "step"), np.full((world_draws, duration), np.nan)),
@@ -131,7 +132,7 @@ def init_multiagent_results_dataset(
     ), behavior_index
 
 
-def init(cfg: DictConfig, latest_dir: str) -> Tuple[DictConfig, "RunParams", DictConfig[GatekeeperConfig]]:
+def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams", DictConfig[GatekeeperConfig]]:
     """
     Process the config, set up some objects etc.
     """
@@ -157,18 +158,18 @@ def init(cfg: DictConfig, latest_dir: str) -> Tuple[DictConfig, "RunParams", Dic
     np.random.seed(seed)
     random.seed(seed)
 
-    # Results save dir
-    if os.path.exists(latest_dir):
-        # Clear and write over the latest dir
-        for f in os.listdir(latest_dir):
-            file_path = os.path.join(latest_dir, f)
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.unlink(file_path)
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)
-    else:
-        # Create dir
-        os.makedirs(latest_dir)
+    # # Results save dir
+    # if os.path.exists(run_dir):
+    #     # Clear and write over the latest dir
+    #     for f in os.listdir(run_dir):
+    #         file_path = os.path.join(run_dir, f)
+    #         if os.path.isfile(file_path) or os.path.islink(file_path):
+    #             os.unlink(file_path)
+    #         elif os.path.isdir(file_path):
+    #             shutil.rmtree(file_path)
+    # else:
+    #     # Create dir
+    #     os.makedirs(run_dir)
 
     # Create an xarray Dataset
     duration = int(env_cfg.duration)
@@ -192,7 +193,8 @@ def init(cfg: DictConfig, latest_dir: str) -> Tuple[DictConfig, "RunParams", Dic
     # Convert to py-dict so we can record the seed in case this is a random run
     py_cfg = OmegaConf.to_container(cfg, resolve=True)
     py_cfg['seed'] = seed
-    OmegaConf.save(config=py_cfg, f=f"{latest_dir}/config.yaml")
+    # Overwrite the config file
+    OmegaConf.save(config=py_cfg, f=f"{cfg.run_dir}/.hydra/config.yaml")
 
     run_params = {
         "seed": seed,

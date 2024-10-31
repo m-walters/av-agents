@@ -753,13 +753,13 @@ class AVPlotter:
         col_wheel = self.get_color_wheel()
         fig = sns.violinplot(
             data=df, x='num_gk', y='ttc', color=next(col_wheel),
-            cut=0, inner='point',
+            cut=0, inner='box',
             # If inner is 'box'
             # inner_kws=dict(box_width=15, whis_width=2, color=".8")
         )
 
         # Set ylims from 0 to 100 or the max TTC
-        plt.ylim(0, min(100, df['ttc'].max()) + 5)
+        plt.ylim(0, min(200, df['ttc'].max()) + 5)
         plt.ylabel("TTC")
         plt.xlabel("Number of GK-controlled vehicles")
 
