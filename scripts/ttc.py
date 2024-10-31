@@ -118,7 +118,7 @@ def main(cfg: DictConfig):
                     ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
 
                     # We are concerned with any collisions on the map so
-                    if env.any_crashed():
+                    if uenv.any_crashed():
                         # Record the TTC crash and exit
                         ds["time_to_collision"][i_world] = step
                         logger.info(f"Crashed vehicles (Step {step}). Exiting.")
@@ -156,7 +156,7 @@ def main(cfg: DictConfig):
                 ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
 
                 # We are concerned with any collisions on the map so
-                if env.any_crashed():
+                if uenv.any_crashed():
                     # Record the TTC crash and exit
                     ds["time_to_collision"][i_world] = step
                     logger.info(f"Crashed vehicles (Step {step}). Exiting.")

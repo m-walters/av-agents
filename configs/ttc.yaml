@@ -25,19 +25,19 @@ highway_env:
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: 20
   n_montecarlo: 20
-  duration: 100
+  duration: 200
   normalize_reward: true
 #==============
 
 name: ttc
 seed: 86777
-world_draws: 20
+world_draws: 200
 warmup_steps: 0  # included within the duration
-mc_period: &mc_period 10   # real-world steps between MC issuances
+mc_period: 10   # real-world steps between MC issuances
 
 # Multiprocessing configs
 use_mp: true
-multiprocessing_cpus: 12
+multiprocessing_cpus: 8
 
 gatekeeper:
   # Time-discounting

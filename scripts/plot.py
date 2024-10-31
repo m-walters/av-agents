@@ -51,7 +51,7 @@ def multiagent_plot():
     # Create the video with the saved frames and data
     # Load the data
     RESULTS_DIR = "../results"
-    run_dir = RESULTS_DIR + "/multiagent"
+    run_dir = RESULTS_DIR + "/freezer/quick-ttc-gk-nc-8"
 
     dataset = xr.open_dataset(f"{run_dir}/results.nc")
 
@@ -78,8 +78,9 @@ def multiagent_plot():
 def gatekeep_compare():
     # Gatekeep comparing
     RESULTS_DIR = "../results"
-    no_gk_dir = RESULTS_DIR + "/freezer/multiagent"
-    gk_dir = RESULTS_DIR + "/freezer/multiagent_gk"
+    save_dir = RESULTS_DIR + "/freezer/quick-ttc-gk-nc-8"
+    no_gk_dir = RESULTS_DIR + "/freezer/quick-ttc-gk-nc-8"
+    gk_dir = RESULTS_DIR + "/freezer/quick-ttc-gk-nc-8"
 
     data_tups = [
         (xr.open_dataset(no_gk_dir + "/results.nc"), "No GK"),
@@ -110,7 +111,7 @@ def gatekeep_compare():
 
     avplot = plotting.AVPlotter()
     avplot.multiagent_comparison_plot(
-        f"{gk_dir}/gatekeep_compare.png",
+        f"{save_dir}/gatekeep_compare.png",
         data_tups,
         metric_label_map,
         axes_layout=axes_layout,

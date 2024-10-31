@@ -15,23 +15,29 @@ def run_multiagent_sequence():
         #     "use_mp": True,
         #     "highway_env.controlled_vehicles": 1,
         # },
-        {
-            "name": "quick-ttc-gk-nc-2",
-            "seed": seed,
-            "use_mp": True,
-            "highway_env.controlled_vehicles": 2,
-        },
-        {
-            "name": "quick-ttc-gk-nc-4",
-            "seed": seed,
-            "use_mp": True,
-            "highway_env.controlled_vehicles": 4,
-        },
+        # {
+        #     "name": "quick-ttc-gk-nc-2",
+        #     "seed": seed,
+        #     "use_mp": True,
+        #     "highway_env.controlled_vehicles": 2,
+        # },
+        # {
+        #     "name": "quick-ttc-gk-nc-4",
+        #     "seed": seed,
+        #     "use_mp": True,
+        #     "highway_env.controlled_vehicles": 4,
+        # },
         {
             "name": "quick-ttc-gk-nc-8",
             "seed": seed,
             "use_mp": True,
             "highway_env.controlled_vehicles": 8,
+        },
+        {
+            "name": "quick-ttc-gk-nc-16",
+            "seed": seed,
+            "use_mp": True,
+            "highway_env.controlled_vehicles": 16,
         },
         # {
         #     "name": "pstar-0p9",
