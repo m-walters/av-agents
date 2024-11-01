@@ -449,11 +449,12 @@ class AVHighway(HighwayEnv):
 
         return reward
 
-    def any_crashed(self) -> bool:
+    @property
+    def crashed(self) -> list:
         """
-        Check if any of the vehicles have crashed
+        Return crashed vehicles
         """
-        return any([v.crashed or self.config["offroad_terminal"] and not v.on_road for v in self.road.vehicles])
+        return [v for v in self.road.vehicles if v.crashed]
 
     def _is_terminated(self) -> bool | Array:
         """The episode is over if the ego vehicle crashed."""

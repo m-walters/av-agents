@@ -78,6 +78,9 @@ def main(cfg: DictConfig):
     chkpt_time = time.time()
     world_loop_times = []
 
+    # We track a single controlled vehicle for crash so that we can compare its TTC across runs
+    crash_tagged_id = uenv.controlled_vehicles[0].av_id
+
     # If mc_steps is empty, this is a baseline run for collision testing
     # So we don't need to do multiprocessing
     if run_params['mc_steps'].size > 0:
@@ -130,11 +133,16 @@ def main(cfg: DictConfig):
                         ds["defensive_reward"][i_world, step, :] = info["rewards"]["defensive_reward"]
                         ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
 
-                        # We are concerned with any collisions on the map so
-                        if uenv.any_crashed():
-                            # Record the TTC crash and exit
+                        # Check if our target vehicle crashed
+                        if crash_tagged_id in [v.av_id for v in uenv.crashed]:
+                            # Record the step which saw the first vehicle collision
                             ds["time_to_collision"][i_world] = step
-                            logger.info(f"Crashed vehicles (Step {step}). Exiting.")
+                            logger.info(f"Target vehicle crash (Step {step}). Exiting.")
+                            break
+
+                        if len(uenv.crashed) >= 6:
+                            # That's tooooo many -- probably a jam
+                            logger.info(f"Jam occurred (Step {step}). Exiting.")
                             break
 
                         if truncated:
@@ -177,11 +185,16 @@ def main(cfg: DictConfig):
                     ds["defensive_reward"][i_world, step, :] = info["rewards"]["defensive_reward"]
                     ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
 
-                    # We are concerned with any collisions on the map so
-                    if uenv.any_crashed():
-                        # Record the TTC crash and exit
+                    # Check if our target vehicle crashed
+                    if crash_tagged_id in [v.av_id for v in uenv.crashed]:
+                        # Record the step which saw the first vehicle collision
                         ds["time_to_collision"][i_world] = step
-                        logger.info(f"Crashed vehicles (Step {step}). Exiting.")
+                        logger.info(f"Target vehicle crash (Step {step}). Exiting.")
+                        break
+
+                    if len(uenv.crashed) >= 6:
+                        # That's tooooo many -- probably a jam
+                        logger.info(f"Jam occurred (Step {step}). Exiting.")
                         break
 
                     if truncated:

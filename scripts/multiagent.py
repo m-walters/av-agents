@@ -22,9 +22,6 @@ from sim.envs.highway import AVHighway
 # Name of file in configs, set this to your liking
 DEFAULT_CONFIG = "multiagent"
 
-RESULTS_DIR = "../results"
-LATEST_DIR = f"{RESULTS_DIR}/latest"
-
 logger = logging.getLogger("av-sim")
 
 
@@ -33,7 +30,9 @@ def main(cfg: DictConfig):
     """
     Set the parameters and run the sim
     """
-    cfg, run_params, gk_cfg = run.init(cfg, LATEST_DIR)
+    cfg, run_params, gk_cfg = run.init(cfg)
+    run_dir = cfg.run_dir
+
     if run_params['world_draws'] > 1:
         raise ValueError("world_draws > 1 not configured for multiagent")
 
@@ -60,7 +59,7 @@ def main(cfg: DictConfig):
         env = gym.make('AVAgents/racetrack-v0', render_mode=render_mode)
     else:
         render_mode = 'rgb_array'
-        video_dir = f"{LATEST_DIR}/recordings"
+        video_dir = f"{run_dir}/recordings"
         video_prefix = "sim"
         env = recorder.AVRecorder(
             gym.make('AVAgents/racetrack-v0', render_mode=render_mode), video_dir, name_prefix=video_prefix
@@ -79,6 +78,16 @@ def main(cfg: DictConfig):
     obs, info = env.reset(seed=rkey.next_seed())
     i_mc = 0  # Tracking MC steps
     crashed_vehicles = set()
+
+    def checkpoint_dataset(msg: str = None):
+        """
+        Save the dataset to disk
+        """
+        if msg:
+            logger.info(msg)
+        utils.Results.save_ds(ds, f"{run_dir}/results.nc")
+        # Save behavior index
+        utils.Results.save_json(behavior_index, f"{run_dir}/behavior_index.json")
 
     if use_mp:
         with logging_redirect_tqdm():
@@ -123,6 +132,12 @@ def main(cfg: DictConfig):
                         if crashed_set - crashed_vehicles:
                             logger.info(f"Crashed vehicles (Step {step}): {crashed_set}")
                             crashed_vehicles.update(crashed_set)
+
+                    if len(uenv.crashed) >= 6:
+                        # That's tooooo many -- probably a jam
+                        # ds["time_to_collision"][i_world] = step
+                        logger.info(f"Jam occurred (Step {step}). Exiting.")
+                        break
 
                     if truncated:
                         # Times up
@@ -169,8 +184,14 @@ def main(cfg: DictConfig):
                     av_ids = np.array(info['av_ids'])
                     crashed_set = set(av_ids[crashed_ids].flatten())
                     if crashed_set - crashed_vehicles:
-                        logger.info(f"Crashed vehicles (Step {step}): {crashed_set}")
+                        logger.info(f"Crashed Control Vehicles (Step {step}): {crashed_set}")
                         crashed_vehicles.update(crashed_set)
+
+                if len(uenv.crashed) >= 6:
+                    # That's tooooo many -- probably a jam
+                    # ds["time_to_collision"][i_world] = step
+                    logger.info(f"Jam occurred (Step {step}). Exiting.")
+                    break
 
                 if truncated:
                     # Times up
@@ -181,26 +202,14 @@ def main(cfg: DictConfig):
 
         if isinstance(env, recorder.AVRecorder):
             # Save frames
-            np.save(f"{LATEST_DIR}/frames.npy", env.video_recorder.recorded_frames)
+            np.save(f"{run_dir}/frames.npy", env.video_recorder.recorded_frames)
 
     # Append an extra data array "real_loss" to our dataset that is the negative of reward
     # Reward is normalized to [0,1]
     ds["real_loss"] = 1 - ds["reward"]
 
     # Automatically save latest
-    logger.info("Saving results")
-    utils.Results.save_ds(ds, f"{LATEST_DIR}/results.nc")
-    # Save behavior index
-    utils.Results.save_json(behavior_index, f"{LATEST_DIR}/behavior_index.json")
-
-    # If a name is provided, copy results over
-    if "name" in cfg:
-        save_dir: str = cfg.get("save_dir", RESULTS_DIR)
-        run_dir: str = os.path.join(save_dir, cfg.name)
-        logger.info(f"Copying run results to {run_dir}")
-        if os.path.exists(run_dir):
-            shutil.rmtree(run_dir)
-        shutil.copytree(LATEST_DIR, run_dir)
+    checkpoint_dataset("Saving final results")
 
 
 if __name__ == '__main__':

@@ -2,16 +2,29 @@
 defaults:
   - _self_
 
-# Overrides for the env config
+# Note this can still be overridden with 'name' in the command line
+name: multi/tmp
+run_dir: ../results/${name}
+
+hydra:
+  run:
+    dir: ${run_dir}
+  # Format the logging so that it overwrites instead of appending
+  job_logging:
+    handlers:
+      file:
+        filename: ${run_dir}/out.log
+        mode: w
+
 # See AVHighway for defaults
 highway_env:
-  controlled_vehicles: &n_controlled 8  # Number of ego vehicles
+  controlled_vehicles: 1  # Number of ego vehicles
   control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
   other_vehicles_type: "sim.vehicles.highway.AlterIDMVehicle"
   vehicles_count: 24  # Number of alters
   vehicles_density: 2
   reward_speed: 30
-  speed_limit: 20
+  speed_limit: 30
   action:
     type: "MultiAgentAction"
     action_config:
@@ -23,37 +36,34 @@ highway_env:
     observation_config:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
-  mc_horizon: &mc_horizon 20
-  n_montecarlo: &n_montecarlo 100
+  mc_horizon: 20
+  n_montecarlo: 20
   duration: 200
-  normalize_reward: true  # Setting to false is not recommended
+  normalize_reward: true
 #==============
-name: multiagent
+
 seed: 86777
 world_draws: 1
-warmup_steps: 0  # included within the duration
-mc_period: &mc_period 2   # real-world steps between MC issuances
+warmup_steps: 10  # included within the duration
+mc_period: 10   # real-world steps between MC issuances
 
 # Multiprocessing configs
-use_mp: true
-multiprocessing_cpus: 16
+use_mp: false
+multiprocessing_cpus: 8
 
 gatekeeper:
-  n_controlled: *n_controlled
-  mc_period: *mc_period
-  # Montecarlo params
-  mc_horizon: *mc_horizon
-  n_montecarlo: *n_montecarlo
+  # Time-discounting
+  enable_time_discounting: true
+  gamma: 0.96
+  risk_eval_period: 5  # Every nth inner step, eval risk
   # Models
   preference_prior:
     model: "ExponentialPreferencePrior"
     p_star: 0.1
-    l_star: 0.9
+    l_star: 0.2
   risk_model:
     model: "NullEntropyRiskModel"
   behavior_cfg:
     enable: true
-#    nominal_risk_threshold: 3.0
-#    conservative_risk_threshold: 2.0
     nominal_class: "sim.vehicles.highway.AggressiveParams"
     conservative_class: "sim.vehicles.highway.ConservativeParams"

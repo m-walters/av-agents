@@ -121,6 +121,13 @@ class AVRacetrack(RacetrackEnv):
         """
         return np.mean([v.speed for v in self.road.vehicles])
 
+    @property
+    def crashed(self) -> list:
+        """
+        Return crashed vehicles
+        """
+        return [v for v in self.road.vehicles if v.crashed]
+
     def _reset(self) -> None:
         """
         Init road and vehicles
@@ -496,12 +503,6 @@ class AVRacetrack(RacetrackEnv):
                 "speed_reward": self.speed_reward(self.vehicle),
                 "crash_reward": self.crash_reward(self.vehicle),
             }
-
-    def any_crashed(self) -> bool:
-        """
-        Check if any of the vehicles have crashed
-        """
-        return any([v.crashed for v in self.road.vehicles])
 
     def _is_terminated(self) -> bool | Array:
         """The episode is over if the ego vehicle crashed."""

@@ -18,13 +18,13 @@ hydra:
 
 # See AVHighway for defaults
 highway_env:
-  controlled_vehicles: 1  # Number of ego vehicles
+  controlled_vehicles: 8  # Number of ego vehicles
   control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
   other_vehicles_type: "sim.vehicles.highway.AlterIDMVehicle"
   vehicles_count: 24  # Number of alters
   vehicles_density: 2
-  reward_speed: 40
-  speed_limit: 40
+  reward_speed: 30
+  speed_limit: 30
   action:
     type: "MultiAgentAction"
     action_config:
@@ -38,18 +38,18 @@ highway_env:
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: 20
   n_montecarlo: 20
-  duration: 10
+  duration: 200
   normalize_reward: true
 #==============
 
 seed: 86777
-world_draws: 1
+world_draws: 200
 warmup_steps: 0  # included within the duration
 mc_period: 10   # real-world steps between MC issuances
 
 # Multiprocessing configs
 use_mp: true
-multiprocessing_cpus: 8
+multiprocessing_cpus: 16
 
 gatekeeper:
   # Time-discounting
