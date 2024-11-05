@@ -125,13 +125,13 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results/freezer/seeds/seed-86777"
-    save_dir = RESULTS_DIR + "/"
+    RESULTS_DIR = "../results/manuscript/av-8"
+    save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
+
     data_tups = [
-        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p1/results.nc"), r'$L^*=0.1$'),
-        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p2/results.nc"), r'$L^*=0.2$'),
-        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p5/results.nc"), r'$L^*=0.5$'),
-        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p9/results.nc"), r'$L^*=0.9$'),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'nom/results.nc')), "Nominal"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'def/results.nc')), "Defensive"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'hotshot/results.nc')), "Hotshot"),
     ]
 
     truncate = None
@@ -142,35 +142,47 @@ def compare_plot():
     #     (xr.open_dataset(RESULTS_DIR + "/tmp/results.nc"), r'$\beta = 1$'),
     # ]
 
+    # labels = [
+    #     "R_Def",
+    #     "R_Spd",
+    #     "Actual Loss",
+    #     "E[Loss]",
+    #     "E[Energy]",
+    #     "E[Entropy]",
+    #     "Risk",
+    #     "Crashed",
+    #     "Number in Conservative",
+    # ]
+    # # 4 rows, 2 columns
+    # axes_layout = [
+    #     ["R_Def", "Actual Loss"],
+    #     ["R_Spd", "E[Loss]"],
+    #     ["E[Energy]", "Risk"],
+    #     ["E[Entropy]", "Crashed"],
+    #     [None, "Number in Conservative"],
+    # ]
+
     labels = [
         "R_Def",
         "R_Spd",
         "Actual Loss",
-        "E[Loss]",
-        "E[Energy]",
-        "E[Entropy]",
-        "Risk",
-        "Crashed",
-        "Number in Conservative",
+        # "Crashed",
     ]
-    metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
-
     # 4 rows, 2 columns
     axes_layout = [
         ["R_Def", "Actual Loss"],
-        ["R_Spd", "E[Loss]"],
-        ["E[Energy]", "Risk"],
-        ["E[Entropy]", "Crashed"],
-        [None, "Number in Conservative"],
+        ["R_Spd", None],
     ]
+    metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
 
     avplot = plotting.AVPlotter()
-    avplot.multiagent_comparison_plot(
-        f"{save_dir}/temp_compare.png",
+    avplot.comparison_plot(
+        save_path,
         data_tups,
         metric_label_map,
         axes_layout=axes_layout,
         truncate=truncate,
+        title=title,
     )
 
 
@@ -192,22 +204,30 @@ def ttc_baseline_hist():
 
 
 def ttc_spec_plot():
+
     SPEC_BEHAVIORS = {
         "nom": "sim.vehicles.highway.NominalParams",
-        "cons": "sim.vehicles.highway.ConservativeParams",
+        # "cons": "sim.vehicles.highway.ConservativeParams",
+        "def": "sim.vehicles.highway.DefensiveParams",
         "hotshot": "sim.vehicles.highway.HotshotParams",
-        "polite-incr": "sim.vehicles.highway.PoliteIncr",
-        "polite-decr": "sim.vehicles.highway.PoliteDecr",
-        "timedist-incr": "sim.vehicles.highway.TimeDistWantedIncr",
-        "timedist-decr": "sim.vehicles.highway.TimeDistWantedDecr",
-        "acc-max-incr": "sim.vehicles.highway.AccMaxIncr",
-        "acc-max-decr": "sim.vehicles.highway.AccMaxDecr",
-        "comf-brake-incr": "sim.vehicles.highway.ComfBrakingIncr",
-        "comf-brake-decr": "sim.vehicles.highway.ComfBrakingDecr",
+        # "polite-incr": "sim.vehicles.highway.PolitenessIncr",
+        # "polite-decr": "sim.vehicles.highway.PolitenessDecr",
+        # "timedist-incr": "sim.vehicles.highway.TimeDistWantedIncr",
+        # "timedist-decr": "sim.vehicles.highway.TimeDistWantedDecr",
+        # "acc-max-incr": "sim.vehicles.highway.AccMaxIncr",
+        # "acc-max-decr": "sim.vehicles.highway.AccMaxDecr",
+        # "comf-brake-incr": "sim.vehicles.highway.ComfBrakingIncr",
+        # "comf-brake-decr": "sim.vehicles.highway.ComfBrakingDecr",
+        # "reckmax1": "sim.vehicles.highway.ReckMax1",
+        # "reckmax2": "sim.vehicles.highway.ReckMax2",
+        # "reckmax3": "sim.vehicles.highway.ReckMax3",
+        # "def-HE": "sim.vehicles.highway.DefensiveHE",
+        # "def-1": "sim.vehicles.highway.Defensive1",
+        # "def-2": "sim.vehicles.highway.Defensive2",
     }
 
     RESULTS_DIR = "../results"
-    run_dir = os.path.join(RESULTS_DIR, "bigsweep/av-8")
+    run_dir = os.path.join(RESULTS_DIR, "manuscript/av-8")
     save_path = os.path.join(run_dir, "ttc-baseline-hist.png")
 
     avplot = plotting.AVPlotter()

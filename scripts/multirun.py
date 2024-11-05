@@ -6,29 +6,36 @@ import os
 
 
 SPEC_BEHAVIORS = {
-    # "nom": "sim.vehicles.highway.NominalParams",
+    "nom": "sim.vehicles.highway.NominalParams",
     # "cons": "sim.vehicles.highway.ConservativeParams",
-    # "hotshot": "sim.vehicles.highway.HotshotParams",
-    "polite-incr": "sim.vehicles.highway.PolitenessIncr",
-    "polite-decr": "sim.vehicles.highway.PolitenessDecr",
-    "timedist-incr": "sim.vehicles.highway.TimeDistWantedIncr",
-    "timedist-decr": "sim.vehicles.highway.TimeDistWantedDecr",
-    "acc-max-incr": "sim.vehicles.highway.AccMaxIncr",
-    "acc-max-decr": "sim.vehicles.highway.AccMaxDecr",
-    "comf-brake-incr": "sim.vehicles.highway.ComfBrakingIncr",
-    "comf-brake-decr": "sim.vehicles.highway.ComfBrakingDecr",
+    "def": "sim.vehicles.highway.DefensiveParams",
+    "hotshot": "sim.vehicles.highway.HotshotParams",
+    # "polite-incr": "sim.vehicles.highway.PolitenessIncr",
+    # "polite-decr": "sim.vehicles.highway.PolitenessDecr",
+    # "timedist-incr": "sim.vehicles.highway.TimeDistWantedIncr",
+    # "timedist-decr": "sim.vehicles.highway.TimeDistWantedDecr",
+    # "acc-max-incr": "sim.vehicles.highway.AccMaxIncr",
+    # "acc-max-decr": "sim.vehicles.highway.AccMaxDecr",
+    # "comf-brake-incr": "sim.vehicles.highway.ComfBrakingIncr",
+    # "comf-brake-decr": "sim.vehicles.highway.ComfBrakingDecr",
+    # "reckmax1": "sim.vehicles.highway.ReckMax1",
+    # "reckmax2": "sim.vehicles.highway.ReckMax2",
+    # "reckmax3": "sim.vehicles.highway.ReckMax3",
+    # "def-HE": "sim.vehicles.highway.DefensiveHE",
+    # "def-1": "sim.vehicles.highway.Defensive1",
+    # "def-2": "sim.vehicles.highway.Defensive2",
 }
 
 def run_multiagent_sequence():
     seed = 86777
     script = "ttc.py"
 
-    num_cpus = 8
-    duration = 100
-    world_draws = 300
+    num_cpus = 12
+    duration = 200
+    world_draws = 400
     warmup = 1e5
     env_type = "racetrack-v0"
-    run_dir = "bigsweep/av-8"
+    run_dir = "manuscript/av-8"
     any_control_collision = "true"
 
     configs = [

@@ -3,7 +3,7 @@ defaults:
   - _self_
 
 # Note this can still be overridden with 'name' in the command line
-name: ttc/tmp
+name: tmp/ttc
 run_dir: ../results/${name}
 
 hydra:
@@ -47,7 +47,7 @@ highway_env:
 #==============
 
 seed: 867
-world_draws: 1
+world_draws: 100
 warmup_steps: 1000  # included within the duration
 mc_period: 5   # real-world steps between MC issuances
 

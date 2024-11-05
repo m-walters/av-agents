@@ -103,7 +103,7 @@ def init_multiagent_results_dataset(
             "speed_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "crashed": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             # Record the step which saw the first vehicle collision
-            "time_to_collision": (("world",), np.full((world_draws,), np.inf)),
+            "time_to_collision": (("world",), np.full((world_draws,), np.nan)),
             # For gatekeeper analysis
             # 0 for nominal, 1 for conservative, etc...
             "behavior_mode": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),

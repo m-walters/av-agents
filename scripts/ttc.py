@@ -4,6 +4,7 @@ Multiagent Gatekeeper simulation for a Time-To-Collision mode
 import logging
 import multiprocessing
 import time
+import warnings
 
 import gymnasium as gym
 import hydra
@@ -22,6 +23,8 @@ DEFAULT_CONFIG = "ttc"
 
 logger = logging.getLogger("av-sim")
 
+# Suppress specific warnings around our Env method overrides.
+warnings.filterwarnings("ignore", category=UserWarning, module=r"gymnasium\.utils\.passive_env_checker")
 
 def non_mc_worldsim(world_idx: int, world_seed: int, env: AVRacetrack, any_control_collision: bool) -> tuple[int, dict]:
     """
@@ -35,13 +38,13 @@ def non_mc_worldsim(world_idx: int, world_seed: int, env: AVRacetrack, any_contr
     duration, n_controlled = uenv.config['duration'], uenv.config['controlled_vehicles']
 
     result = {
-        "losses": np.zeros((duration, n_controlled)),
-        "reward": np.zeros((duration, n_controlled)),
-        "real_loss": np.zeros((duration, n_controlled)),
-        "crashed": np.zeros((duration, n_controlled)),
-        "defensive_reward": np.zeros((duration, n_controlled)),
-        "speed_reward": np.zeros((duration, n_controlled)),
-        "time_to_collision": np.inf,  # Or int if found later
+        "losses": np.full((duration, n_controlled), np.nan),
+        "reward": np.full((duration, n_controlled), np.nan),
+        "real_loss": np.full((duration, n_controlled), np.nan),
+        "crashed": np.full((duration, n_controlled), np.nan),
+        "defensive_reward": np.full((duration, n_controlled), np.nan),
+        "speed_reward": np.full((duration, n_controlled), np.nan),
+        "time_to_collision": np.nan,  # Or int if found later
     }
 
     for step in range(duration):

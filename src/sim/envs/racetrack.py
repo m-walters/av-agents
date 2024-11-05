@@ -299,7 +299,7 @@ class AVRacetrack(RacetrackEnv):
 
         logger.debug(f"Created {len(self.road.vehicles)} vehicles")
 
-    def step(self, action: Action) -> Tuple[Observation, float, bool | Array, bool, dict]:
+    def step(self, action: Action) -> Tuple[Observation, float, Array, bool, dict]:
         """
         Perform an action and step the environment dynamics.
 
