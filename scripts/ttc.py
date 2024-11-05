@@ -3,7 +3,6 @@ Multiagent Gatekeeper simulation for a Time-To-Collision mode
 """
 import logging
 import multiprocessing
-import os
 import time
 
 import gymnasium as gym
@@ -24,6 +23,67 @@ DEFAULT_CONFIG = "ttc"
 logger = logging.getLogger("av-sim")
 
 
+def non_mc_worldsim(world_idx: int, world_seed: int, env: AVRacetrack, any_control_collision: bool) -> tuple[int, dict]:
+    """
+    Run a single world simulation without MC
+    """
+    # Seed world
+    obs, info = env.reset(seed=world_seed)
+    uenv: "AVRacetrack" = env.unwrapped
+    crash_tagged_id = uenv.controlled_vehicles[0].av_id
+
+    duration, n_controlled = uenv.config['duration'], uenv.config['controlled_vehicles']
+
+    result = {
+        "losses": np.zeros((duration, n_controlled)),
+        "reward": np.zeros((duration, n_controlled)),
+        "real_loss": np.zeros((duration, n_controlled)),
+        "crashed": np.zeros((duration, n_controlled)),
+        "defensive_reward": np.zeros((duration, n_controlled)),
+        "speed_reward": np.zeros((duration, n_controlled)),
+        "time_to_collision": np.inf,  # Or int if found later
+    }
+
+    for step in range(duration):
+        # We do action after MC sim in case it informs actions
+        # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
+        action = env.action_space.sample()
+        # action = tuple(np.ones_like(action))
+        obs, reward, crashed, truncated, info = env.step(action)
+
+        # Record the actuals
+        result["reward"][step, :] = reward
+        # Reward is normalized to [0,1]
+        result["real_loss"][step, :] = 1 - reward
+        result["crashed"][step, :] = crashed
+        result["defensive_reward"][step, :] = info["rewards"]["defensive_reward"]
+        result["speed_reward"][step, :] = info["rewards"]["speed_reward"]
+
+        # Check if any of control vehicle crashed
+        if any_control_collision and any(crashed):
+            # if crash_tagged_id in [v.av_id for v in uenv.crashed]:
+            # Record the step which saw the first vehicle collision
+            result["time_to_collision"] = step
+            logger.info(f"Control vehicle collision (Step {step}): {crashed}\nExiting.")
+            break
+        elif not any_control_collision and uenv.controlled_vehicles[0].crashed:
+            # We are tracking the first controlled vehicle and it crashed
+            result["time_to_collision"] = step
+            logger.info(f"Control vehicle collision (Step {step}): {crashed}\nExiting.")
+            break
+
+        if len(uenv.crashed) >= 6:
+            # That's tooooo many -- probably a jam
+            logger.info(f"Jam occurred (Step {step}). Exiting.")
+            break
+
+        if truncated:
+            # Times up
+            break
+
+    return world_idx, result
+
+
 @hydra.main(version_base=None, config_path="../configs", config_name=DEFAULT_CONFIG)
 def main(cfg: DictConfig):
     """
@@ -39,9 +99,6 @@ def main(cfg: DictConfig):
     seed = run_params['seed']
     world_draws = run_params['world_draws']
     env_cfg = cfg.highway_env
-    use_mp = cfg.get('use_mp', False)
-    if not use_mp:
-        raise ValueError("Time-To-Collision simulation only configured for multiprocessing")
 
     # Initiate the pymc model and load the parameters
     params = []
@@ -54,7 +111,8 @@ def main(cfg: DictConfig):
 
     # Create our gym Env
     render_mode = None  # No visuals because of multiprocessing
-    env = gym.make('AVAgents/racetrack-v0', render_mode=render_mode)
+    env = gym.make(f"AVAgents/{cfg.get('env_type', 'racetrack-v0')}", render_mode=render_mode)
+
     uenv: "AVRacetrack" = env.unwrapped
     uenv.update_config(env_cfg, reset=True)
 
@@ -74,7 +132,6 @@ def main(cfg: DictConfig):
         utils.Results.save_json(behavior_index, f"{run_dir}/behavior_index.json")
 
     t_last = time.time()
-    checkpoint_interval = 1 * 30  # 5 minutes
     chkpt_time = time.time()
     world_loop_times = []
 
@@ -149,70 +206,53 @@ def main(cfg: DictConfig):
                             # Times up
                             break
 
+                    # Checkpoint world draws
+                    if i_world + 1 < world_draws:
+                        checkpoint_dataset(f"Checkpointing World {i_world}")
+
                     t_lap = time.time()
                     world_loop_times.append(t_lap - t_last)
-                    chkpt_time += t_lap - t_last
-                    if chkpt_time > checkpoint_interval:
-                        checkpoint_dataset(f"Checkpointing World {i_world}")
-                        chkpt_time = 0
+                    # chkpt_time += t_lap - t_last
+                    # if chkpt_time > checkpoint_interval:
+                    #     chkpt_time = 0
 
                     logger.info(f"World Loop: {t_lap - t_last:.2f}s (Avg: {np.mean(world_loop_times):.2f}s)")
                     t_last = t_lap
 
-
     else:
         # No Gatekeeper MC
-        i_world = -1
+        # We are instead going to using the multiprocess pooling across the world draws, since no MC
+        num_cpu = cfg.get('multiprocessing_cpus', 1)
+        # with logging_redirect_tqdm():
         with logging_redirect_tqdm():
-            for w_seed in tqdm(world_seeds, desc="Worlds"):
-                i_world += 1
-                # Seed world
-                obs, info = env.reset(seed=w_seed)
-                uenv: "AVRacetrack" = env.unwrapped
+            with multiprocessing.Pool(num_cpu, maxtasksperchild=10) as pool:
+                for i_world in tqdm(range(0, world_draws, num_cpu), desc="Worlds", unit_scale=num_cpu):
+                    # Chunk the worlds by number of processes
+                    end_world = min(i_world + num_cpu, world_draws)
+                    pool_args = [
+                        (
+                            world_idx,
+                            world_seeds[world_idx],
+                            env,
+                            cfg.get("any_control_collision", True)
+                        ) for world_idx in range(i_world, end_world)
+                    ]
 
-                for step in tqdm(range(run_params['duration']), desc="Steps", leave=False):
-                    # We do action after MC sim in case it informs actions
-                    # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
-                    action = env.action_space.sample()
-                    # action = tuple(np.ones_like(action))
-                    obs, reward, crashed, truncated, info = env.step(action)
+                    results = pool.starmap(
+                        non_mc_worldsim,
+                        pool_args,
+                    )
 
-                    # Record the actuals
-                    ds["reward"][i_world, step, :] = reward
-                    # Reward is normalized to [0,1]
-                    ds["real_loss"][i_world, step, :] = 1 - reward
-                    ds["crashed"][i_world, step, :] = crashed
-                    ds["defensive_reward"][i_world, step, :] = info["rewards"]["defensive_reward"]
-                    ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
+                    for world_idx, result_dict in results:
+                        ds["reward"][world_idx, :, :] = result_dict["reward"]
+                        ds["real_loss"][world_idx, :, :] = result_dict["real_loss"]
+                        ds["crashed"][world_idx, :, :] = result_dict["crashed"]
+                        ds["defensive_reward"][world_idx, :, :] = result_dict["defensive_reward"]
+                        ds["speed_reward"][world_idx, :, :] = result_dict["speed_reward"]
+                        ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
 
-                    # Check if our target vehicle crashed
-                    if crash_tagged_id in [v.av_id for v in uenv.crashed]:
-                        # Record the step which saw the first vehicle collision
-                        ds["time_to_collision"][i_world] = step
-                        logger.info(f"Target vehicle crash (Step {step}). Exiting.")
-                        break
-
-                    if len(uenv.crashed) >= 6:
-                        # That's tooooo many -- probably a jam
-                        logger.info(f"Jam occurred (Step {step}). Exiting.")
-                        break
-
-                    if truncated:
-                        # Times up
-                        break
-
-                t_lap = time.time()
-                world_loop_times.append(t_lap - t_last)
-                chkpt_time += t_lap - t_last
-                if chkpt_time > checkpoint_interval:
-                    checkpoint_dataset(f"Checkpointing World {i_world}")
-                    chkpt_time = 0
-
-                logger.info(f"World Loop: {t_lap - t_last:.2f}s (Avg: {np.mean(world_loop_times):.2f}s)")
-                t_last = t_lap
-
-    # Automatically save latest
-    checkpoint_dataset("Saving final results")
+            # Automatically save latest
+            checkpoint_dataset("Saving final results")
 
 
 if __name__ == '__main__':

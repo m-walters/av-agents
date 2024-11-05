@@ -3,6 +3,7 @@ from highway_env.envs.racetrack_env import RacetrackEnv
 from highway_env.road.lane import CircularLane, LineType, StraightLane
 from highway_env.road.road import Road, RoadNetwork
 
+from sim.road import AVRoad
 
 def racetrack_road1(racetrack: "RacetrackEnv") -> Road:
 
@@ -445,7 +446,348 @@ def racetrack_road1(racetrack: "RacetrackEnv") -> Road:
         ),
     )
 
-    return Road(
+    return AVRoad(
+        network=net,
+        np_random=racetrack.np_random,
+        record_history=racetrack.config["show_trajectories"],
+    )
+
+
+def big_ring(racetrack: "RacetrackEnv") -> Road:
+    """
+    Three lanes in a big ring
+    """
+
+    net = RoadNetwork()
+    w = 5
+    default_speedlimit = racetrack.config['speed_limit']
+
+    # Initialise First Lane
+    center = [0, 0]
+    radius = 40
+    chunk = 180
+    th1, th2 = np.deg2rad(1), np.deg2rad(chunk)
+    clockwise = True
+    lane = CircularLane(
+        center,
+        radius,
+        th1,
+        th2,
+        width=w,
+        clockwise=clockwise,
+        line_types=[LineType.NONE, LineType.CONTINUOUS],
+        speed_limit=default_speedlimit,
+    )
+    racetrack.lane = lane
+    net.add_lane("a", "b", lane)
+
+    # Add some outer rings too
+    net.add_lane(
+        "a",
+        "b",
+        CircularLane(
+            center,
+            radius + w,
+            th1,
+            th2,
+            width=w,
+            clockwise=clockwise,
+            line_types=[LineType.STRIPED, LineType.STRIPED],
+            speed_limit=default_speedlimit,
+        )
+    )
+    net.add_lane(
+        "a",
+        "b",
+        CircularLane(
+            center,
+            radius + w*2,
+            th1,
+            th2,
+            width=w,
+            clockwise=clockwise,
+            line_types=[LineType.CONTINUOUS, LineType.NONE],
+            speed_limit=default_speedlimit,
+        )
+    )
+
+    num_extras = (360-chunk) // chunk
+    letters = "bcdefghijklmnopqrstuvwxyz"
+    deg_pairs = [(np.deg2rad(i*chunk), np.deg2rad((i+1)*chunk)) for i in range(1,num_extras+1)]
+    letter_pairs = [[letters[i], letters[i+1]] for i in range(num_extras)]
+    letter_pairs[-1][-1] = "a"
+
+    for letter_pair, deg_pair in zip(letter_pairs, deg_pairs):
+        th1, th2 = deg_pair
+        net.add_lane(
+            letter_pair[0],
+            letter_pair[1],
+            CircularLane(
+                center,
+                radius,
+                th1,
+                th2,
+                width=w,
+                clockwise=clockwise,
+                line_types=[LineType.NONE, LineType.CONTINUOUS],
+                speed_limit=default_speedlimit,
+            )
+        )
+        net.add_lane(
+            letter_pair[0],
+            letter_pair[1],
+            CircularLane(
+                center,
+                radius + w,
+                th1,
+                th2,
+                width=w,
+                clockwise=clockwise,
+                line_types=[LineType.STRIPED, LineType.STRIPED],
+                speed_limit=default_speedlimit,
+            )
+        )
+        net.add_lane(
+            letter_pair[0],
+            letter_pair[1],
+            CircularLane(
+                center,
+                radius + w*2,
+                th1,
+                th2,
+                width=w,
+                clockwise=clockwise,
+                line_types=[LineType.CONTINUOUS, LineType.NONE],
+                speed_limit=default_speedlimit,
+            )
+        )
+
+    #
+    # # Stitch the ending
+    # th1, th2 = np.deg2rad(chunk), np.deg2rad(360)
+    # net.add_lane(
+    #     "b",
+    #     "a",
+    #     CircularLane(
+    #         center,
+    #         radius,
+    #         th1,
+    #         th2,
+    #         width=w,
+    #         clockwise=clockwise,
+    #         line_types=[LineType.NONE, LineType.CONTINUOUS],
+    #         speed_limit=default_speedlimit,
+    #     )
+    # )
+    # net.add_lane(
+    #     "b",
+    #     "a",
+    #     CircularLane(
+    #         center,
+    #         radius + w,
+    #         th1,
+    #         th2,
+    #         width=w,
+    #         clockwise=clockwise,
+    #         line_types=[LineType.STRIPED, LineType.STRIPED],
+    #         speed_limit=default_speedlimit,
+    #     )
+    # )
+    # net.add_lane(
+    #     "b",
+    #     "a",
+    #     CircularLane(
+    #         center,
+    #         radius + w*2,
+    #         th1,
+    #         th2,
+    #         width=w,
+    #         clockwise=clockwise,
+    #         line_types=[LineType.CONTINUOUS, LineType.NONE],
+    #         speed_limit=default_speedlimit,
+    #     )
+    # )
+
+
+    return AVRoad(
+        network=net,
+        np_random=racetrack.np_random,
+        record_history=racetrack.config["show_trajectories"],
+    )
+
+
+def oval(racetrack: "RacetrackEnv") -> Road:
+    net = RoadNetwork()
+    w = 5
+    w2 = 2*w
+    L = 120
+    R = 20
+    default_speedlimit = racetrack.config['speed_limit']
+
+    # Initialise First Lane
+    lane = StraightLane(
+        [0, R],
+        [L, R],
+        line_types=(LineType.CONTINUOUS, LineType.NONE),
+        width=w,
+        speed_limit=default_speedlimit,
+    )
+    racetrack.lane = lane
+
+    # Add Lanes to Road Network - Straight Section
+    net.add_lane("a", "b", lane)
+    net.add_lane(
+        "a",
+        "b",
+        StraightLane(
+            [0, R + w],
+            [L, R + w],
+            line_types=(LineType.STRIPED, LineType.STRIPED),
+            width=w,
+            speed_limit=default_speedlimit,
+        ),
+    )
+    net.add_lane(
+        "a",
+        "b",
+        StraightLane(
+            [0, R + w2],
+            [L, R + w2],
+            line_types=(LineType.NONE, LineType.CONTINUOUS),
+            width=w,
+            speed_limit=default_speedlimit,
+        ),
+    )
+
+    # 2 - First arc
+    center = [L, 0]
+    th1, th2 = np.deg2rad(90), np.deg2rad(-90)
+    net.add_lane(
+        "b",
+        "c",
+        CircularLane(
+            center,
+            R,
+            th1,
+            th2,
+            width=w,
+            clockwise=False,
+            line_types=[LineType.CONTINUOUS, LineType.NONE],
+            speed_limit=default_speedlimit,
+        )
+    )
+    net.add_lane(
+        "b",
+        "c",
+        CircularLane(
+            center,
+            R + w,
+            th1,
+            th2,
+            width=w,
+            clockwise=False,
+            line_types=[LineType.STRIPED, LineType.STRIPED],
+            speed_limit=default_speedlimit,
+        )
+    )
+    net.add_lane(
+        "b",
+        "c",
+        CircularLane(
+            center,
+            R + w*2,
+            th1,
+            th2,
+            width=w,
+            clockwise=False,
+            line_types=[LineType.NONE, LineType.CONTINUOUS],
+            speed_limit=default_speedlimit,
+        )
+    )
+
+    # 3 -- Second straightaway
+    net.add_lane(
+        "c",
+        "d",
+        StraightLane(
+            [L, -R],
+            [0, -R],
+            line_types=(LineType.CONTINUOUS, LineType.NONE),
+            width=w,
+            speed_limit=default_speedlimit,
+        ),
+    )
+    net.add_lane(
+        "c",
+        "d",
+        StraightLane(
+            [L, -R - w],
+            [0, -R - w],
+            line_types=(LineType.STRIPED, LineType.STRIPED),
+            width=w,
+            speed_limit=default_speedlimit,
+        ),
+    )
+    net.add_lane(
+        "c",
+        "d",
+        StraightLane(
+            [L, -R - w2],
+            [0, -R - w2],
+            line_types=(LineType.NONE, LineType.CONTINUOUS),
+            width=w,
+            speed_limit=default_speedlimit,
+        ),
+    )
+
+    # 4 -- Second arc
+    center = [0, 0]
+    th1, th2 = np.deg2rad(270), np.deg2rad(90)
+    net.add_lane(
+        "d",
+        "a",
+        CircularLane(
+            center,
+            R,
+            th1,
+            th2,
+            width=w,
+            clockwise=False,
+            line_types=[LineType.CONTINUOUS, LineType.NONE],
+            speed_limit=default_speedlimit,
+        )
+    )
+    net.add_lane(
+        "d",
+        "a",
+        CircularLane(
+            center,
+            R + w,
+            th1,
+            th2,
+            width=w,
+            clockwise=False,
+            line_types=[LineType.STRIPED, LineType.STRIPED],
+            speed_limit=default_speedlimit,
+        )
+    )
+    net.add_lane(
+        "d",
+        "a",
+        CircularLane(
+            center,
+            R + w*2,
+            th1,
+            th2,
+            width=w,
+            clockwise=False,
+            line_types=[LineType.NONE, LineType.CONTINUOUS],
+            speed_limit=default_speedlimit,
+        )
+    )
+
+
+    return AVRoad(
         network=net,
         np_random=racetrack.np_random,
         record_history=racetrack.config["show_trajectories"],

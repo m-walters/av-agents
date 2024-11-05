@@ -96,8 +96,7 @@ class Gatekeeper:
         """
         Use ID to see if this vehicle crashed
         """
-        vehicle = self.get_vehicle(env)
-        return vehicle.crashed or (env.config['offroad_terminal'] and not vehicle.on_road)
+        return self.get_vehicle(env).crashed
 
     def calculate_reward(self, env: Union[highway.AVHighway, intersection.AVIntersection]):
         """

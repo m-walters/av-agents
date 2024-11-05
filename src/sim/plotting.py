@@ -499,13 +499,14 @@ class AVPlotter:
 
         plt.show()
 
-    def multiagent_comparison_plot(
+    def comparison_plot(
         self,
         save_path: str,
         datasets: list[tuple[Union[xr.Dataset, str], str]],
         metric_label_map: dict,
         axes_layout: list[list[str]] | None = None,
         ylog_plots: list[str] | None = None,
+        title: str | None = None,
         truncate: Union[int, range, list] | None = None,
     ):
         """
@@ -518,6 +519,7 @@ class AVPlotter:
         :param metric_label_map: Map of plot labels to Dataset keys
         :param axes_layout: Optional 2D layout of axes labels
         :param ylog_plots: Optional list of labels to plot on a log scale
+        :param title: Optional title for the plot
         :param truncate: Optionally limit the plotting range by simulation step.
             Provide an int for an end limit or an inclusive window range
         """
@@ -671,6 +673,8 @@ class AVPlotter:
                 title=None
             )
 
+        fig.suptitle(title)
+
         if save_path:
             print(f"Saving to {save_path}")
             plt.savefig(save_path)
@@ -682,12 +686,14 @@ class AVPlotter:
         save_path: str,
         nominal_ds: xr.Dataset,
         conservative_ds: xr.Dataset,
+        hotshot_ds: xr.Dataset | None = None,
     ):
         """
         Histogram of TTCs for the two baselines
         """
         nom_values: np.ndarray = nominal_ds['time_to_collision'].values
         cons_values: np.ndarray = conservative_ds['time_to_collision'].values
+        
         # When no collision occurred, values are `inf`
         # Filter these out
         nom_values = nom_values[nom_values != np.inf]
@@ -698,12 +704,27 @@ class AVPlotter:
         cons_color = next(col_wheel)
 
         # Plotting the distributions
-        sns.histplot(nom_values, bins=30, kde=True, label='Nominal', color=nom_color)
-        sns.histplot(cons_values, bins=30, kde=True, label='Cons.', color=cons_color)
+        # Get the bin range as the 'duration' of the simulation
+        bin_range = (0, nominal_ds.coords['step'].values[-1])
+        # bin_range = (0, 30)
+        sns.histplot(nom_values, bins=30, kde=False, label='Nominal', color=nom_color, binrange=bin_range)
+        sns.histplot(cons_values, bins=30, kde=False, label='Cons.', color=cons_color, binrange=bin_range)
 
         # Adding vertical lines at the means
         nom_mean = np.mean(nom_values)
         cons_mean = np.mean(cons_values)
+
+        if hotshot_ds:
+            hotshot_values = hotshot_ds['time_to_collision'].values if hotshot_ds else None
+            hotshot_values = hotshot_values[hotshot_values != np.inf]
+            hotshot_color = next(col_wheel)
+            hotshot_mean = np.mean(hotshot_values)
+            print(f"SIZES: Nom: {len(nom_values)} | Cons: {len(cons_values)} | Hot: {len(hotshot_values)}")
+            sns.histplot(hotshot_values, bins=30, kde=False, label='Hotshot', color=hotshot_color, binrange=bin_range)
+            plt.axvline(hotshot_mean, color=hotshot_color, linestyle='dashed', linewidth=1)
+        else:
+            print(f"SIZES: Nom: {len(nom_values)} | Cons: {len(cons_values)}")
+
         plt.axvline(nom_mean, color=nom_color, linestyle='dashed', linewidth=1)
         plt.axvline(cons_mean, color=cons_color, linestyle='dashed', linewidth=1)
 
@@ -719,7 +740,59 @@ class AVPlotter:
 
         plt.show()
 
-    def ttc_vs_num_gk(
+    def spec_baselines_hist(
+        self,
+        save_path: str,
+        _datasets: list[tuple[xr.Dataset, str]],
+    ):
+        # Compile datasets
+        datasets = [
+            ds['time_to_collision'].values for ds, lbl in _datasets
+        ]
+        # And again
+        datasets = [
+            ds[ds != np.inf] for ds in datasets
+        ]
+
+        col_wheel = self.get_color_wheel()
+        # Plotting the distributions
+        # Get the bin range as the 'duration' of the simulation
+        bin_range = (0, 100)
+        # bin_range = (0, 30)
+
+        for i_ds, ds in enumerate(datasets):
+            lbl = _datasets[i_ds][1]
+            col = next(col_wheel)
+            sns.histplot(ds, bins=30, kde=False, label=lbl, color=col, binrange=bin_range)
+            print(f"MW MEAN -- {lbl}: {np.mean(ds)}")
+            plt.axvline(np.mean(ds), color=col, linestyle='dashed', linewidth=1)
+
+        # Adding titles and labels
+        plt.title("")
+        plt.xlabel("Step")
+        plt.ylabel("")
+        plt.legend()
+
+        if save_path:
+            print(f"Saving to {save_path}")
+            plt.savefig(save_path)
+
+        plt.show()
+
+    def collisions(
+        self,
+        save_path: str,
+        nominal_ds: xr.Dataset,
+        conservative_ds: xr.Dataset,
+        hotshot_ds: xr.Dataset | None = None,
+    ):
+        """
+        Investigate the collision/crashed dataset.
+        """
+        ...
+
+
+    def ttc_vs_gk(
         self,
         save_path: str,
         datasets: list[Union[xr.Dataset, str]],
@@ -753,7 +826,7 @@ class AVPlotter:
         col_wheel = self.get_color_wheel()
         fig = sns.violinplot(
             data=df, x='num_gk', y='ttc', color=next(col_wheel),
-            cut=0, inner='box',
+            cut=0, inner='point',
             # If inner is 'box'
             # inner_kws=dict(box_width=15, whis_width=2, color=".8")
         )

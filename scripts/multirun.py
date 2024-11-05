@@ -2,67 +2,48 @@
 One-off script for running multiple runs
 """
 import subprocess
+import os
 
+
+SPEC_BEHAVIORS = {
+    # "nom": "sim.vehicles.highway.NominalParams",
+    # "cons": "sim.vehicles.highway.ConservativeParams",
+    # "hotshot": "sim.vehicles.highway.HotshotParams",
+    "polite-incr": "sim.vehicles.highway.PolitenessIncr",
+    "polite-decr": "sim.vehicles.highway.PolitenessDecr",
+    "timedist-incr": "sim.vehicles.highway.TimeDistWantedIncr",
+    "timedist-decr": "sim.vehicles.highway.TimeDistWantedDecr",
+    "acc-max-incr": "sim.vehicles.highway.AccMaxIncr",
+    "acc-max-decr": "sim.vehicles.highway.AccMaxDecr",
+    "comf-brake-incr": "sim.vehicles.highway.ComfBrakingIncr",
+    "comf-brake-decr": "sim.vehicles.highway.ComfBrakingDecr",
+}
 
 def run_multiagent_sequence():
     seed = 86777
     script = "ttc.py"
 
+    num_cpus = 8
+    duration = 100
+    world_draws = 300
+    warmup = 1e5
+    env_type = "racetrack-v0"
+    run_dir = "bigsweep/av-8"
+    any_control_collision = "true"
+
     configs = [
         {
-            "name": "quick-ttc-gk-nc-1",
+            "name": os.path.join(run_dir, name),
             "seed": seed,
-            "use_mp": True,
-            "highway_env.controlled_vehicles": 1,
-        },
-        {
-            "name": "quick-ttc-gk-nc-2",
-            "seed": seed,
-            "use_mp": True,
-            "highway_env.controlled_vehicles": 2,
-        },
-        {
-            "name": "quick-ttc-gk-nc-4",
-            "seed": seed,
-            "use_mp": True,
-            "highway_env.controlled_vehicles": 4,
-        },
-        {
-            "name": "quick-ttc-gk-nc-8",
-            "seed": seed,
-            "use_mp": True,
+            "highway_env.default_control_behavior": behavior,
             "highway_env.controlled_vehicles": 8,
-        },
-        # {
-        #     "name": "quick-ttc-gk-nc-16",
-        #     "seed": seed,
-        #     "use_mp": True,
-        #     "highway_env.controlled_vehicles": 16,
-        # },
-        # {
-        #     "name": "pstar-0p9",
-        #     "use_mp": True,
-        #     "gatekeeper.preference_prior.p_star": 0.9,
-        #     "gatekeeper.preference_prior.l_star": 0.2,
-        # },
-        # {
-        #     "name": "pstar-0p01_lstar-0p1",
-        #     "use_mp": True,
-        #     "gatekeeper.preference_prior.p_star": 0.01,
-        #     "gatekeeper.preference_prior.l_star": 0.1,
-        # },
-        # {
-        #     "name": "pstar-0p1_lstar-0p1",
-        #     "use_mp": True,
-        #     "gatekeeper.preference_prior.p_star": 0.1,
-        #     "gatekeeper.preference_prior.l_star": 0.1,
-        # },
-        # {
-        #     "name": "pstar-0p9_lstar-0p1",
-        #     "use_mp": True,
-        #     "gatekeeper.preference_prior.p_star": 0.9,
-        #     "gatekeeper.preference_prior.l_star": 0.1,
-        # },
+            "highway_env.duration": duration,
+            "any_control_collision": any_control_collision,
+            "world_draws": world_draws,
+            "warmup_steps": warmup,
+            "multiprocessing_cpus": num_cpus,
+            "env_type": env_type,
+        } for name, behavior in SPEC_BEHAVIORS.items()
     ]
 
     for config in configs:

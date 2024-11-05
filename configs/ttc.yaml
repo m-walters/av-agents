@@ -18,13 +18,17 @@ hydra:
 
 # See AVHighway for defaults
 highway_env:
-  controlled_vehicles: 8  # Number of ego vehicles
+  controlled_vehicles: 4  # Number of ego vehicles
   control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
   other_vehicles_type: "sim.vehicles.highway.AlterIDMVehicle"
-  vehicles_count: 24  # Number of alters
+  default_control_behavior: "sim.vehicles.highway.NominalParams"
+  # Number of vehicles with the reward_speed target
+  # Remainder will have a target speed lower than speed_limit
+  num_vehicles_control_speed: 8
+  vehicles_count: 24
   vehicles_density: 2
   reward_speed: 30
-  speed_limit: 30
+  speed_limit: 20
   action:
     type: "MultiAgentAction"
     action_config:
@@ -38,22 +42,27 @@ highway_env:
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: 20
   n_montecarlo: 20
-  duration: 200
+  duration: 400
   normalize_reward: true
 #==============
 
-seed: 86777
-world_draws: 200
-warmup_steps: 0  # included within the duration
-mc_period: 10   # real-world steps between MC issuances
+seed: 867
+world_draws: 1
+warmup_steps: 1000  # included within the duration
+mc_period: 5   # real-world steps between MC issuances
+
+# Temporary, probably will remove
+env_type: "racetrack-v0"
+# Whether we check for collisions for any of the control vehicles (true) or just the first one (false)
+any_control_collision: false
 
 # Multiprocessing configs
-use_mp: true
-multiprocessing_cpus: 16
+use_mp: false
+multiprocessing_cpus: 2
 
 gatekeeper:
   # Time-discounting
-  enable_time_discounting: true
+  enable_time_discounting: false
   gamma: 0.96
   risk_eval_period: 5  # Every nth inner step, eval risk
   # Models
@@ -65,5 +74,5 @@ gatekeeper:
     model: "NullEntropyRiskModel"
   behavior_cfg:
     enable: true
-    nominal_class: "sim.vehicles.highway.AggressiveParams"
+    nominal_class: "sim.vehicles.highway.NominalParams"
     conservative_class: "sim.vehicles.highway.ConservativeParams"

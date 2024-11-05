@@ -145,6 +145,9 @@ def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams", DictConfig[Gatekeepe
     elif log_level == "warning":
         logger.setLevel(logging.WARNING)
 
+    if not cfg.highway_env.get("default_control_behavior", None):
+        raise ValueError("highway_env.default_control_behavior class must be specified")
+
     # Print our config
     logger.debug(f"CONFIG\n{OmegaConf.to_yaml(cfg)}")
 
