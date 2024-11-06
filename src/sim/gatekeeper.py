@@ -294,15 +294,12 @@ class GatekeeperCommand:
 
         return losses, collisions
 
-    def run(self, pool: Optional["multiprocessing.Pool"], gamma: float = 1.0) -> dict:
+    def run(self, pool: Optional["multiprocessing.Pool"]) -> dict:
         """
         Perform montecarlo simulations and calculate risk equations etc.
 
         :return: Several result arrays. Dimensions [n_controlled, n_mc]
         """
-        if gamma != 1.0:
-            raise NotImplementedError("Discounting not yet implemented")
-
         # losses = np.zeros((self.n_montecarlo, self.n_controlled))
         # collisions = np.zeros_like(losses)
 

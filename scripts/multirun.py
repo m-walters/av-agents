@@ -8,8 +8,8 @@ import os
 SPEC_BEHAVIORS = {
     "nom": "sim.vehicles.highway.NominalParams",
     # "cons": "sim.vehicles.highway.ConservativeParams",
-    "def": "sim.vehicles.highway.DefensiveParams",
-    "hotshot": "sim.vehicles.highway.HotshotParams",
+    # "def": "sim.vehicles.highway.DefensiveParams",
+    # "hotshot": "sim.vehicles.highway.HotshotParams",
     # "polite-incr": "sim.vehicles.highway.PolitenessIncr",
     # "polite-decr": "sim.vehicles.highway.PolitenessDecr",
     # "timedist-incr": "sim.vehicles.highway.TimeDistWantedIncr",
@@ -30,32 +30,42 @@ def run_multiagent_sequence():
     seed = 86777
     script = "ttc.py"
 
-    num_cpus = 16
+    num_cpus = 8
     env_type = "racetrack-v0"
-    run_dir = "manuscript/av-8-gk"
     any_control_collision = "true"
-    world_draws = 200
-    duration = 200
+    world_draws = 1
+    duration = 20
     warmup = 0
     mc_period = 5
     mc_horizon = 20
-    n_montecarlo = 100
+    n_montecarlo = 10
+    # Discounting
+    enable_time_discounting = "true"
+
+    # Name the run, and where it will be saved
+    RUN_DIR = "profiling"
+    tmp_name = os.path.join(
+        RUN_DIR,
+        "gk-gamma"
+    )
 
     configs = [
         {
-            "name": os.path.join(run_dir, name),
+            "name": tmp_name,
+            # "name": os.path.join(RUN_DIR, name),
             "seed": seed,
             "highway_env.default_control_behavior": behavior,
             "highway_env.controlled_vehicles": 8,
-            "highway_env.duration": duration,
             "any_control_collision": any_control_collision,
-            "world_draws": world_draws,
             "multiprocessing_cpus": num_cpus,
             "env_type": env_type,
+            "highway_env.duration": duration,
+            "highway_env.mc_horizon": mc_horizon,
+            "highway_env.n_montecarlo": n_montecarlo,
+            "world_draws": world_draws,
             "warmup_steps": warmup,
             "mc_period": mc_period,
-            "mc_horizon": mc_horizon,
-            "n_montecarlo": n_montecarlo,
+            "gatekeeper.enable_time_discounting": enable_time_discounting,
         } for name, behavior in SPEC_BEHAVIORS.items()
     ]
 

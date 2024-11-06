@@ -1,8 +1,10 @@
 """
 Multiagent Gatekeeper simulation for a Time-To-Collision mode
 """
+import cProfile
 import logging
 import multiprocessing
+import os
 import time
 import warnings
 
@@ -25,6 +27,7 @@ logger = logging.getLogger("av-sim")
 
 # Suppress specific warnings around our Env method overrides.
 warnings.filterwarnings("ignore", category=UserWarning, module=r"gymnasium\.utils\.passive_env_checker")
+
 
 def non_mc_worldsim(world_idx: int, world_seed: int, env: AVRacetrack, any_control_collision: bool) -> tuple[int, dict]:
     """
@@ -141,12 +144,21 @@ def main(cfg: DictConfig):
     # We track a single controlled vehicle for crash so that we can compare its TTC across runs
     any_control_collision = cfg.get("any_control_collision", True)
 
+    if cfg.get("profiling", False):
+        # Create profiler
+        profiler = cProfile.Profile()
+    else:
+        profiler = None
+
     # If mc_steps is empty, this is a baseline run for collision testing
     if run_params['mc_steps'].size > 0:
         with logging_redirect_tqdm():
             with multiprocessing.Pool(cfg.get('multiprocessing_cpus', 8), maxtasksperchild=100) as pool:
                 i_world = -1  # tqdm doesn't handle the enumerate tuples well
-                for w_seed in tqdm(world_seeds, desc="Worlds"):
+                if profiler:
+                    profiler.enable()
+
+                for w_seed in tqdm(world_seeds, desc="Worlds", disable=bool(profiler)):
                     # Seed world
                     i_world += 1
                     obs, info = env.reset(seed=w_seed)
@@ -193,7 +205,7 @@ def main(cfg: DictConfig):
                         ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
 
                         # Check if any of control vehicle crashed
-                        if any_control_collision and any(controlled_crashed): # type: ignore
+                        if any_control_collision and any(controlled_crashed):  # type: ignore
                             # Record the step which saw the first vehicle collision
                             ds["time_to_collision"] = step
                             logger.info(f"Control vehicle collision (Step {step}): {controlled_crashed}\nExiting.")
@@ -234,7 +246,12 @@ def main(cfg: DictConfig):
         # with logging_redirect_tqdm():
         with logging_redirect_tqdm():
             with multiprocessing.Pool(num_cpu, maxtasksperchild=10) as pool:
-                for i_world in tqdm(range(0, world_draws, num_cpu), desc="Worlds", unit_scale=num_cpu):
+                if profiler:
+                    profiler.enable()
+                    
+                for i_world in tqdm(
+                        range(0, world_draws, num_cpu), desc="Worlds", unit_scale=num_cpu, disable=bool(profiler)
+                ):
                     # Chunk the worlds by number of processes
                     end_world = min(i_world + num_cpu, world_draws)
                     pool_args = [
@@ -259,9 +276,12 @@ def main(cfg: DictConfig):
                         ds["speed_reward"][world_idx, :, :] = result_dict["speed_reward"]
                         ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
 
-
     # Automatically save latest
     checkpoint_dataset("Saving final results")
+
+    if profiler:
+        profiler.disable()
+        profiler.dump_stats(os.path.join(run_dir, "profiling.prof"))
 
 
 if __name__ == '__main__':
