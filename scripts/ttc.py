@@ -139,10 +139,9 @@ def main(cfg: DictConfig):
     world_loop_times = []
 
     # We track a single controlled vehicle for crash so that we can compare its TTC across runs
-    crash_tagged_id = uenv.controlled_vehicles[0].av_id
+    any_control_collision = cfg.get("any_control_collision", True)
 
     # If mc_steps is empty, this is a baseline run for collision testing
-    # So we don't need to do multiprocessing
     if run_params['mc_steps'].size > 0:
         with logging_redirect_tqdm():
             with multiprocessing.Pool(cfg.get('multiprocessing_cpus', 8), maxtasksperchild=100) as pool:
@@ -152,13 +151,13 @@ def main(cfg: DictConfig):
                     i_world += 1
                     obs, info = env.reset(seed=w_seed)
                     uenv: "AVRacetrack" = env.unwrapped
-                    i_mc = 0  # Tracking MC steps
 
                     # Init the gatekeeper
                     gk_cmd = gatekeeper.GatekeeperCommand(
                         uenv, gk_cfg, uenv.controlled_vehicles, w_seed
                     )
 
+                    i_mc = 0  # Tracking MC steps
                     for step in tqdm(range(run_params['duration']), desc="Steps", leave=False):
                         # First, record the gatekeeper behavior states
                         ds["behavior_mode"][i_world, step, :] = gk_cmd.collect_behaviors()
@@ -193,11 +192,17 @@ def main(cfg: DictConfig):
                         ds["defensive_reward"][i_world, step, :] = info["rewards"]["defensive_reward"]
                         ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
 
-                        # Check if our target vehicle crashed
-                        if crash_tagged_id in [v.av_id for v in uenv.crashed]:
+                        # Check if any of control vehicle crashed
+                        if any_control_collision and any(controlled_crashed): # type: ignore
                             # Record the step which saw the first vehicle collision
-                            ds["time_to_collision"][i_world] = step
-                            logger.info(f"Target vehicle crash (Step {step}). Exiting.")
+                            ds["time_to_collision"] = step
+                            logger.info(f"Control vehicle collision (Step {step}): {controlled_crashed}\nExiting.")
+                            break
+
+                        elif not any_control_collision and uenv.controlled_vehicles[0].crashed:
+                            # We are tracking the first controlled vehicle and it crashed
+                            ds["time_to_collision"] = step
+                            logger.info(f"Control vehicle collision (Step {step}): {controlled_crashed}\nExiting.")
                             break
 
                         if len(uenv.crashed) >= 6:
@@ -237,7 +242,7 @@ def main(cfg: DictConfig):
                             world_idx,
                             world_seeds[world_idx],
                             env,
-                            cfg.get("any_control_collision", True)
+                            any_control_collision
                         ) for world_idx in range(i_world, end_world)
                     ]
 
@@ -254,8 +259,9 @@ def main(cfg: DictConfig):
                         ds["speed_reward"][world_idx, :, :] = result_dict["speed_reward"]
                         ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
 
-            # Automatically save latest
-            checkpoint_dataset("Saving final results")
+
+    # Automatically save latest
+    checkpoint_dataset("Saving final results")
 
 
 if __name__ == '__main__':

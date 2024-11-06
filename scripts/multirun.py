@@ -30,13 +30,16 @@ def run_multiagent_sequence():
     seed = 86777
     script = "ttc.py"
 
-    num_cpus = 12
-    duration = 200
-    world_draws = 400
-    warmup = 1e5
+    num_cpus = 16
     env_type = "racetrack-v0"
-    run_dir = "manuscript/av-8"
+    run_dir = "manuscript/av-8-gk"
     any_control_collision = "true"
+    world_draws = 200
+    duration = 200
+    warmup = 0
+    mc_period = 5
+    mc_horizon = 20
+    n_montecarlo = 100
 
     configs = [
         {
@@ -47,9 +50,12 @@ def run_multiagent_sequence():
             "highway_env.duration": duration,
             "any_control_collision": any_control_collision,
             "world_draws": world_draws,
-            "warmup_steps": warmup,
             "multiprocessing_cpus": num_cpus,
             "env_type": env_type,
+            "warmup_steps": warmup,
+            "mc_period": mc_period,
+            "mc_horizon": mc_horizon,
+            "n_montecarlo": n_montecarlo,
         } for name, behavior in SPEC_BEHAVIORS.items()
     ]
 

@@ -125,7 +125,7 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results/manuscript/av-8"
+    RESULTS_DIR = "../results/manuscript/av-8-extra"
     save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
 
     data_tups = [
@@ -227,7 +227,7 @@ def ttc_spec_plot():
     }
 
     RESULTS_DIR = "../results"
-    run_dir = os.path.join(RESULTS_DIR, "manuscript/av-8")
+    run_dir = os.path.join(RESULTS_DIR, "manuscript/av-8-extra")
     save_path = os.path.join(run_dir, "ttc-baseline-hist.png")
 
     avplot = plotting.AVPlotter()

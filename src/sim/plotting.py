@@ -846,7 +846,7 @@ class AVPlotter:
         ]
         # And again
         datasets = [
-            ds[ds != np.nan] for ds in datasets
+            ds[~np.isnan(ds)] for ds in datasets
         ]
 
         col_wheel = self.get_color_wheel()

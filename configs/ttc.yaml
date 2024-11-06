@@ -57,12 +57,12 @@ env_type: "racetrack-v0"
 any_control_collision: false
 
 # Multiprocessing configs
-use_mp: false
+use_mp: true
 multiprocessing_cpus: 2
 
 gatekeeper:
   # Time-discounting
-  enable_time_discounting: false
+  enable_time_discounting: true
   gamma: 0.96
   risk_eval_period: 5  # Every nth inner step, eval risk
   # Models
@@ -74,5 +74,5 @@ gatekeeper:
     model: "NullEntropyRiskModel"
   behavior_cfg:
     enable: true
-    nominal_class: "sim.vehicles.highway.NominalParams"
-    conservative_class: "sim.vehicles.highway.ConservativeParams"
+    nominal_class: "sim.vehicles.highway.HotshotParams"
+    conservative_class: "sim.vehicles.highway.DefensiveParams"
