@@ -3,6 +3,7 @@ from typing import Union
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import seaborn as sns
 import xarray as xr
 
@@ -675,3 +676,96 @@ class AVPlotter:
             plt.savefig(save_path)
 
         plt.show()
+
+    def ttc_baselines_hist(
+        self,
+        save_path: str,
+        nominal_ds: xr.Dataset,
+        conservative_ds: xr.Dataset,
+    ):
+        """
+        Histogram of TTCs for the two baselines
+        """
+        nom_values: np.ndarray = nominal_ds['time_to_collision'].values
+        cons_values: np.ndarray = conservative_ds['time_to_collision'].values
+        # When no collision occurred, values are `inf`
+        # Filter these out
+        nom_values = nom_values[nom_values != np.inf]
+        cons_values = cons_values[cons_values != np.inf]
+
+        col_wheel = self.get_color_wheel()
+        nom_color = next(col_wheel)
+        cons_color = next(col_wheel)
+
+        # Plotting the distributions
+        sns.histplot(nom_values, bins=30, kde=True, label='Nominal', color=nom_color)
+        sns.histplot(cons_values, bins=30, kde=True, label='Cons.', color=cons_color)
+
+        # Adding vertical lines at the means
+        nom_mean = np.mean(nom_values)
+        cons_mean = np.mean(cons_values)
+        plt.axvline(nom_mean, color=nom_color, linestyle='dashed', linewidth=1)
+        plt.axvline(cons_mean, color=cons_color, linestyle='dashed', linewidth=1)
+
+        # Adding titles and labels
+        plt.title("")
+        plt.xlabel("Step")
+        plt.ylabel("")
+        plt.legend()
+
+        if save_path:
+            print(f"Saving to {save_path}")
+            plt.savefig(save_path)
+
+        plt.show()
+
+    def ttc_vs_num_gk(
+        self,
+        save_path: str,
+        datasets: list[Union[xr.Dataset, str]],
+    ):
+        """
+        Time-To-Collision as function of number of GK-controlled vehicles.
+
+        :param save_path: Save path
+        :param datasets: List of (Dataset or Dataset path, Label) tuples
+        """
+        # Compile datasets
+        datasets = [xr.open_dataset(ds) if isinstance(ds, str) else ds for ds in datasets]
+
+        df = pd.DataFrame([], columns=['num_gk', 'ttc'], dtype=int)
+        for i_ds, ds in enumerate(datasets):
+            n_controlled = ds.ego.size
+            ttc = ds.time_to_collision.values
+            # Filter out the inf values
+            ttc = ttc[ttc != np.inf].astype(int)
+            if len(ttc) == 0:
+                print(f"No TTC values for dataset: {i_ds}")
+
+
+            # Add to dataframe
+            df = pd.concat([df, pd.DataFrame({'num_gk': n_controlled, 'ttc': ttc})])
+
+        # Set placeholder categories to make the x-axis numerical
+        all_x_values = np.arange(0, df['num_gk'].max() + 1)
+        df['num_gk'] = pd.Categorical(df['num_gk'], categories=all_x_values)
+
+        col_wheel = self.get_color_wheel()
+        fig = sns.violinplot(
+            data=df, x='num_gk', y='ttc', color=next(col_wheel),
+            cut=0, inner='box',
+            # If inner is 'box'
+            # inner_kws=dict(box_width=15, whis_width=2, color=".8")
+        )
+
+        # Set ylims from 0 to 100 or the max TTC
+        plt.ylim(0, min(200, df['ttc'].max()) + 5)
+        plt.ylabel("TTC")
+        plt.xlabel("Number of GK-controlled vehicles")
+
+        if save_path:
+            print(f"Saving to {save_path}")
+            plt.savefig(save_path)
+
+        plt.show()
+

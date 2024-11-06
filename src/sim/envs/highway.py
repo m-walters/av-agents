@@ -449,6 +449,13 @@ class AVHighway(HighwayEnv):
 
         return reward
 
+    @property
+    def crashed(self) -> list:
+        """
+        Return crashed vehicles
+        """
+        return [v for v in self.road.vehicles if v.crashed]
+
     def _is_terminated(self) -> bool | Array:
         """The episode is over if the ego vehicle crashed."""
         if not self.multiagent:

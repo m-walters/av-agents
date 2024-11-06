@@ -3,7 +3,7 @@ defaults:
   - _self_
 
 # Note this can still be overridden with 'name' in the command line
-name: multi/tmp
+name: ttc/tmp
 run_dir: ../results/${name}
 
 hydra:
@@ -18,7 +18,7 @@ hydra:
 
 # See AVHighway for defaults
 highway_env:
-  controlled_vehicles: 1  # Number of ego vehicles
+  controlled_vehicles: 8  # Number of ego vehicles
   control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
   other_vehicles_type: "sim.vehicles.highway.AlterIDMVehicle"
   vehicles_count: 24  # Number of alters
@@ -43,13 +43,13 @@ highway_env:
 #==============
 
 seed: 86777
-world_draws: 1
-warmup_steps: 10  # included within the duration
+world_draws: 200
+warmup_steps: 0  # included within the duration
 mc_period: 10   # real-world steps between MC issuances
 
 # Multiprocessing configs
-use_mp: false
-multiprocessing_cpus: 8
+use_mp: true
+multiprocessing_cpus: 16
 
 gatekeeper:
   # Time-discounting

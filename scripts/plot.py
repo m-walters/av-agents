@@ -51,7 +51,7 @@ def multiagent_plot():
     # Create the video with the saved frames and data
     # Load the data
     RESULTS_DIR = "../results"
-    run_dir = RESULTS_DIR + "/multiagent"
+    run_dir = RESULTS_DIR + "/freezer/quick-ttc-gk-nc-8"
 
     dataset = xr.open_dataset(f"{run_dir}/results.nc")
 
@@ -78,8 +78,9 @@ def multiagent_plot():
 def gatekeep_compare():
     # Gatekeep comparing
     RESULTS_DIR = "../results"
-    no_gk_dir = RESULTS_DIR + "/freezer/multiagent"
-    gk_dir = RESULTS_DIR + "/freezer/multiagent_gk"
+    save_dir = RESULTS_DIR + "/freezer/quick-ttc-gk-nc-8"
+    no_gk_dir = RESULTS_DIR + "/freezer/quick-ttc-gk-nc-8"
+    gk_dir = RESULTS_DIR + "/freezer/quick-ttc-gk-nc-8"
 
     data_tups = [
         (xr.open_dataset(no_gk_dir + "/results.nc"), "No GK"),
@@ -110,7 +111,7 @@ def gatekeep_compare():
 
     avplot = plotting.AVPlotter()
     avplot.multiagent_comparison_plot(
-        f"{gk_dir}/gatekeep_compare.png",
+        f"{save_dir}/gatekeep_compare.png",
         data_tups,
         metric_label_map,
         axes_layout=axes_layout,
@@ -124,16 +125,13 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results"
+    RESULTS_DIR = "../results/freezer/seeds/seed-86777"
     save_dir = RESULTS_DIR + "/"
     data_tups = [
-        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p01/results.nc"), r'$p^* = 0.01, L^*=0.2$'),
-        (xr.open_dataset(RESULTS_DIR + "/pstar-0p1/results.nc"), r'$p^* = 0.1, L^*=0.2$'),
-        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p9/results.nc"), r'$p^* = 0.9, L^*=0.2$'),
-        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p01_lstar-0p1/results.nc"), r'$p^* = 0.01, L^*=0.1$'),
-        (xr.open_dataset(RESULTS_DIR + "/pstar-0p1_lstar-0p1/results.nc"), r'$p^* = 0.1, L^*=0.1$'),
-        # (xr.open_dataset(RESULTS_DIR + "/pstar-0p9_lstar-0p1/results.nc"), r'$p^* = 0.9, L^*=0.1$'),
-
+        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p1/results.nc"), r'$L^*=0.1$'),
+        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p2/results.nc"), r'$L^*=0.2$'),
+        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p5/results.nc"), r'$L^*=0.5$'),
+        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p9/results.nc"), r'$L^*=0.9$'),
     ]
 
     truncate = None
@@ -173,6 +171,43 @@ def compare_plot():
         metric_label_map,
         axes_layout=axes_layout,
         truncate=truncate,
+    )
+
+
+def baseline_hist():
+    """
+    Plot the baseline histogram
+    """
+    RESULTS_DIR = "../results/freezer/"
+    save_dir = RESULTS_DIR + "/"
+
+    avplot = plotting.AVPlotter()
+    avplot.ttc_baselines_hist(
+        f"{save_dir}/ttc_baseline_hist.png",
+        nominal_ds=xr.open_dataset(RESULTS_DIR + "/ttc_nom_baseline/results.nc"),
+        conservative_ds=xr.open_dataset(RESULTS_DIR + "/ttc_conservative_baseline/results.nc"),
+    )
+
+
+def ttc_vs_gk():
+    """
+    Time-to-Collision vs Number controlled by GK
+    """
+    title = None
+
+    RESULTS_DIR = "../results/freezer"
+    save_dir = RESULTS_DIR + "/"
+    data = [
+        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-1/results.nc"),
+        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-2/results.nc"),
+        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-4/results.nc"),
+        # xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-8/results.nc"),
+    ]
+
+    avplot = plotting.AVPlotter()
+    avplot.ttc_vs_num_gk(
+        f"{save_dir}/ttc-vs-gk.png",
+        data
     )
 
 

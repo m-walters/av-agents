@@ -114,6 +114,20 @@ class AVRacetrack(RacetrackEnv):
 
         return self.controlled_vehicles[0] if self.controlled_vehicles else None
 
+    @property
+    def average_speed(self) -> float:
+        """
+        Return the average speed of all vehicles
+        """
+        return np.mean([v.speed for v in self.road.vehicles])
+
+    @property
+    def crashed(self) -> list:
+        """
+        Return crashed vehicles
+        """
+        return [v for v in self.road.vehicles if v.crashed]
+
     def _reset(self) -> None:
         """
         Init road and vehicles
@@ -152,15 +166,6 @@ class AVRacetrack(RacetrackEnv):
         np.random.seed(seed)
         # seeding.np_random(seed)
 
-        if options and "config" in options:
-            self.configure(options["config"])
-        self.update_metadata()
-        self.define_spaces()  # First, to set the controlled vehicle class depending on action space
-        self.time = self.steps = 0
-        self.done = False
-        self._reset()
-        self.define_spaces()  # Second, to link the obs and actions to the vehicles once the scene is created
-
         obs, info = super().reset(seed=seed, options=options)
         self.action_space.seed(seed)
 
@@ -178,9 +183,12 @@ class AVRacetrack(RacetrackEnv):
         control_vehicle_class = utils.class_from_path(self.config["control_vehicle_type"])
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
 
-        # Controlled vehicles
-        self.controlled_vehicles = []
-        self.alter_vehicles = []
+        # Clear vehicles
+        self.controlled_vehicles.clear()
+        self.alter_vehicles.clear()
+        self.vehicle_lookup.clear()
+        self.road.vehicles.clear()
+
         av_id = 1
         controlled_created = 0
         break_count = 1e3
@@ -242,6 +250,12 @@ class AVRacetrack(RacetrackEnv):
                 ),
                 speed=0.7 * rng.normal(self.config["speed_limit"]),
             )
+
+            # For comparing the effects of varying the number of GKs,
+            # we need the target speed attribute of the various cars on the road to
+            # be invariant under this change.
+            vehicle.target_speed = self.config["reward_speed"]
+
             # Prevent early collisions
             for v in self.road.vehicles:
                 if np.linalg.norm(vehicle.position - v.position) < 12:
@@ -258,7 +272,7 @@ class AVRacetrack(RacetrackEnv):
                 if hasattr(vehicle, "randomize_behavior"):
                     vehicle.randomize_behavior()
 
-        logger.info(f"Created {len(self.road.vehicles)} vehicles")
+        logger.debug(f"Created {len(self.road.vehicles)} vehicles")
 
     def step(self, action: Action) -> Tuple[Observation, float, bool, bool, dict]:
         """
@@ -493,11 +507,10 @@ class AVRacetrack(RacetrackEnv):
     def _is_terminated(self) -> bool | Array:
         """The episode is over if the ego vehicle crashed."""
         if not self.multiagent:
-            return (self.vehicle.crashed or
-                    self.config["offroad_terminal"] and not self.vehicle.on_road)
+            return self.vehicle.crashed
 
         return np.array(
-            [v.crashed or self.config["offroad_terminal"] and not v.on_road for v in self.controlled_vehicles],
+            [v.crashed for v in self.controlled_vehicles],
             dtype=int
         )
 

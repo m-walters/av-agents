@@ -27,7 +27,7 @@ def main(cfg: DictConfig):
     """
     Set the parameters and run the sim
     """
-    cfg, run_params = run.init(cfg)
+    cfg, run_params, gk_cfg = run.init(cfg)
     ds = run.init_results_dataset(
         run_params['world_draws'], run_params['duration'], run_params['mc_steps'], run_params['n_montecarlo']
     )
@@ -73,7 +73,6 @@ def main(cfg: DictConfig):
     i_mc = 0
 
     for wdraw in range(run_params['world_draws']):
-        # obs, info = env.reset(seed=seed)
         obs, info = env.reset(seed=rkey.next_seed())
 
         # Run a world simulation
