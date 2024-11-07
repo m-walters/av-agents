@@ -155,19 +155,6 @@ class ComfBrakingDecr(NominalParams):
     COMFORT_ACC_MIN = -2.0
 
 
-"""
-Results of first trial indicate (relative to Nominal):
-- Politeness decrease had a marginal increase in collisions (sample size of only 100 was not enough)
-- TimeDist Decrease had a *Significantly* more collisions and earlier.
-    - Strangely, TimeDist Increase was marginally worse tha nom, but within noise
-- AccMax: Trend showed safer with *increaseing* AccMax -- reasoning might be because of increased control/options.
-- Braking Comf had almost no effect
-
-In conclusion, TimeDist had the strongest effect
-
-"""
-
-
 class ReckMax1(NominalParams):
     """Reckless driver 1"""
     POLITENESS = 0

@@ -10,7 +10,7 @@ from highway_env.envs.highway_env import HighwayEnv
 from highway_env.road.road import RoadNetwork
 from omegaconf import DictConfig
 
-from sim.road import OldAVRoad
+from sim.road import AVRoad
 from sim.utils import Array
 from sim.vehicles.highway import IDMVehicle, MetaActionVehicle
 
@@ -167,7 +167,7 @@ class AVHighway(HighwayEnv):
         Create a road composed of straight adjacent lanes
         Super-method forces speed_limit=30
         """
-        self.road = OldAVRoad(
+        self.road = AVRoad(
             network=RoadNetwork.straight_road_network(
                 self.config["lanes_count"], speed_limit=self.config["speed_limit"]
             ),

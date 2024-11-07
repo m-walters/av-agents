@@ -2,19 +2,15 @@
 Utils for running simulations
 """
 import logging
-import os
 import random
-import shutil
 from typing import Tuple, TypedDict
 
 import numpy as np
 import xarray as xr
 from omegaconf import DictConfig, OmegaConf, open_dict
-import hydra
 
 from sim import utils
-from sim.gatekeeper import Behaviors
-from sim.gatekeeper import GatekeeperConfig
+from sim.gatekeeper import Behaviors, GatekeeperConfig
 
 logger = logging.getLogger("av-sim")
 
