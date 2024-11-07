@@ -30,7 +30,7 @@ def run_baselines():
     seed = 86777
     script = "ttc.py"
 
-    num_cpus = 32
+    num_cpus = 64
     env_type = "racetrack-v0"
     any_control_collision = "true"
     world_draws = 5000
@@ -83,10 +83,10 @@ def run_gk_gamma():
     seed = 86777
     script = "ttc.py"
 
-    num_cpus = 32
+    num_cpus = 64
     env_type = "racetrack-v0"
     any_control_collision = "true"
-    world_draws = 5000
+    world_draws = 1000
     duration = 200
     warmup = 0
     mc_period = 5
@@ -139,10 +139,10 @@ def run_gk():
     # Name the run, and where it will be saved
     RUN_DIR = "manuscript/hpc/av-8-gk"
 
-    num_cpus = 32
+    num_cpus = 64
     env_type = "racetrack-v0"
     any_control_collision = "true"
-    world_draws = 5000
+    world_draws = 1000
     duration = 200
     warmup = 0
     mc_period = 5
