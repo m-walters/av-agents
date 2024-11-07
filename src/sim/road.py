@@ -8,7 +8,7 @@ from highway_env.vehicle.objects import Landmark
 from highway_env.road.road import Road
 
 import jax.numpy as jnp
-from jax import jit
+# from jax import jit
 
 
 if TYPE_CHECKING:
@@ -404,14 +404,14 @@ class AVRoadNetwork(object):
                     graph_dict[_from][_to].append(lane.to_config())
         return graph_dict
 
-import sys
-class GPUAVRoad(object):
+class JAX_AVOvalRoad(object):
     """
     Road override
 
     Optimized with matrices etc.
     Note:
         - We will not have any self.objects
+        - We leverage oval track shape to determine if a vehicle is in front or behind
     """
     def __init__(
         self,
@@ -436,11 +436,69 @@ class GPUAVRoad(object):
         self.np_random = np_random if np_random else np.random.RandomState()
         self.record_history = record_history
 
-        # 2D Array of global vehicle positions
-        # self.vehicle_positions = np.zeros((len(self.vehicles), 2))
-        self.vehicle_positions = np.array([v.position for v in self.vehicles])
-        print(f"MW POSNS -- {self.vehicle_positions}")
-        sys.exit()
+        # Vehicle to matrix index
+        self.vehicle_lookup = {v: i for i, v in enumerate(self.vehicles)}
+        # Init the vehicle positions and velocities
+        self.refresh_vehicle_states(skip_matrices=True)
+
+        # Init other vehicles relationship matrices
+        self.rel_distances = None
+        self.rel_velocities = None
+        self.frontbacks = None
+
+    def refresh_distance_matrix(self):
+        """
+        Compute the distance matrix of every vehicle to every other vehicle
+        """
+        # positions[:, None, :] expands the positions array to [n_v, 1, 2]
+        # positions[None, :, :] expands the positions array to [1, n_v, 2]
+        # This way, subtracting them gives us [n_v, n_v, 2]
+        diffs = self.vehicle_positions[:, None, :] - self.vehicle_positions[None, :, :]
+        self.rel_distances = jnp.sqrt(jnp.sum(diffs ** 2, axis=-1))
+
+    def refresh_relative_velocity_matrix(self):
+        """
+        Return an [n, n, 2] matrix of vehicle velocities relative to each other,
+        where (i, j) is the velocity of vehicle i relative to vehicle j
+        """
+        self.rel_velocities = self.vehicle_velocities[:, None, :] - self.vehicle_velocities[None, :, :]
+
+    def refresh_front_back(self):
+        """
+        Since our track is an oval centered on [0, 0], we can determine if another vehicle
+        is in front or behind a target vehicle by comparing their angle around the center, and
+        leveraging the fact that vehicles are proceeding clockwise
+        """
+        # Compute the angle of each vehicle
+        angles = jnp.arctan2(self.vehicle_positions[:, 1], self.vehicle_positions[:, 0])
+        # Compute the angle difference between each vehicle
+        # We do this fancy operation that wraps around the angle difference
+        angle_diffs = (angles[:, None] - angles[None, :] + jnp.pi) % (2 * jnp.pi) - jnp.pi
+        # If the difference is positive, the vehicle is in front
+        # If the difference negative, the vehicle is behind
+        # We return the [n, n] array of booleans where True means in front
+        self.frontbacks = angle_diffs > 0
+
+    def refresh_vehicle_states(self, skip_matrices: bool = False):
+        if not self.vehicles:
+            return
+
+        if not self.vehicle_lookup:
+            self.vehicle_lookup = {v: i for i, v in enumerate(self.vehicles)}
+
+        self.vehicle_positions = jnp.asarray([v.position for v in self.vehicles])
+        self.vehicle_velocities = jnp.asarray([v.velocity for v in self.vehicles])
+        self.vehicle_lanes = jnp.asarray([v.lane_index[2] for v in self.vehicles])
+
+        if not skip_matrices:
+            self.refresh_vehicle_matrices()
+
+    def refresh_vehicle_matrices(self):
+        # We'll want to use this sparingly -- really should only be once between steps
+        self.refresh_distance_matrix()
+        self.refresh_relative_velocity_matrix()
+        self.refresh_front_back()
+
 
     def close_objects_to(
         self,
@@ -451,27 +509,48 @@ class GPUAVRoad(object):
         sort: bool = True,
         vehicles_only: bool = False,
     ) -> object:
-        vehicles = [
-            v
-            for v in self.vehicles
-            if np.linalg.norm(v.position - vehicle.position) < distance
-               and v is not vehicle
-               and (see_behind or -2 * vehicle.LENGTH < vehicle.lane_distance_to(v))
-        ]
-        obstacles = [
-            o
-            for o in self.objects
-            if np.linalg.norm(o.position - vehicle.position) < distance
-               and -2 * vehicle.LENGTH < vehicle.lane_distance_to(o)
-        ]
+        """
+        Get objects within a certain range, with a few different controls
+        If see_behind is False, we will only consider vehicles in front of the target vehicle
+        or those within 2*vehicle.LENGTH.
+        """
+        # vehicles = [
+        #     v
+        #     for v in self.vehicles
+        #     if np.linalg.norm(v.position - vehicle.position) < distance
+        #        and v is not vehicle
+        #        and (see_behind or -2 * vehicle.LENGTH < vehicle.lane_distance_to(v))
+        # ]
 
-        objects_ = vehicles if vehicles_only else vehicles + obstacles
+        ref_idx = self.vehicle_lookup[vehicle]
+        if see_behind:
+            # Get all vehicles within distance
+            mask = self.rel_distances[ref_idx, :] < distance
+            mask.at[ref_idx].set(False)
+            # vehicles = self.vehicles[jnp.linalg.norm(self.vehicle_positions - vehicle.position, axis=1) < distance]
 
+        else:
+            # Get all vehicles within distance in front of the target vehicle
+            mask = (self.rel_distances[ref_idx, :] < distance) & self.frontbacks[ref_idx]
+            # Include any vehicles within the 2*vehicle.LENGTH range
+            mask |= (self.rel_distances[ref_idx, :] < 2 * vehicle.LENGTH)
+            mask.at[ref_idx].set(False)
+
+        # The mask already gives us valid vehicle indices
+        mask = mask.astype(bool)
         if sort:
-            objects_ = sorted(objects_, key=lambda o: abs(vehicle.lane_distance_to(o)))
+            # Get the filtered indices
+            v_idxs = jnp.where(mask)[0]
+            # Sort the indices according the rel_distances
+            v_idxs = sorted(v_idxs, key=lambda i: self.rel_distances[ref_idx, i])
+            vehicles = [self.vehicles[i] for i in v_idxs]
+        else:
+            vehicles = [v for (v, m) in zip(self.vehicles, mask) if m]
+
         if count:
-            objects_ = objects_[:count]
-        return objects_
+            return vehicles[:count]
+
+        return vehicles
 
     def close_vehicles_to(
         self,
@@ -504,18 +583,14 @@ class GPUAVRoad(object):
             # for other in self.objects:
             #     vehicle.handle_collisions(other, dt)
 
+        # Refresh the vehicle states
+        self.refresh_vehicle_states()
+
     def neighbour_vehicles(
         self, vehicle: "AVVehicle", lane_index: LaneIndex = None
     ) -> Tuple[Optional["kinematics.Vehicle"], Optional["kinematics.Vehicle"]]:
         """
-        Custom neighbour_vehicles override.
-        This method does a hierarchical search in order:
-            - Same road, same lane
-                - L2 distance
-            - Directly connected road, same lane
-                - L2 distance
-        That is, for all vehicles on same road, same lane, we take the nearest L2 distance.
-        If not vehicle found there, we check the connected road and then take L2 on any of those vehicles
+        Return the front and back vehicles,
 
         :param vehicle: the vehicle whose neighbours must be found
         :param lane_index: the lane on which to look for preceding and following vehicles.
@@ -526,81 +601,248 @@ class GPUAVRoad(object):
         lane_index = lane_index or vehicle.lane_index
         if not lane_index:
             return None, None
-        lane = self.network.get_lane(lane_index)
-        s = self.network.get_lane(lane_index).local_coordinates(vehicle.position)[0]
-        s_front = s_rear = None
-        v_front = v_rear = None
-        for v in self.vehicles + self.objects:
-            if v is not vehicle and not isinstance(v, Landmark):
-                # Check if same road
-                same_road = self.network.is_same_road(v.lane_index, lane_index, same_lane=True)
-                if same_road:
-                    # Determine if in front or behind
-                    rel_pos_enum, rel_vel_enum, rel_pos, rel_vel = self.determine_approach(vehicle, v)
-                    dist = np.linalg.norm(rel_pos)
-                    if vehicle.av_id == "1":
-                        print(
-                            f"MW SAMEROAD [{v.av_id}] -- {rel_pos_enum} | {rel_vel_enum} | {rel_pos} | {rel_vel} |"
-                            f" {dist}"
-                        )
-                    if rel_pos_enum == APPROACHES.AHEAD:
-                        if not s_front or dist < s_front:
-                            if vehicle.av_id == "1":
-                                print(f"MW UPDATING FRONT {v.av_id} | {dist}")
-                            s_front = dist
-                            v_front = v
-                    else:
-                        # Vehicle is behind
-                        if not s_rear or dist < s_rear:
-                            if vehicle.av_id == "1":
-                                print(f"MW UPDATING REAR {v.av_id} | {dist}")
-                            s_rear = dist
-                            v_rear = v
-                    continue
 
-                # Check upcoming lane
-                next_road = self.network.is_leading_to_road(lane_index, v.lane_index, same_lane=True)
-                if next_road:
-                    rel_pos_enum, rel_vel_enum, rel_pos, rel_vel = self.determine_approach(vehicle, v)
-                    dist = np.linalg.norm(rel_pos)
-                    # We will assert that this is a front vehicle and ignore the enums
-                    if vehicle.av_id == "1":
-                        print(
-                            f"MW NEXT ROAD [{v.av_id}] -- {rel_pos_enum} | {rel_vel_enum} | {rel_pos} | {rel_vel} |"
-                            f" {dist}"
-                        )
-                        print(f"MW UPCOMING POSNS -- {vehicle.position} | {v.position} | {rel_pos}")
-                        print(f"MW UPCOMING VELS -- {vehicle.velocity} | {v.velocity} | {rel_vel}")
-                    if not s_front or dist < s_front:
-                        if vehicle.av_id == "1":
-                            print(f"MW UPDATING FRONT {v.av_id} | {dist}")
-                        s_front = dist
-                        v_front = v
-                    continue
+        # Find which vehicles are in this lane and front or back, making sure to ignore ref_idx
+        ref_idx = self.vehicle_lookup[vehicle]
+        front_mask = (self.vehicle_lanes == lane_index[2]) & self.frontbacks[ref_idx]
+        front_mask.at[ref_idx].set(False)
+        back_mask = (self.vehicle_lanes == lane_index[2]) & ~self.frontbacks[ref_idx]
+        back_mask.at[ref_idx].set(False)
 
-                # Check previous lane
-                prev_road = self.network.is_leading_to_road(v.lane_index, lane_index, same_lane=True)
-                if prev_road:
-                    rel_pos_enum, rel_vel_enum, rel_pos, rel_vel = self.determine_approach(vehicle, v)
-                    dist = np.linalg.norm(rel_pos)
-                    # We will assert that this is a rear vehicle and ignore the enums
-                    if not s_rear or dist < s_rear:
-                        s_rear = dist
-                        v_rear = v
-                    continue
+        v_front, v_rear = None, None
+        if jnp.any(front_mask):
+            # Select the vehicle with the smallest distance to our reference vehicle
+            v_front = self.vehicles[jnp.argmin(self.rel_distances[ref_idx, front_mask])]
+        if jnp.any(back_mask):
+            v_rear = self.vehicles[jnp.argmin(self.rel_distances[ref_idx, back_mask])]
 
-        if vehicle.av_id == "1":
-            print(f"MW FINAL DIST -- {s_rear} | {s_front}")
         return v_front, v_rear
 
     def __repr__(self):
         return self.vehicles.__repr__()
 
-class OldAVRoad(Road):
+
+class AVOvalRoad(object):
+    """
+    Road override -- Numpy style.
+
+    Optimized with matrices etc.
+    Note:
+        - We will not have any self.objects
+        - We leverage oval track shape to determine if a vehicle is in front or behind
+    """
+    def __init__(
+        self,
+        network: AVRoadNetwork = None,
+        vehicles: List["kinematics.Vehicle"] = None,
+        road_objects: List["objects.RoadObject"] = None,
+        np_random: np.random.RandomState = None,
+        record_history: bool = False,
+    ) -> None:
+        """
+        New road.
+
+        :param network: the road network describing the lanes
+        :param vehicles: the vehicles driving on the road
+        :param road_objects: the objects on the road including obstacles and landmarks
+        :param np.random.RandomState np_random: a random number generator for vehicle behaviour
+        :param record_history: whether the recent trajectories of vehicles should be recorded for display
+        """
+        self.network = network
+        self.vehicles = vehicles or []
+        self.objects = road_objects or []
+        self.np_random = np_random if np_random else np.random.RandomState()
+        self.record_history = record_history
+
+        # Vehicle to matrix index
+        self.vehicle_lookup = {v: i for i, v in enumerate(self.vehicles)}
+        # Init the vehicle positions and velocities
+        self.refresh_vehicle_states(skip_matrices=True)
+
+        # Init other vehicles relationship matrices
+        self.rel_distances = None
+        self.rel_velocities = None
+        self.frontbacks = None
+
+    def refresh_distance_matrix(self):
+        """
+        Compute the distance matrix of every vehicle to every other vehicle
+        """
+        # positions[:, None, :] expands the positions array to [n_v, 1, 2]
+        # positions[None, :, :] expands the positions array to [1, n_v, 2]
+        # This way, subtracting them gives us [n_v, n_v, 2]
+        diffs = self.vehicle_positions[:, None, :] - self.vehicle_positions[None, :, :]
+        self.rel_distances = np.sqrt(np.sum(diffs ** 2, axis=-1))
+
+    def refresh_relative_velocity_matrix(self):
+        """
+        Return an [n, n, 2] matrix of vehicle velocities relative to each other,
+        where (i, j) is the velocity of vehicle i relative to vehicle j
+        """
+        self.rel_velocities = self.vehicle_velocities[:, None, :] - self.vehicle_velocities[None, :, :]
+
+    def refresh_front_back(self):
+        """
+        Since our track is an oval centered on [0, 0], we can determine if another vehicle
+        is in front or behind a target vehicle by comparing their angle around the center, and
+        leveraging the fact that vehicles are proceeding clockwise
+        """
+        # Compute the angle of each vehicle
+        angles = np.arctan2(self.vehicle_positions[:, 1], self.vehicle_positions[:, 0])
+        # Compute the angle difference between each vehicle
+        # We do this fancy operation that wraps around the angle difference
+        angle_diffs = (angles[:, None] - angles[None, :] + np.pi) % (2 * np.pi) - np.pi
+        # If the difference is positive, the vehicle is in front
+        # If the difference negative, the vehicle is behind
+        # We return the [n, n] array of booleans where True means in front
+        self.frontbacks = angle_diffs > 0
+
+    def refresh_vehicle_states(self, skip_matrices: bool = False):
+        if not self.vehicles:
+            return
+
+        if not self.vehicle_lookup:
+            self.vehicle_lookup = {v: i for i, v in enumerate(self.vehicles)}
+
+        self.vehicle_positions = np.asarray([v.position for v in self.vehicles])
+        self.vehicle_velocities = np.asarray([v.velocity for v in self.vehicles])
+        self.vehicle_lanes = np.asarray([v.lane_index[2] for v in self.vehicles])
+
+        if not skip_matrices:
+            self.refresh_vehicle_matrices()
+
+    def refresh_vehicle_matrices(self):
+        # We'll want to use this sparingly -- really should only be once between steps
+        self.refresh_distance_matrix()
+        self.refresh_relative_velocity_matrix()
+        self.refresh_front_back()
+
+
+    def close_objects_to(
+        self,
+        vehicle: "kinematics.Vehicle",
+        distance: float,
+        count: Optional[int] = None,
+        see_behind: bool = True,
+        sort: bool = True,
+        vehicles_only: bool = False,
+    ) -> object:
+        """
+        Get objects within a certain range, with a few different controls
+        If see_behind is False, we will only consider vehicles in front of the target vehicle
+        or those within 2*vehicle.LENGTH.
+        """
+        # vehicles = [
+        #     v
+        #     for v in self.vehicles
+        #     if np.linalg.norm(v.position - vehicle.position) < distance
+        #        and v is not vehicle
+        #        and (see_behind or -2 * vehicle.LENGTH < vehicle.lane_distance_to(v))
+        # ]
+
+        ref_idx = self.vehicle_lookup[vehicle]
+        if see_behind:
+            # Get all vehicles within distance
+            mask = self.rel_distances[ref_idx, :] < distance
+            mask[ref_idx] = False
+            # vehicles = self.vehicles[np.linalg.norm(self.vehicle_positions - vehicle.position, axis=1) < distance]
+
+        else:
+            # Get all vehicles within distance in front of the target vehicle
+            mask = (self.rel_distances[ref_idx, :] < distance) & self.frontbacks[ref_idx]
+            # Include any vehicles within the 2*vehicle.LENGTH range
+            mask |= (self.rel_distances[ref_idx, :] < 2 * vehicle.LENGTH)
+            mask[ref_idx] = False
+
+        # The mask already gives us valid vehicle indices
+        mask = mask.astype(bool)
+        if sort:
+            # Get the filtered indices
+            v_idxs = np.where(mask)[0]
+            # Sort the indices according the rel_distances
+            v_idxs = sorted(v_idxs, key=lambda i: self.rel_distances[ref_idx, i])
+            vehicles = [self.vehicles[i] for i in v_idxs]
+        else:
+            vehicles = [v for (v, m) in zip(self.vehicles, mask) if m]
+
+        if count:
+            return vehicles[:count]
+
+        return vehicles
+
+    def close_vehicles_to(
+        self,
+        vehicle: "kinematics.Vehicle",
+        distance: float,
+        count: Optional[int] = None,
+        see_behind: bool = True,
+        sort: bool = True,
+    ) -> object:
+        return self.close_objects_to(
+            vehicle, distance, count, see_behind, sort, vehicles_only=True
+        )
+
+    def act(self) -> None:
+        """Decide the actions of each entity on the road."""
+        for vehicle in self.vehicles:
+            vehicle.act()
+
+    def step(self, dt: float) -> None:
+        """
+        Step the dynamics of each entity on the road.
+
+        :param dt: timestep [s]
+        """
+        for vehicle in self.vehicles:
+            vehicle.step(dt)
+        for i, vehicle in enumerate(self.vehicles):
+            for other in self.vehicles[i + 1:]:
+                vehicle.handle_collisions(other, dt)
+            # for other in self.objects:
+            #     vehicle.handle_collisions(other, dt)
+
+        # Refresh the vehicle states
+        self.refresh_vehicle_states()
+
+    def neighbour_vehicles(
+        self, vehicle: "AVVehicle", lane_index: LaneIndex = None
+    ) -> Tuple[Optional["kinematics.Vehicle"], Optional["kinematics.Vehicle"]]:
+        """
+        Return the front and back vehicles,
+
+        :param vehicle: the vehicle whose neighbours must be found
+        :param lane_index: the lane on which to look for preceding and following vehicles.
+                     It doesn't have to be the current vehicle lane but can also be another lane, in which case the
+                     vehicle is projected on it considering its local coordinates in the lane.
+        :return: its preceding vehicle, its following vehicle
+        """
+        lane_index = lane_index or vehicle.lane_index
+        if not lane_index:
+            return None, None
+
+        # Find which vehicles are in this lane and front or back, making sure to ignore ref_idx
+        ref_idx = self.vehicle_lookup[vehicle]
+        front_mask = (self.vehicle_lanes == lane_index[2]) & self.frontbacks[ref_idx]
+        front_mask[ref_idx] = False
+        back_mask = (self.vehicle_lanes == lane_index[2]) & ~self.frontbacks[ref_idx]
+        back_mask[ref_idx] = False
+
+        v_front, v_rear = None, None
+        if np.any(front_mask):
+            # Select the vehicle with the smallest distance to our reference vehicle
+            v_front = self.vehicles[np.argmin(self.rel_distances[ref_idx, front_mask])]
+        if np.any(back_mask):
+            v_rear = self.vehicles[np.argmin(self.rel_distances[ref_idx, back_mask])]
+
+        return v_front, v_rear
+
+    def __repr__(self):
+        return self.vehicles.__repr__()
+
+class AVRoad(Road):
     """
     Road override
     """
-
     def close_vehicles_to(
         self, vehicle: AVVehicle, distance: float, count: int | None = None,
         see_behind: bool = True, sort: bool = True

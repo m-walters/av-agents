@@ -227,7 +227,7 @@ def ttc_spec_plot():
     }
 
     RESULTS_DIR = "../results"
-    run_dir = os.path.join(RESULTS_DIR, "manuscript/av-8-extra")
+    run_dir = os.path.join(RESULTS_DIR, "manuscript/av-8-gk-gamma")
     save_path = os.path.join(run_dir, "ttc-baseline-hist.png")
 
     avplot = plotting.AVPlotter()

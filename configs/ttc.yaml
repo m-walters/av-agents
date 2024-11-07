@@ -18,7 +18,7 @@ hydra:
 
 # See AVHighway for defaults
 highway_env:
-  controlled_vehicles: 4  # Number of ego vehicles
+  controlled_vehicles: 8  # Number of ego vehicles
   control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
   other_vehicles_type: "sim.vehicles.highway.AlterIDMVehicle"
   default_control_behavior: "sim.vehicles.highway.NominalParams"
@@ -59,6 +59,8 @@ any_control_collision: false
 # Multiprocessing configs
 use_mp: true
 multiprocessing_cpus: 2
+# Profiling
+profiling: false
 
 gatekeeper:
   # Time-discounting

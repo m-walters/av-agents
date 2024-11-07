@@ -299,6 +299,10 @@ class AVRacetrack(RacetrackEnv):
 
         logger.debug(f"Created {len(self.road.vehicles)} vehicles")
 
+        # Init the road vehicle matrices
+        if hasattr(self.road, "refresh_vehicle_states"):
+            self.road.refresh_vehicle_states()
+
     def step(self, action: Action) -> Tuple[Observation, float, Array, bool, dict]:
         """
         Perform an action and step the environment dynamics.
@@ -559,7 +563,7 @@ class AVRacetrack(RacetrackEnv):
 
         state_copy: "AVRacetrack" = copy.deepcopy(self)
         state_copy.road.vehicles = [state_copy.vehicle] + state_copy.road.close_vehicles_to(
-            state_copy.vehicle, distance
+            state_copy.vehicle, distance, sort=False
         )
 
         return state_copy

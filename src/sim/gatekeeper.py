@@ -383,7 +383,7 @@ class GatekeeperCommand:
         Ignore found_gks.
         """
         found_gks += [gk]
-        for nbr in self.env.road.close_vehicles_to(gk.get_vehicle(self.env), self.nbr_distance):
+        for nbr in self.env.road.close_vehicles_to(gk.get_vehicle(self.env), self.nbr_distance, sort=False):
             if nbr.av_id not in self.gatekept_vehicles:
                 # Ignore
                 continue

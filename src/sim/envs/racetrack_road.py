@@ -3,7 +3,7 @@ from highway_env.envs.racetrack_env import RacetrackEnv
 from highway_env.road.lane import CircularLane, LineType, StraightLane
 from highway_env.road.road import Road, RoadNetwork
 
-from sim.road import AVRoad
+from sim import road as roads
 
 def racetrack_road1(racetrack: "RacetrackEnv") -> Road:
 
@@ -446,7 +446,7 @@ def racetrack_road1(racetrack: "RacetrackEnv") -> Road:
         ),
     )
 
-    return AVRoad(
+    return roads.AVRoad(
         network=net,
         np_random=racetrack.np_random,
         record_history=racetrack.config["show_trajectories"],
@@ -609,25 +609,26 @@ def big_ring(racetrack: "RacetrackEnv") -> Road:
     # )
 
 
-    return AVRoad(
+    return roads.AVRoad(
         network=net,
         np_random=racetrack.np_random,
         record_history=racetrack.config["show_trajectories"],
     )
 
 
-def oval(racetrack: "RacetrackEnv") -> Road:
+def oval(racetrack: "RacetrackEnv") -> roads.AVOvalRoad:
     net = RoadNetwork()
     w = 5
     w2 = 2*w
     L = 120
     R = 20
+    offset = np.array([-L / 2, 0])
     default_speedlimit = racetrack.config['speed_limit']
 
     # Initialise First Lane
     lane = StraightLane(
-        [0, R],
-        [L, R],
+        np.array([0, R]) + offset,
+        np.array([L, R]) + offset,
         line_types=(LineType.CONTINUOUS, LineType.NONE),
         width=w,
         speed_limit=default_speedlimit,
@@ -640,8 +641,8 @@ def oval(racetrack: "RacetrackEnv") -> Road:
         "a",
         "b",
         StraightLane(
-            [0, R + w],
-            [L, R + w],
+            np.array([0, R + w]) + offset,
+            np.array([L, R + w]) + offset,
             line_types=(LineType.STRIPED, LineType.STRIPED),
             width=w,
             speed_limit=default_speedlimit,
@@ -651,8 +652,8 @@ def oval(racetrack: "RacetrackEnv") -> Road:
         "a",
         "b",
         StraightLane(
-            [0, R + w2],
-            [L, R + w2],
+            np.array([0, R + w2]) + offset,
+            np.array([L, R + w2]) + offset,
             line_types=(LineType.NONE, LineType.CONTINUOUS),
             width=w,
             speed_limit=default_speedlimit,
@@ -660,7 +661,7 @@ def oval(racetrack: "RacetrackEnv") -> Road:
     )
 
     # 2 - First arc
-    center = [L, 0]
+    center = np.array([L, 0]) + offset
     th1, th2 = np.deg2rad(90), np.deg2rad(-90)
     net.add_lane(
         "b",
@@ -710,8 +711,8 @@ def oval(racetrack: "RacetrackEnv") -> Road:
         "c",
         "d",
         StraightLane(
-            [L, -R],
-            [0, -R],
+            np.array([L, -R]) + offset,
+            np.array([0, -R]) + offset,
             line_types=(LineType.CONTINUOUS, LineType.NONE),
             width=w,
             speed_limit=default_speedlimit,
@@ -721,8 +722,8 @@ def oval(racetrack: "RacetrackEnv") -> Road:
         "c",
         "d",
         StraightLane(
-            [L, -R - w],
-            [0, -R - w],
+            np.array([L, -R - w]) + offset,
+            np.array([0, -R - w]) + offset,
             line_types=(LineType.STRIPED, LineType.STRIPED),
             width=w,
             speed_limit=default_speedlimit,
@@ -732,8 +733,8 @@ def oval(racetrack: "RacetrackEnv") -> Road:
         "c",
         "d",
         StraightLane(
-            [L, -R - w2],
-            [0, -R - w2],
+            np.array([L, -R - w2]) + offset,
+            np.array([0, -R - w2]) + offset,
             line_types=(LineType.NONE, LineType.CONTINUOUS),
             width=w,
             speed_limit=default_speedlimit,
@@ -741,7 +742,7 @@ def oval(racetrack: "RacetrackEnv") -> Road:
     )
 
     # 4 -- Second arc
-    center = [0, 0]
+    center = np.array([0, 0]) + offset
     th1, th2 = np.deg2rad(270), np.deg2rad(90)
     net.add_lane(
         "d",
@@ -787,7 +788,7 @@ def oval(racetrack: "RacetrackEnv") -> Road:
     )
 
 
-    return AVRoad(
+    return roads.AVOvalRoad(
         network=net,
         np_random=racetrack.np_random,
         record_history=racetrack.config["show_trajectories"],
