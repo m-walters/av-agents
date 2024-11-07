@@ -1,5 +1,6 @@
 import numpy as np
 import xarray as xr
+import os
 
 from sim import plotting
 
@@ -75,16 +76,15 @@ def multiagent_plot():
     )
 
 
-def gatekeep_compare():
-    # Gatekeep comparing
+def comparison_plot():
+    # Comparison plot
     RESULTS_DIR = "../results"
-    save_dir = RESULTS_DIR + "/freezer/quick-ttc-gk-nc-8"
-    no_gk_dir = RESULTS_DIR + "/freezer/quick-ttc-gk-nc-8"
-    gk_dir = RESULTS_DIR + "/freezer/quick-ttc-gk-nc-8"
+    save_path = RESULTS_DIR + "/freezer/nc8/behavior_compare.png"
 
     data_tups = [
-        (xr.open_dataset(no_gk_dir + "/results.nc"), "No GK"),
-        (xr.open_dataset(gk_dir + "/results.nc"), "GK"),
+        (xr.open_dataset(f"{RESULTS_DIR}/freezer/nc8/ttc-baseline-cons/results.nc"), "Cons."),
+        (xr.open_dataset(f"{RESULTS_DIR}/freezer/nc8/ttc-baseline-nom/results.nc"), "Nom."),
+        (xr.open_dataset(f"{RESULTS_DIR}/freezer/nc8/ttc-baseline-hotshot/results.nc"), "Hotshot"),
     ]
 
     labels = [
@@ -110,8 +110,8 @@ def gatekeep_compare():
     ]
 
     avplot = plotting.AVPlotter()
-    avplot.multiagent_comparison_plot(
-        f"{save_dir}/gatekeep_compare.png",
+    avplot.comparison_plot(
+        save_path,
         data_tups,
         metric_label_map,
         axes_layout=axes_layout,
@@ -125,13 +125,13 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results/freezer/seeds/seed-86777"
-    save_dir = RESULTS_DIR + "/"
+    RESULTS_DIR = "../results/manuscript/av-8-extra"
+    save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
+
     data_tups = [
-        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p1/results.nc"), r'$L^*=0.1$'),
-        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p2/results.nc"), r'$L^*=0.2$'),
-        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p5/results.nc"), r'$L^*=0.5$'),
-        (xr.open_dataset(RESULTS_DIR + "/gk-lstar-0p9/results.nc"), r'$L^*=0.9$'),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'nom/results.nc')), "Nominal"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'def/results.nc')), "Defensive"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'hotshot/results.nc')), "Hotshot"),
     ]
 
     truncate = None
@@ -142,50 +142,100 @@ def compare_plot():
     #     (xr.open_dataset(RESULTS_DIR + "/tmp/results.nc"), r'$\beta = 1$'),
     # ]
 
+    # labels = [
+    #     "R_Def",
+    #     "R_Spd",
+    #     "Actual Loss",
+    #     "E[Loss]",
+    #     "E[Energy]",
+    #     "E[Entropy]",
+    #     "Risk",
+    #     "Crashed",
+    #     "Number in Conservative",
+    # ]
+    # # 4 rows, 2 columns
+    # axes_layout = [
+    #     ["R_Def", "Actual Loss"],
+    #     ["R_Spd", "E[Loss]"],
+    #     ["E[Energy]", "Risk"],
+    #     ["E[Entropy]", "Crashed"],
+    #     [None, "Number in Conservative"],
+    # ]
+
     labels = [
         "R_Def",
         "R_Spd",
         "Actual Loss",
-        "E[Loss]",
-        "E[Energy]",
-        "E[Entropy]",
-        "Risk",
-        "Crashed",
-        "Number in Conservative",
+        # "Crashed",
     ]
-    metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
-
     # 4 rows, 2 columns
     axes_layout = [
         ["R_Def", "Actual Loss"],
-        ["R_Spd", "E[Loss]"],
-        ["E[Energy]", "Risk"],
-        ["E[Entropy]", "Crashed"],
-        [None, "Number in Conservative"],
+        ["R_Spd", None],
     ]
+    metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
 
     avplot = plotting.AVPlotter()
-    avplot.multiagent_comparison_plot(
-        f"{save_dir}/temp_compare.png",
+    avplot.comparison_plot(
+        save_path,
         data_tups,
         metric_label_map,
         axes_layout=axes_layout,
         truncate=truncate,
+        title=title,
     )
 
 
-def baseline_hist():
+def ttc_baseline_hist():
     """
     Plot the baseline histogram
     """
-    RESULTS_DIR = "../results/freezer/"
-    save_dir = RESULTS_DIR + "/"
+    RESULTS_DIR = "../results/"
+    run_dir = os.path.join(RESULTS_DIR, "tmp/nc8/oval-av1-crash/")
+    save_path = os.path.join(run_dir, "ttc-baseline-hist.png")
 
     avplot = plotting.AVPlotter()
     avplot.ttc_baselines_hist(
-        f"{save_dir}/ttc_baseline_hist.png",
-        nominal_ds=xr.open_dataset(RESULTS_DIR + "/ttc_nom_baseline/results.nc"),
-        conservative_ds=xr.open_dataset(RESULTS_DIR + "/ttc_conservative_baseline/results.nc"),
+        save_path,
+        nominal_ds=xr.open_dataset(os.path.join(run_dir, "ttc-baseline-nom/results.nc")),
+        conservative_ds=xr.open_dataset(os.path.join(run_dir, "ttc-baseline-cons/results.nc")),
+        hotshot_ds=xr.open_dataset(os.path.join(run_dir, "ttc-baseline-hotshot/results.nc")),
+    )
+
+
+def ttc_spec_plot():
+
+    SPEC_BEHAVIORS = {
+        "nom": "sim.vehicles.highway.NominalParams",
+        # "cons": "sim.vehicles.highway.ConservativeParams",
+        "def": "sim.vehicles.highway.DefensiveParams",
+        "hotshot": "sim.vehicles.highway.HotshotParams",
+        # "polite-incr": "sim.vehicles.highway.PolitenessIncr",
+        # "polite-decr": "sim.vehicles.highway.PolitenessDecr",
+        # "timedist-incr": "sim.vehicles.highway.TimeDistWantedIncr",
+        # "timedist-decr": "sim.vehicles.highway.TimeDistWantedDecr",
+        # "acc-max-incr": "sim.vehicles.highway.AccMaxIncr",
+        # "acc-max-decr": "sim.vehicles.highway.AccMaxDecr",
+        # "comf-brake-incr": "sim.vehicles.highway.ComfBrakingIncr",
+        # "comf-brake-decr": "sim.vehicles.highway.ComfBrakingDecr",
+        # "reckmax1": "sim.vehicles.highway.ReckMax1",
+        # "reckmax2": "sim.vehicles.highway.ReckMax2",
+        # "reckmax3": "sim.vehicles.highway.ReckMax3",
+        # "def-HE": "sim.vehicles.highway.DefensiveHE",
+        # "def-1": "sim.vehicles.highway.Defensive1",
+        # "def-2": "sim.vehicles.highway.Defensive2",
+    }
+
+    RESULTS_DIR = "../results"
+    run_dir = os.path.join(RESULTS_DIR, "manuscript/av-8-gk-gamma")
+    save_path = os.path.join(run_dir, "ttc-baseline-hist.png")
+
+    avplot = plotting.AVPlotter()
+    avplot.spec_baselines_hist(
+        save_path,
+        [
+            (xr.open_dataset(os.path.join(run_dir, f"{name}/results.nc")), name) for name in SPEC_BEHAVIORS
+        ]
     )
 
 
@@ -201,11 +251,11 @@ def ttc_vs_gk():
         xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-1/results.nc"),
         xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-2/results.nc"),
         xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-4/results.nc"),
-        # xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-8/results.nc"),
+        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-8/results.nc"),
     ]
 
     avplot = plotting.AVPlotter()
-    avplot.ttc_vs_num_gk(
+    avplot.ttc_vs_gk(
         f"{save_dir}/ttc-vs-gk.png",
         data
     )

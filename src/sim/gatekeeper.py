@@ -96,8 +96,7 @@ class Gatekeeper:
         """
         Use ID to see if this vehicle crashed
         """
-        vehicle = self.get_vehicle(env)
-        return vehicle.crashed or (env.config['offroad_terminal'] and not vehicle.on_road)
+        return self.get_vehicle(env).crashed
 
     def calculate_reward(self, env: Union[highway.AVHighway, intersection.AVIntersection]):
         """
@@ -295,15 +294,12 @@ class GatekeeperCommand:
 
         return losses, collisions
 
-    def run(self, pool: Optional["multiprocessing.Pool"], gamma: float = 1.0) -> dict:
+    def run(self, pool: Optional["multiprocessing.Pool"]) -> dict:
         """
         Perform montecarlo simulations and calculate risk equations etc.
 
         :return: Several result arrays. Dimensions [n_controlled, n_mc]
         """
-        if gamma != 1.0:
-            raise NotImplementedError("Discounting not yet implemented")
-
         # losses = np.zeros((self.n_montecarlo, self.n_controlled))
         # collisions = np.zeros_like(losses)
 
@@ -387,7 +383,7 @@ class GatekeeperCommand:
         Ignore found_gks.
         """
         found_gks += [gk]
-        for nbr in self.env.road.close_vehicles_to(gk.get_vehicle(self.env), self.nbr_distance):
+        for nbr in self.env.road.close_vehicles_to(gk.get_vehicle(self.env), self.nbr_distance, sort=False):
             if nbr.av_id not in self.gatekept_vehicles:
                 # Ignore
                 continue

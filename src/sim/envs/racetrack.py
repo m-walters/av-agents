@@ -9,7 +9,7 @@ from highway_env.envs.common.action import Action
 from highway_env.envs.racetrack_env import RacetrackEnv
 from omegaconf import DictConfig
 
-from sim.envs.racetrack_road import racetrack_road1
+from sim.envs import racetrack_road as racetrack_maps
 from sim.utils import Array
 from sim.vehicles.highway import IDMVehicle, MetaActionVehicle
 
@@ -88,6 +88,10 @@ class AVRacetrack(RacetrackEnv):
             "max_defensive_penalty": -3,  # Cap the defensive reward/penalty
             "control_vehicle_type": "sim.vehicles.highway.IDMVehicle",
             "other_vehicles_type": "sim.vehicles.highway.AlterIDMVehicle",
+            "default_control_behavior": "sim.vehicles.highway.NominalParams",
+            # Number of vehicles with the reward_speed target
+            # Remainder will have a target speed lower than speed_limit
+            "num_vehicles_control_speed": 8,
             "simulation_frequency": 15,  # frames per second
             "policy_frequency": 5,  # policy checks per second (and how many 'steps' per second)
             "n_montecarlo": 10,
@@ -128,6 +132,13 @@ class AVRacetrack(RacetrackEnv):
         """
         return [v for v in self.road.vehicles if v.crashed]
 
+    @property
+    def off_road(self) -> list:
+        """
+        Return vehicles off the road
+        """
+        return [v for v in self.road.vehicles if not v.on_road]
+
     def _reset(self) -> None:
         """
         Init road and vehicles
@@ -144,7 +155,9 @@ class AVRacetrack(RacetrackEnv):
 
         self._make_road()
         self._make_vehicles()
-        self.multiagent = len(self.controlled_vehicles) > 1
+        # self.multiagent = len(self.controlled_vehicles) > 1
+        # Let's just force things to always be multiagent
+        self.multiagent = True
 
     def reset(
         self,
@@ -176,12 +189,13 @@ class AVRacetrack(RacetrackEnv):
         return obs, info
 
     def _make_road(self) -> None:
-        self.road = racetrack_road1(self)
+        self.road = racetrack_maps.oval(self)
 
     def _make_vehicles(self) -> None:
         rng = self.np_random
         control_vehicle_class = utils.class_from_path(self.config["control_vehicle_type"])
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
+        control_behavior = utils.class_from_path(self.config["default_control_behavior"])
 
         # Clear vehicles
         self.controlled_vehicles.clear()
@@ -193,6 +207,8 @@ class AVRacetrack(RacetrackEnv):
         controlled_created = 0
         break_count = 1e3
         attempts = 0
+
+        num_control_speed_remaining = self.config["num_vehicles_control_speed"]
 
         while controlled_created < self.config["controlled_vehicles"]:
             attempts += 1
@@ -213,6 +229,8 @@ class AVRacetrack(RacetrackEnv):
                 speed=0.7 * rng.normal(self.config["speed_limit"])
             )
             controlled_vehicle.target_speed = self.config["reward_speed"]
+            # Imbue default behavior
+            controlled_vehicle.set_behavior_params(control_behavior)
             # Prevent early collisions
             for v in self.road.vehicles:
                 if np.linalg.norm(controlled_vehicle.position - v.position) < 12:
@@ -226,6 +244,7 @@ class AVRacetrack(RacetrackEnv):
                 self.vehicle_lookup[controlled_vehicle.av_id] = controlled_vehicle
                 self.controlled_vehicles.append(controlled_vehicle)
                 self.road.vehicles.append(controlled_vehicle)
+                num_control_speed_remaining -= 1
                 # Randomize its behavior
                 if hasattr(controlled_vehicle, "randomize_behavior"):
                     controlled_vehicle.randomize_behavior()
@@ -254,7 +273,13 @@ class AVRacetrack(RacetrackEnv):
             # For comparing the effects of varying the number of GKs,
             # we need the target speed attribute of the various cars on the road to
             # be invariant under this change.
-            vehicle.target_speed = self.config["reward_speed"]
+            #
+            # However, only up until num_vehicles_control_speed
+            if num_control_speed_remaining > 0:
+                vehicle.target_speed = self.config["reward_speed"]
+                num_control_speed_remaining -= 1
+            else:
+                vehicle.target_speed = self.config["speed_limit"]
 
             # Prevent early collisions
             for v in self.road.vehicles:
@@ -274,7 +299,11 @@ class AVRacetrack(RacetrackEnv):
 
         logger.debug(f"Created {len(self.road.vehicles)} vehicles")
 
-    def step(self, action: Action) -> Tuple[Observation, float, bool, bool, dict]:
+        # Init the road vehicle matrices
+        if hasattr(self.road, "refresh_vehicle_states"):
+            self.road.refresh_vehicle_states()
+
+    def step(self, action: Action) -> Tuple[Observation, float, Array, bool, dict]:
         """
         Perform an action and step the environment dynamics.
 
@@ -504,11 +533,11 @@ class AVRacetrack(RacetrackEnv):
                 "crash_reward": self.crash_reward(self.vehicle),
             }
 
-    def _is_terminated(self) -> bool | Array:
+    def _is_terminated(self) -> Array:
         """The episode is over if the ego vehicle crashed."""
-        if not self.multiagent:
-            return self.vehicle.crashed
-
+        # if not self.multiagent:
+        #     return self.vehicle.crashed
+        #
         return np.array(
             [v.crashed for v in self.controlled_vehicles],
             dtype=int
@@ -534,7 +563,7 @@ class AVRacetrack(RacetrackEnv):
 
         state_copy: "AVRacetrack" = copy.deepcopy(self)
         state_copy.road.vehicles = [state_copy.vehicle] + state_copy.road.close_vehicles_to(
-            state_copy.vehicle, distance
+            state_copy.vehicle, distance, sort=False
         )
 
         return state_copy
