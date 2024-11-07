@@ -85,6 +85,10 @@ class AVHighway(HighwayEnv):
             "mc_horizon": 5,
             "alpha": 10.,
             "beta": 0.25,
+            "default_control_behavior": "sim.vehicles.highway.NominalParams",
+            # Number of vehicles with the reward_speed target
+            # Remainder will have a target speed lower than speed_limit
+            "num_vehicles_control_speed": 8,
         }
 
     def update_config(self, cfg: DictConfig, reset: bool = True) -> None:
@@ -116,7 +120,9 @@ class AVHighway(HighwayEnv):
 
         self._create_road()
         self._create_vehicles()
-        self.multiagent = len(self.controlled_vehicles) > 1
+        # self.multiagent = len(self.controlled_vehicles) > 1
+        # Let's just force things to always be multiagent
+        self.multiagent = True
 
     def reset(
         self,
@@ -175,6 +181,7 @@ class AVHighway(HighwayEnv):
         """
         control_vehicle_class = utils.class_from_path(self.config["control_vehicle_type"])
         other_vehicles_type = utils.class_from_path(self.config["other_vehicles_type"])
+        control_behavior = utils.class_from_path(self.config["default_control_behavior"])
         other_per_controlled = utils.near_split(
             self.config["vehicles_count"], num_bins=self.config[
                 "controlled_vehicles"]
@@ -182,6 +189,8 @@ class AVHighway(HighwayEnv):
 
         self.controlled_vehicles = []
         self.alter_vehicles = []
+        # Number of alters that will also share the target reward speed
+        num_alter_control_speed = self.config["num_vehicles_control_speed"] - self.config["controlled_vehicles"]
         av_id = 1
         for others in other_per_controlled:
             vehicle = control_vehicle_class.create_random(
@@ -192,6 +201,8 @@ class AVHighway(HighwayEnv):
                 av_id=str(av_id),
                 target_speed=self.config["reward_speed"]
             )
+            # Imbue default behavior
+            vehicle.set_behavior_params(control_behavior)
             self.vehicle_lookup[vehicle.av_id] = vehicle
             av_id += 1
             # vehicle = self.action_type.vehicle_class(self.road, vehicle.position, vehicle.heading, vehicle.speed)
@@ -210,6 +221,12 @@ class AVHighway(HighwayEnv):
                 setattr(vehicle, "av_id", str(av_id))
                 self.vehicle_lookup[vehicle.av_id] = vehicle
                 av_id += 1
+                if num_alter_control_speed > 0:
+                    vehicle.target_speed = self.config["reward_speed"]
+                    num_alter_control_speed -= 1
+                else:
+                    vehicle.target_speed = self.config["speed_limit"]
+
                 if hasattr(vehicle, "randomize_behavior"):
                     vehicle.randomize_behavior()
                 self.alter_vehicles.append(vehicle)
@@ -456,12 +473,18 @@ class AVHighway(HighwayEnv):
         """
         return [v for v in self.road.vehicles if v.crashed]
 
+    @property
+    def off_road(self) -> list:
+        """
+        Return vehicles off the road
+        """
+        return [v for v in self.road.vehicles if not v.on_road]
+
     def _is_terminated(self) -> bool | Array:
         """The episode is over if the ego vehicle crashed."""
-        if not self.multiagent:
-            return (self.vehicle.crashed or
-                    self.config["offroad_terminal"] and not self.vehicle.on_road)
-
+        # if not self.multiagent:
+        #     return self.vehicle.crashed or self.config["offroad_terminal"] and not self.vehicle.on_road
+        #
         return np.array(
             [v.crashed or self.config["offroad_terminal"] and not v.on_road for v in self.controlled_vehicles],
             dtype=int

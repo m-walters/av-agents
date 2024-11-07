@@ -2,67 +2,70 @@
 One-off script for running multiple runs
 """
 import subprocess
+import os
 
+
+SPEC_BEHAVIORS = {
+    "nom": "sim.vehicles.highway.NominalParams",
+    # "cons": "sim.vehicles.highway.ConservativeParams",
+    "def": "sim.vehicles.highway.DefensiveParams",
+    "hotshot": "sim.vehicles.highway.HotshotParams",
+    # "polite-incr": "sim.vehicles.highway.PolitenessIncr",
+    # "polite-decr": "sim.vehicles.highway.PolitenessDecr",
+    # "timedist-incr": "sim.vehicles.highway.TimeDistWantedIncr",
+    # "timedist-decr": "sim.vehicles.highway.TimeDistWantedDecr",
+    # "acc-max-incr": "sim.vehicles.highway.AccMaxIncr",
+    # "acc-max-decr": "sim.vehicles.highway.AccMaxDecr",
+    # "comf-brake-incr": "sim.vehicles.highway.ComfBrakingIncr",
+    # "comf-brake-decr": "sim.vehicles.highway.ComfBrakingDecr",
+    # "reckmax1": "sim.vehicles.highway.ReckMax1",
+    # "reckmax2": "sim.vehicles.highway.ReckMax2",
+    # "reckmax3": "sim.vehicles.highway.ReckMax3",
+    # "def-HE": "sim.vehicles.highway.DefensiveHE",
+    # "def-1": "sim.vehicles.highway.Defensive1",
+    # "def-2": "sim.vehicles.highway.Defensive2",
+}
 
 def run_multiagent_sequence():
     seed = 86777
     script = "ttc.py"
 
+    num_cpus = 16
+    env_type = "racetrack-v0"
+    any_control_collision = "true"
+    world_draws = 100
+    duration = 100
+    warmup = 0
+    mc_period = 5
+    mc_horizon = 20
+    n_montecarlo = 100
+    # Discounting
+    enable_time_discounting = "true"
+    # Profiling
+    profiling = "false"
+
+    # Name the run, and where it will be saved
+    RUN_DIR = "manuscript/av-8-gk-gamma"
+
     configs = [
         {
-            "name": "quick-ttc-gk-nc-1",
+            "name": os.path.join(RUN_DIR, name),
             "seed": seed,
-            "use_mp": True,
-            "highway_env.controlled_vehicles": 1,
-        },
-        {
-            "name": "quick-ttc-gk-nc-2",
-            "seed": seed,
-            "use_mp": True,
-            "highway_env.controlled_vehicles": 2,
-        },
-        {
-            "name": "quick-ttc-gk-nc-4",
-            "seed": seed,
-            "use_mp": True,
-            "highway_env.controlled_vehicles": 4,
-        },
-        {
-            "name": "quick-ttc-gk-nc-8",
-            "seed": seed,
-            "use_mp": True,
+            "highway_env.default_control_behavior": behavior,
             "highway_env.controlled_vehicles": 8,
-        },
-        # {
-        #     "name": "quick-ttc-gk-nc-16",
-        #     "seed": seed,
-        #     "use_mp": True,
-        #     "highway_env.controlled_vehicles": 16,
-        # },
-        # {
-        #     "name": "pstar-0p9",
-        #     "use_mp": True,
-        #     "gatekeeper.preference_prior.p_star": 0.9,
-        #     "gatekeeper.preference_prior.l_star": 0.2,
-        # },
-        # {
-        #     "name": "pstar-0p01_lstar-0p1",
-        #     "use_mp": True,
-        #     "gatekeeper.preference_prior.p_star": 0.01,
-        #     "gatekeeper.preference_prior.l_star": 0.1,
-        # },
-        # {
-        #     "name": "pstar-0p1_lstar-0p1",
-        #     "use_mp": True,
-        #     "gatekeeper.preference_prior.p_star": 0.1,
-        #     "gatekeeper.preference_prior.l_star": 0.1,
-        # },
-        # {
-        #     "name": "pstar-0p9_lstar-0p1",
-        #     "use_mp": True,
-        #     "gatekeeper.preference_prior.p_star": 0.9,
-        #     "gatekeeper.preference_prior.l_star": 0.1,
-        # },
+            "any_control_collision": any_control_collision,
+            "multiprocessing_cpus": num_cpus,
+            "env_type": env_type,
+            "highway_env.duration": duration,
+            "highway_env.mc_horizon": mc_horizon,
+            "highway_env.n_montecarlo": n_montecarlo,
+            "world_draws": world_draws,
+            "warmup_steps": warmup,
+            "mc_period": mc_period,
+            "gatekeeper.enable_time_discounting": enable_time_discounting,
+            "profiling": profiling,
+
+        } for name, behavior in SPEC_BEHAVIORS.items()
     ]
 
     for config in configs:

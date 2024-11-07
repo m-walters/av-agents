@@ -30,9 +30,9 @@ class AVPlotter:
         # Custom metric processing override methods
         # Keys are the plot labels, permitting Dataset metric keys to not be confined to a single processor
         # We have different sets based on different contexts
-        self.GK_METRIC_PROCESSORS = {
-            "Crashed": self.process_multiagent_crashed,
-            "Number in Conservative": self.process_multiagent_behaviors,
+        self.PLOT_OVERRIDES = {
+            "Crashed": self.multiagent_crash_override,
+            "Number in Conservative": self.multiagent_behaviors_override,
         }
 
     @staticmethod
@@ -46,24 +46,48 @@ class AVPlotter:
     def subplots(nrow, ncol, **kwargs):
         return plt.subplots(nrow, ncol, **kwargs)
 
-    @classmethod
-    def process_multiagent_crashed(cls, var_dataset: xr.Dataset) -> np.ndarray:
+    @staticmethod
+    def multiagent_crash_override(
+        ds: xr.Dataset, var, steps, mc_steps, world_avg: bool = False, **plot_kwargs,
+    ) -> None:
         """
         Specialized function for the 'crashed' multiagent Dataset variable
-
-        :param var_dataset: The filtered dataset on the 'crashed' variable
         """
-        # return var_dataset.sum(dim='ego').values
-        return var_dataset.sum(dim='ego').values  # Pycharm flags as wrong return type but it's correct
+        if not world_avg:
+            y = ds[var].sum(dim='ego').values
+            sns.lineplot(
+                x=steps, y=y, **plot_kwargs
+            )
+        else:
+            # Shape of 'data' will be [duration]
+            data = ds[var].sum(['ego', 'world'], skipna=True)
 
-    @classmethod
-    def process_multiagent_behaviors(cls, var_dataset: xr.Dataset) -> np.ndarray:
+            # Dataframe with columns ['step', var]
+            df = data.to_dataframe().reset_index()
+            _ = plot_kwargs.pop("errorbar", None)
+            sns.lineplot(
+                data=df, x='step', y=var, errorbar='sd', **plot_kwargs
+            )
+            # bin_range = (0, df[var].max())
+            # sns.histplot(
+            #     x='step', y=var, bins=30, kde=False,
+            #     binrange=bin_range, **plot_kwargs
+            # )
+
+    @staticmethod
+    def multiagent_behaviors_override(
+        ds: xr.Dataset, var, steps, mc_steps, world_avg: bool=False, **plot_kwargs,
+    ) -> None:
         """
         Specialized function for the 'behavior_mode' multiagent Dataset variable
-
-        :param var_dataset: The filtered dataset on the 'behavior_mode' variable
         """
-        return var_dataset.sum(dim='ego').values  # Pycharm flags as wrong return type but it's correct
+        if not world_avg:
+            y = ds[var].sum(dim='ego').values
+            sns.lineplot(
+                x=steps, y=y, **plot_kwargs
+            )
+        else:
+            raise NotImplementedError("World averaging not implemented for 'behavior_mode'")
 
     def create_animation(
         self,
@@ -499,27 +523,67 @@ class AVPlotter:
 
         plt.show()
 
-    def multiagent_comparison_plot(
+    @staticmethod
+    def world_stats(
+        ds: xr.Dataset,
+        var: str,
+        as_df: bool = True,
+    ) -> Union[tuple[np.ndarray, np.ndarray, np.ndarray], pd.DataFrame]:
+        """
+        Return the mean and 5/95 percentiles for a dataset on var across worlds
+
+        :param ds: Dataset
+        :param var: Variable to extract
+        :param as_df: Return as a DataFrame averaged across ego, but containing each world_draw and duration measure
+        """
+        # First get a mask of the NaNs for this variable
+        # mask = ds[var].isnull()
+        mask = ds[var] == 0
+
+        # Shape of 'data' will be [world_draws, duration]
+        # Set masked 0s to nan and then skip them in the mean calculation
+        data = ds[var].where(~mask, np.nan).mean('ego', skipna=True)
+
+        if as_df:
+            # Convert to a DataFrame
+            # data has world_draws and step dimensions that we need to make columns for
+            # Return a dataframe with columns ['world', 'step', var]
+            return data.to_dataframe().reset_index()
+        else:
+            # NaN values may still be present if they were for all egos
+            data = data.values
+            mean = np.nanmean(data, axis=0)
+            p5 = np.nanpercentile(data, 5, axis=0)
+            p95 = np.nanpercentile(data, 95, axis=0)
+
+            return mean, p5, p95
+
+    def comparison_plot(
         self,
         save_path: str,
         datasets: list[tuple[Union[xr.Dataset, str], str]],
         metric_label_map: dict,
         axes_layout: list[list[str]] | None = None,
         ylog_plots: list[str] | None = None,
+        title: str | None = None,
         truncate: Union[int, range, list] | None = None,
+        world_avg: bool = True,
     ):
         """
         Plot to compare multiple datasets.
         Datasets should have the same egos and steps.
         Plotted values are the averages across egos.
+        Filters out data after a 'time_to_collision' is encountered
 
         :param save_path: Save path
         :param datasets: List of (Dataset or Dataset path, Name) tuples
         :param metric_label_map: Map of plot labels to Dataset keys
         :param axes_layout: Optional 2D layout of axes labels
         :param ylog_plots: Optional list of labels to plot on a log scale
+        :param title: Optional title for the plot
         :param truncate: Optionally limit the plotting range by simulation step.
             Provide an int for an end limit or an inclusive window range
+        :param world_avg: Average across worlds
         """
         # Compile datasets
         datasets = [(xr.open_dataset(ds) if isinstance(ds, str) else ds, name) for ds, name in datasets]
@@ -619,34 +683,58 @@ class AVPlotter:
             # Tick to the next bin above duration
             xticks = np.arange(steps[0], duration + r + 1, size, dtype=int)
 
-        # Tighten up
-        plt.subplots_adjust(hspace=0.1, bottom=0.05, right=0.95, top=0.98)
-
         for label in y_labels:
             var = metric_label_map[label]
             ax = label2axis(label)
 
             for idx, (ds, ds_name) in enumerate(datasets):
-                data = ds[var].sel(world=0)
+                if world_avg:
+                    if label in self.PLOT_OVERRIDES:
+                        self.PLOT_OVERRIDES[label](
+                            ds, var=var, steps=steps, mc_steps=mc_steps, world_avg=True, color=cols[idx], ax=ax,
+                            errorbar='sd', legend=False, label=ds_name
+                        )
+                    else:
+                        # Default to mean
+                        df = self.world_stats(ds, var, as_df=True)
 
-                # Call custom methods if they exist
-                if label in self.GK_METRIC_PROCESSORS:
-                    y = self.GK_METRIC_PROCESSORS[label](data)
+                        if 'mc_step' in ds[var].dims:
+                            x = mc_steps
+                            # Std-dev error bars. See https://seaborn.pydata.org/tutorial/error_bars.html
+                            sns.lineplot(
+                                data=df, x='mc_step', y=var, color=cols[idx], ax=ax,
+                                errorbar='sd', legend=False, label=ds_name,
+                            )
+                        else:
+                            x = steps
+                            sns.lineplot(
+                                data=df, x='step', y=var, color=cols[idx], ax=ax,
+                                errorbar='sd', legend=False, label=ds_name,
+                            )
+
                 else:
-                    # Default to mean
-                    y = data.mean(dim='ego').values
+                    # Call custom methods if they exist
+                    if label in self.PLOT_OVERRIDES:
+                        self.PLOT_OVERRIDES[label](
+                            ds, var=var, steps=steps, mc_steps=mc_steps, world_avg=False,
+                            color=cols[idx], ax=ax, legend=False, label=ds_name,
+                        )
+                    else:
+                        data = ds[var].sel(world=0)
+                        # Default to mean
+                        y = data.mean(dim='ego').values
 
-                if 'mc_step' in ds[var].dims:
-                    x = mc_steps
-                    y = y[left_mc_steps_idx:right_mc_steps_idx + 1]
-                else:
-                    x = steps
-                    y = y[left_steps_idx:right_steps_idx + 1]
+                        if 'mc_step' in ds[var].dims:
+                            x = mc_steps
+                            y = y[left_mc_steps_idx:right_mc_steps_idx + 1]
+                        else:
+                            x = steps
+                            y = y[left_steps_idx:right_steps_idx + 1]
 
-                sns.lineplot(
-                    x=x, y=y, color=cols[idx], ax=ax,
-                    legend=False, label=ds_name,
-                )
+                        sns.lineplot(
+                            x=x, y=y, color=cols[idx], ax=ax,
+                            legend=False, label=ds_name,
+                        )
 
             ax.set_ylabel(label)
             ax.set_xticks(xticks)
@@ -671,6 +759,13 @@ class AVPlotter:
                 title=None
             )
 
+        # Tighten up
+        if not title:
+            plt.subplots_adjust(hspace=0.1, bottom=0.15, right=0.95, top=0.95)
+        else:
+            fig.suptitle(title)
+            plt.subplots_adjust(hspace=0.1, bottom=0.15, right=0.95, top=0.9)
+
         if save_path:
             print(f"Saving to {save_path}")
             plt.savefig(save_path)
@@ -682,28 +777,45 @@ class AVPlotter:
         save_path: str,
         nominal_ds: xr.Dataset,
         conservative_ds: xr.Dataset,
+        hotshot_ds: xr.Dataset | None = None,
     ):
         """
         Histogram of TTCs for the two baselines
         """
         nom_values: np.ndarray = nominal_ds['time_to_collision'].values
         cons_values: np.ndarray = conservative_ds['time_to_collision'].values
+        
         # When no collision occurred, values are `inf`
         # Filter these out
-        nom_values = nom_values[nom_values != np.inf]
-        cons_values = cons_values[cons_values != np.inf]
+        nom_values = nom_values[nom_values != np.nan]
+        cons_values = cons_values[cons_values != np.nan]
 
         col_wheel = self.get_color_wheel()
         nom_color = next(col_wheel)
         cons_color = next(col_wheel)
 
         # Plotting the distributions
-        sns.histplot(nom_values, bins=30, kde=True, label='Nominal', color=nom_color)
-        sns.histplot(cons_values, bins=30, kde=True, label='Cons.', color=cons_color)
+        # Get the bin range as the 'duration' of the simulation
+        bin_range = (0, nominal_ds.coords['step'].values[-1])
+        # bin_range = (0, 30)
+        sns.histplot(nom_values, bins=30, kde=False, label='Nominal', color=nom_color, binrange=bin_range)
+        sns.histplot(cons_values, bins=30, kde=False, label='Cons.', color=cons_color, binrange=bin_range)
 
         # Adding vertical lines at the means
         nom_mean = np.mean(nom_values)
         cons_mean = np.mean(cons_values)
+
+        if hotshot_ds:
+            hotshot_values = hotshot_ds['time_to_collision'].values if hotshot_ds else None
+            hotshot_values = hotshot_values[hotshot_values != np.nan]
+            hotshot_color = next(col_wheel)
+            hotshot_mean = np.mean(hotshot_values)
+            print(f"SIZES: Nom: {len(nom_values)} | Cons: {len(cons_values)} | Hot: {len(hotshot_values)}")
+            sns.histplot(hotshot_values, bins=30, kde=False, label='Hotshot', color=hotshot_color, binrange=bin_range)
+            plt.axvline(hotshot_mean, color=hotshot_color, linestyle='dashed', linewidth=1)
+        else:
+            print(f"SIZES: Nom: {len(nom_values)} | Cons: {len(cons_values)}")
+
         plt.axvline(nom_mean, color=nom_color, linestyle='dashed', linewidth=1)
         plt.axvline(cons_mean, color=cons_color, linestyle='dashed', linewidth=1)
 
@@ -719,7 +831,63 @@ class AVPlotter:
 
         plt.show()
 
-    def ttc_vs_num_gk(
+    def spec_baselines_hist(
+        self,
+        save_path: str,
+        _datasets: list[tuple[xr.Dataset, str]],
+    ):
+        # Get num world draws from ref
+        ref_ds = _datasets[0][0]
+        world_draws = ref_ds.coords['world'].values[-1]
+
+        # Compile datasets
+        datasets = [
+            ds['time_to_collision'].values for ds, lbl in _datasets
+        ]
+        # And again
+        datasets = [
+            ds[~np.isnan(ds)] for ds in datasets
+        ]
+
+        col_wheel = self.get_color_wheel()
+        # Plotting the distributions
+        # Get the bin range as the 'duration' of the simulation
+        bin_range = (0, 200)
+        # bin_range = (0, 30)
+
+        for i_ds, ds in enumerate(datasets):
+            lbl = _datasets[i_ds][1]
+            col = next(col_wheel)
+            sns.histplot(ds, bins=30, kde=True, label=lbl, color=col, binrange=bin_range)
+            print(f"{lbl}: {np.mean(ds)} ({len(ds)}/{world_draws} crashed)")
+            plt.axvline(np.mean(ds), color=col, linestyle='dashed', linewidth=1)
+
+        # Adding titles and labels
+        plt.title("")
+        plt.xlabel("Step")
+        plt.ylabel("")
+        plt.legend()
+
+        if save_path:
+            print(f"Saving to {save_path}")
+            plt.savefig(save_path)
+
+        plt.show()
+
+    def collisions(
+        self,
+        save_path: str,
+        nominal_ds: xr.Dataset,
+        conservative_ds: xr.Dataset,
+        hotshot_ds: xr.Dataset | None = None,
+    ):
+        """
+        Investigate the collision/crashed dataset.
+        """
+        ...
+
+
+    def ttc_vs_gk(
         self,
         save_path: str,
         datasets: list[Union[xr.Dataset, str]],
@@ -738,7 +906,7 @@ class AVPlotter:
             n_controlled = ds.ego.size
             ttc = ds.time_to_collision.values
             # Filter out the inf values
-            ttc = ttc[ttc != np.inf].astype(int)
+            ttc = ttc[ttc != np.nan].astype(int)
             if len(ttc) == 0:
                 print(f"No TTC values for dataset: {i_ds}")
 
@@ -753,7 +921,7 @@ class AVPlotter:
         col_wheel = self.get_color_wheel()
         fig = sns.violinplot(
             data=df, x='num_gk', y='ttc', color=next(col_wheel),
-            cut=0, inner='box',
+            cut=0, inner='point',
             # If inner is 'box'
             # inner_kws=dict(box_width=15, whis_width=2, color=".8")
         )

@@ -2,19 +2,15 @@
 Utils for running simulations
 """
 import logging
-import os
 import random
-import shutil
 from typing import Tuple, TypedDict
 
 import numpy as np
 import xarray as xr
 from omegaconf import DictConfig, OmegaConf, open_dict
-import hydra
 
 from sim import utils
-from sim.gatekeeper import Behaviors
-from sim.gatekeeper import GatekeeperConfig
+from sim.gatekeeper import Behaviors, GatekeeperConfig
 
 logger = logging.getLogger("av-sim")
 
@@ -103,7 +99,7 @@ def init_multiagent_results_dataset(
             "speed_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             "crashed": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
             # Record the step which saw the first vehicle collision
-            "time_to_collision": (("world",), np.full((world_draws,), np.inf)),
+            "time_to_collision": (("world",), np.full((world_draws,), np.nan)),
             # For gatekeeper analysis
             # 0 for nominal, 1 for conservative, etc...
             "behavior_mode": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
@@ -144,6 +140,9 @@ def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams", DictConfig[Gatekeepe
         logger.setLevel(logging.INFO)
     elif log_level == "warning":
         logger.setLevel(logging.WARNING)
+
+    if not cfg.highway_env.get("default_control_behavior", None):
+        raise ValueError("highway_env.default_control_behavior class must be specified")
 
     # Print our config
     logger.debug(f"CONFIG\n{OmegaConf.to_yaml(cfg)}")
