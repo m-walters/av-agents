@@ -145,7 +145,7 @@ def compare_plot():
 
 def ttc_hist():
 
-    SPEC_BEHAVIORS = {
+    CONTROL_BEHAVIORS = {
         "nom": "sim.vehicles.highway.NominalParams",
         # "cons": "sim.vehicles.highway.ConservativeParams",
         "def": "sim.vehicles.highway.DefensiveParams",
@@ -174,7 +174,7 @@ def ttc_hist():
     avplot.ttc_hist(
         save_path,
         [
-            (xr.open_dataset(os.path.join(run_dir, f"{name}/results.nc")), name) for name in SPEC_BEHAVIORS
+            (xr.open_dataset(os.path.join(run_dir, f"{name}/results.nc")), name) for name in CONTROL_BEHAVIORS
         ]
     )
 

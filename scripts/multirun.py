@@ -5,7 +5,7 @@ import subprocess
 import os
 
 
-SPEC_BEHAVIORS = {
+CONTROL_BEHAVIORS = {
     "nom": "sim.vehicles.highway.NominalParams",
     # "cons": "sim.vehicles.highway.ConservativeParams",
     "def": "sim.vehicles.highway.DefensiveParams",
@@ -65,7 +65,7 @@ def run_multiagent_sequence():
             "gatekeeper.enable_time_discounting": enable_time_discounting,
             "profiling": profiling,
 
-        } for name, behavior in SPEC_BEHAVIORS.items()
+        } for name, behavior in CONTROL_BEHAVIORS.items()
     ]
 
     for config in configs:
