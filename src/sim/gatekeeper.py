@@ -24,6 +24,19 @@ class Behaviors(Enum):
     CONSERVATIVE = "conservative"
 
 
+class ControlPolicies(Enum):
+    """
+    The GK policy for how vehicle behavior modes are selected
+    """
+    # Simulate ahead with the current vehicle policy
+    # If the risk threshold for the current policy is crossed, toggle the policy from Def <-> Hot
+    RISK_THRESHOLD = "risk_threshold"
+
+    # Not Implemented but..
+    # Simulate ahead with N different policies and select the best
+    BEST_OF = "best_of"
+
+
 def behavior_to_num(behavior: Behaviors) -> int:
     if behavior == Behaviors.NOMINAL:
         return 0
@@ -37,6 +50,7 @@ class BehaviorConfig(TypedDict):
     nominal_risk_threshold: float
     conservative_class: str
     conservative_risk_threshold: float
+    control_policy: ControlPolicies
 
 
 class GatekeeperConfig(TypedDict):
@@ -83,6 +97,8 @@ class Gatekeeper:
         # Behavior control logic
         self.behavior_ctrl_enabled = behavior_cfg["enable"]
         self.behavior = Behaviors.NOMINAL
+        self.control_policy = ControlPolicies(behavior_cfg["control_policy"])
+
         if self.behavior_ctrl_enabled:
             self.nominal_behavior = utils.class_from_path(behavior_cfg["nominal_class"])
             self.nominal_risk_threshold = rstar_range[0]
@@ -130,15 +146,16 @@ class Gatekeeper:
         if not self.behavior_ctrl_enabled:
             return
 
-        if self.behavior == Behaviors.NOMINAL and nbrhood_cre > self.nominal_risk_threshold:
-            # Get the vehicle and change its policy
-            vehicle = self.get_vehicle(env)
-            vehicle.set_behavior_params(self.conservative_behavior)
-            self.behavior = Behaviors.CONSERVATIVE
-        elif self.behavior == Behaviors.CONSERVATIVE and nbrhood_cre < self.conservative_risk_threshold:
-            vehicle = self.get_vehicle(env)
-            vehicle.set_behavior_params(self.nominal_behavior)
-            self.behavior = Behaviors.NOMINAL
+        if self.control_policy == ControlPolicies.RISK_THRESHOLD:
+            if self.behavior == Behaviors.NOMINAL and nbrhood_cre > self.nominal_risk_threshold:
+                # Get the vehicle and change its policy
+                vehicle = self.get_vehicle(env)
+                vehicle.set_behavior_params(self.conservative_behavior)
+                self.behavior = Behaviors.CONSERVATIVE
+            elif self.behavior == Behaviors.CONSERVATIVE and nbrhood_cre < self.conservative_risk_threshold:
+                vehicle = self.get_vehicle(env)
+                vehicle.set_behavior_params(self.nominal_behavior)
+                self.behavior = Behaviors.NOMINAL
 
     def __str__(self):
         return f"Gatekeeper[{self.gk_idx} | {self.vehicle_id}]"
@@ -166,6 +183,13 @@ class GatekeeperCommand:
             raise ValueError(
                 f"GatekeeperCommand received {len(control_vehicles)}, but is configured "
                 f"for {gk_cfg.n_controlled}"
+            )
+
+        behavior_config = gk_cfg.behavior_cfg
+        if behavior_config['nominal_class'] != env.config['default_control_behavior']:
+            raise ValueError(
+                f"GatekeeperCommand received nominal_class {behavior_config['nominal_class']} "
+                f"but the environment is configured for {env.config['default_control_behavior']}"
             )
 
         self.env = env
@@ -200,7 +224,7 @@ class GatekeeperCommand:
         self.gatekeepers: List["Gatekeeper"] = []
         self.gatekeeper_lookup: Dict[int, Gatekeeper] = {}
         for i, v in enumerate(control_vehicles):
-            self._spawn_gatekeeper(v, i, gk_cfg.behavior_cfg, (nominal_rstar, conservative_rstar))
+            self._spawn_gatekeeper(v, i, behavior_config, (nominal_rstar, conservative_rstar))
 
     @property
     def gatekept_vehicles(self):

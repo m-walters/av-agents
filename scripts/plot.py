@@ -76,62 +76,19 @@ def multiagent_plot():
     )
 
 
-def comparison_plot():
-    # Comparison plot
-    RESULTS_DIR = "../results"
-    save_path = RESULTS_DIR + "/freezer/nc8/behavior_compare.png"
-
-    data_tups = [
-        (xr.open_dataset(f"{RESULTS_DIR}/freezer/nc8/ttc-baseline-cons/results.nc"), "Cons."),
-        (xr.open_dataset(f"{RESULTS_DIR}/freezer/nc8/ttc-baseline-nom/results.nc"), "Nom."),
-        (xr.open_dataset(f"{RESULTS_DIR}/freezer/nc8/ttc-baseline-hotshot/results.nc"), "Hotshot"),
-    ]
-
-    labels = [
-        "R_Def",
-        "R_Spd",
-        "Actual Loss",
-        "E[Loss]",
-        "E[Energy]",
-        "E[Entropy]",
-        "Risk",
-        "Crashed",
-        "Number in Conservative",
-    ]
-    metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
-
-    # 4 rows, 2 columns
-    axes_layout = [
-        ["R_Def", "Actual Loss"],
-        ["R_Spd", "E[Loss]"],
-        ["E[Energy]", "Risk"],
-        ["E[Entropy]", "Crashed"],
-        ["Number in Conservative", None],
-    ]
-
-    avplot = plotting.AVPlotter()
-    avplot.comparison_plot(
-        save_path,
-        data_tups,
-        metric_label_map,
-        axes_layout=axes_layout,
-        # truncate = 0,
-    )
-
-
 def compare_plot():
     """
     Generic comparison plot
     """
     title = None
 
-    RESULTS_DIR = "../results/manuscript/av-8-extra"
+    RESULTS_DIR = "../results/manuscript/av-8-gk-gamma"
     save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
 
     data_tups = [
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'nom/results.nc')), "Nominal"),
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'def/results.nc')), "Defensive"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'hotshot/results.nc')), "Hotshot"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'hotshot/results.nc')), "Hotshot"),
     ]
 
     truncate = None
@@ -166,12 +123,12 @@ def compare_plot():
         "R_Def",
         "R_Spd",
         "Actual Loss",
-        # "Crashed",
+        "Crashed",
     ]
     # 4 rows, 2 columns
     axes_layout = [
         ["R_Def", "Actual Loss"],
-        ["R_Spd", None],
+        ["R_Spd", "Crashed"],
     ]
     metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
 

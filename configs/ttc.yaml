@@ -76,5 +76,7 @@ gatekeeper:
     model: "NullEntropyRiskModel"
   behavior_cfg:
     enable: true
+    # The GK policy for how vehicle behavior modes are selected
+    control_policy: "risk_threshold"
     nominal_class: "sim.vehicles.highway.HotshotParams"
     conservative_class: "sim.vehicles.highway.DefensiveParams"
