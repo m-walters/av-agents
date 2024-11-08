@@ -181,7 +181,7 @@ def main(cfg: DictConfig):
                                 results = gk_cmd.run(pool)
 
                                 # Record data
-                                ds["mc_loss"][i_world, i_mc, :, :] = results["losses"]
+                                # ds["mc_loss"][i_world, i_mc, :, :] = results["losses"]
                                 ds["loss_mean"][i_world, i_mc, :] = np.mean(results["losses"], axis=0)
                                 ds["loss_p5"][i_world, i_mc, :] = np.percentile(results["losses"], 5, axis=0)
                                 ds["loss_p95"][i_world, i_mc, :] = np.percentile(results["losses"], 95, axis=0)

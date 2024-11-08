@@ -108,10 +108,11 @@ def init_multiagent_results_dataset(
             "entropy": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
             "energy": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
             # Tracking the MC losses -- These are predicted losses
-            "mc_loss": (
-                ("world", "mc_step", "sample", "ego"),
-                np.full((world_draws, num_mc_sweeps, n_montecarlo, n_controlled), np.nan)
-            ),
+            # Let's disable this for now to save memory
+            # "mc_loss": (
+            #     ("world", "mc_step", "sample", "ego"),
+            #     np.full((world_draws, num_mc_sweeps, n_montecarlo, n_controlled), np.nan)
+            # ),
             "loss_mean": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
             # 5% percentile
             "loss_p5": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),

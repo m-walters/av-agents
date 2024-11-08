@@ -143,24 +143,7 @@ def compare_plot():
     )
 
 
-def ttc_baseline_hist():
-    """
-    Plot the baseline histogram
-    """
-    RESULTS_DIR = "../results/"
-    run_dir = os.path.join(RESULTS_DIR, "tmp/nc8/oval-av1-crash/")
-    save_path = os.path.join(run_dir, "ttc-baseline-hist.png")
-
-    avplot = plotting.AVPlotter()
-    avplot.ttc_baselines_hist(
-        save_path,
-        nominal_ds=xr.open_dataset(os.path.join(run_dir, "ttc-baseline-nom/results.nc")),
-        conservative_ds=xr.open_dataset(os.path.join(run_dir, "ttc-baseline-cons/results.nc")),
-        hotshot_ds=xr.open_dataset(os.path.join(run_dir, "ttc-baseline-hotshot/results.nc")),
-    )
-
-
-def ttc_spec_plot():
+def ttc_hist():
 
     SPEC_BEHAVIORS = {
         "nom": "sim.vehicles.highway.NominalParams",
@@ -184,11 +167,11 @@ def ttc_spec_plot():
     }
 
     RESULTS_DIR = "../results"
-    run_dir = os.path.join(RESULTS_DIR, "manuscript/av-8-gk-gamma")
+    run_dir = os.path.join(RESULTS_DIR, "manuscript/av-8-extra")
     save_path = os.path.join(run_dir, "ttc-baseline-hist.png")
 
     avplot = plotting.AVPlotter()
-    avplot.spec_baselines_hist(
+    avplot.ttc_hist(
         save_path,
         [
             (xr.open_dataset(os.path.join(run_dir, f"{name}/results.nc")), name) for name in SPEC_BEHAVIORS

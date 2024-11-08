@@ -772,66 +772,7 @@ class AVPlotter:
 
         plt.show()
 
-    def ttc_baselines_hist(
-        self,
-        save_path: str,
-        nominal_ds: xr.Dataset,
-        conservative_ds: xr.Dataset,
-        hotshot_ds: xr.Dataset | None = None,
-    ):
-        """
-        Histogram of TTCs for the two baselines
-        """
-        nom_values: np.ndarray = nominal_ds['time_to_collision'].values
-        cons_values: np.ndarray = conservative_ds['time_to_collision'].values
-        
-        # When no collision occurred, values are `inf`
-        # Filter these out
-        nom_values = nom_values[nom_values != np.nan]
-        cons_values = cons_values[cons_values != np.nan]
-
-        col_wheel = self.get_color_wheel()
-        nom_color = next(col_wheel)
-        cons_color = next(col_wheel)
-
-        # Plotting the distributions
-        # Get the bin range as the 'duration' of the simulation
-        bin_range = (0, nominal_ds.coords['step'].values[-1])
-        # bin_range = (0, 30)
-        sns.histplot(nom_values, bins=30, kde=False, label='Nominal', color=nom_color, binrange=bin_range)
-        sns.histplot(cons_values, bins=30, kde=False, label='Cons.', color=cons_color, binrange=bin_range)
-
-        # Adding vertical lines at the means
-        nom_mean = np.mean(nom_values)
-        cons_mean = np.mean(cons_values)
-
-        if hotshot_ds:
-            hotshot_values = hotshot_ds['time_to_collision'].values if hotshot_ds else None
-            hotshot_values = hotshot_values[hotshot_values != np.nan]
-            hotshot_color = next(col_wheel)
-            hotshot_mean = np.mean(hotshot_values)
-            print(f"SIZES: Nom: {len(nom_values)} | Cons: {len(cons_values)} | Hot: {len(hotshot_values)}")
-            sns.histplot(hotshot_values, bins=30, kde=False, label='Hotshot', color=hotshot_color, binrange=bin_range)
-            plt.axvline(hotshot_mean, color=hotshot_color, linestyle='dashed', linewidth=1)
-        else:
-            print(f"SIZES: Nom: {len(nom_values)} | Cons: {len(cons_values)}")
-
-        plt.axvline(nom_mean, color=nom_color, linestyle='dashed', linewidth=1)
-        plt.axvline(cons_mean, color=cons_color, linestyle='dashed', linewidth=1)
-
-        # Adding titles and labels
-        plt.title("")
-        plt.xlabel("Step")
-        plt.ylabel("")
-        plt.legend()
-
-        if save_path:
-            print(f"Saving to {save_path}")
-            plt.savefig(save_path)
-
-        plt.show()
-
-    def spec_baselines_hist(
+    def ttc_hist(
         self,
         save_path: str,
         _datasets: list[tuple[xr.Dataset, str]],
@@ -839,6 +780,7 @@ class AVPlotter:
         # Get num world draws from ref
         ref_ds = _datasets[0][0]
         world_draws = ref_ds.coords['world'].values[-1]
+        duration = ref_ds.coords['step'].values[-1]
 
         # Compile datasets
         datasets = [
@@ -852,7 +794,7 @@ class AVPlotter:
         col_wheel = self.get_color_wheel()
         # Plotting the distributions
         # Get the bin range as the 'duration' of the simulation
-        bin_range = (0, 200)
+        bin_range = (0, duration)
         # bin_range = (0, 30)
 
         for i_ds, ds in enumerate(datasets):
@@ -860,7 +802,7 @@ class AVPlotter:
             col = next(col_wheel)
             sns.histplot(ds, bins=30, kde=True, label=lbl, color=col, binrange=bin_range)
             print(f"{lbl}: {np.mean(ds)} ({len(ds)}/{world_draws} crashed)")
-            plt.axvline(np.mean(ds), color=col, linestyle='dashed', linewidth=1)
+            # plt.axvline(np.mean(ds), color=col, linestyle='dashed', linewidth=1)
 
         # Adding titles and labels
         plt.title("")

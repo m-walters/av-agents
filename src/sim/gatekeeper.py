@@ -32,10 +32,6 @@ class ControlPolicies(Enum):
     # If the risk threshold for the current policy is crossed, toggle the policy from Def <-> Hot
     RISK_THRESHOLD = "risk_threshold"
 
-    # Not Implemented but..
-    # Simulate ahead with N different policies and select the best
-    BEST_OF = "best_of"
-
 
 def behavior_to_num(behavior: Behaviors) -> int:
     if behavior == Behaviors.NOMINAL:

@@ -80,7 +80,7 @@ def main(cfg: DictConfig):
                 risk, entropy, energy = risk_model(losses, loss_log_probs)
 
                 # Record data
-                ds["mc_loss"][0, i_mc, :] = losses
+                # ds["mc_loss"][0, i_mc, :] = losses
                 ds["loss_mean"][0, i_mc] = np.mean(losses)
                 ds["loss_p5"][0, i_mc] = np.percentile(losses, 5)
                 ds["loss_p95"][0, i_mc] = np.percentile(losses, 95)
