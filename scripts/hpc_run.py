@@ -5,7 +5,7 @@ import subprocess
 import os
 
 
-BEHAVIORS = {
+CONTROL_BEHAVIORS = {
     "nom": "sim.vehicles.highway.NominalParams",
     # "cons": "sim.vehicles.highway.ConservativeParams",
     "def": "sim.vehicles.highway.DefensiveParams",
@@ -65,7 +65,7 @@ def run_baselines():
             "gatekeeper.enable_time_discounting": enable_time_discounting,
             "profiling": profiling,
 
-        } for name, behavior in BEHAVIORS.items()
+        } for name, behavior in CONTROL_BEHAVIORS.items()
     ]
 
     for config in configs:
@@ -118,7 +118,7 @@ def run_gk_gamma():
             "gatekeeper.enable_time_discounting": enable_time_discounting,
             "profiling": profiling,
 
-        } for name, behavior in BEHAVIORS.items()
+        } for name, behavior in CONTROL_BEHAVIORS.items()
     ]
 
     for config in configs:
@@ -171,7 +171,7 @@ def run_gk():
             "gatekeeper.enable_time_discounting": enable_time_discounting,
             "profiling": profiling,
 
-        } for name, behavior in BEHAVIORS.items()
+        } for name, behavior in CONTROL_BEHAVIORS.items()
     ]
 
     for config in configs:

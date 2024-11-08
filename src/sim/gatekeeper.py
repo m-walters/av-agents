@@ -44,8 +44,8 @@ class BehaviorConfig(TypedDict):
     enable: bool
     nominal_class: str
     nominal_risk_threshold: float
-    conservative_class: str
-    conservative_risk_threshold: float
+    defensive_class: str
+    defensive_risk_threshold: float
     control_policy: ControlPolicies
 
 
@@ -59,7 +59,7 @@ class GatekeeperConfig(TypedDict):
     risk_model: dict
     # Risk and behavior
     nominal_risk_threshold: float
-    conservative_risk_threshold: float
+    defensive_risk_threshold: float
     behavior_cfg: BehaviorConfig
 
 
@@ -98,8 +98,8 @@ class Gatekeeper:
         if self.behavior_ctrl_enabled:
             self.nominal_behavior = utils.class_from_path(behavior_cfg["nominal_class"])
             self.nominal_risk_threshold = rstar_range[0]
-            self.conservative_behavior = utils.class_from_path(behavior_cfg["conservative_class"])
-            self.conservative_risk_threshold = rstar_range[1]
+            self.defensive_behavior = utils.class_from_path(behavior_cfg["defensive_class"])
+            self.defensive_risk_threshold = rstar_range[1]
 
     def get_vehicle(self, env):
         return env.vehicle_lookup[self.vehicle_id]
@@ -146,9 +146,9 @@ class Gatekeeper:
             if self.behavior == Behaviors.NOMINAL and nbrhood_cre > self.nominal_risk_threshold:
                 # Get the vehicle and change its policy
                 vehicle = self.get_vehicle(env)
-                vehicle.set_behavior_params(self.conservative_behavior)
+                vehicle.set_behavior_params(self.defensive_behavior)
                 self.behavior = Behaviors.CONSERVATIVE
-            elif self.behavior == Behaviors.CONSERVATIVE and nbrhood_cre < self.conservative_risk_threshold:
+            elif self.behavior == Behaviors.CONSERVATIVE and nbrhood_cre < self.defensive_risk_threshold:
                 vehicle = self.get_vehicle(env)
                 vehicle.set_behavior_params(self.nominal_behavior)
                 self.behavior = Behaviors.NOMINAL
@@ -213,14 +213,14 @@ class GatekeeperCommand:
         # This quantity here has the nice property that it is L* fraction of the max normalized risk,
         # which in the Loss-normalized [0,1] case, the max risk is k = -log(p_star)/l_star
         nominal_rstar = -np.log(gk_cfg['preference_prior']['p_star']) * 1.1
-        conservative_rstar = nominal_rstar * 0.9 / 1.1
+        defensive_rstar = nominal_rstar * 0.9 / 1.1
 
         # Init GKs
         self.nbr_distance = VehicleBase.MAX_SPEED * 0.7  # For GK neighborhood discovery
         self.gatekeepers: List["Gatekeeper"] = []
         self.gatekeeper_lookup: Dict[int, Gatekeeper] = {}
         for i, v in enumerate(control_vehicles):
-            self._spawn_gatekeeper(v, i, behavior_config, (nominal_rstar, conservative_rstar))
+            self._spawn_gatekeeper(v, i, behavior_config, (nominal_rstar, defensive_rstar))
 
     @property
     def gatekept_vehicles(self):

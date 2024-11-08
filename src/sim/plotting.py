@@ -820,7 +820,7 @@ class AVPlotter:
         self,
         save_path: str,
         nominal_ds: xr.Dataset,
-        conservative_ds: xr.Dataset,
+        defensive_ds: xr.Dataset,
         hotshot_ds: xr.Dataset | None = None,
     ):
         """
