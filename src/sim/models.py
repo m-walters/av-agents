@@ -6,9 +6,7 @@ import numpy as np
 from scipy.special import logsumexp
 from scipy.stats import differential_entropy as entr
 
-from sim.utils import (
-    Array, Number, NpyRKey
-)
+from sim.utils import (Array, NpyRKey, Number)
 
 logger = logging.getLogger("av-sim")
 
@@ -44,6 +42,7 @@ class LossModel(ModelBase):
         )
         loss = speed_loss + collision_loss
         return loss, -10 * np.ones(loss.shape)  # Set log_probs to -10 to show high precision
+
 
 ####
 # Deprecated until we put Jax back online

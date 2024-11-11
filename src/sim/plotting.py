@@ -76,7 +76,7 @@ class AVPlotter:
 
     @staticmethod
     def multiagent_behaviors_override(
-        ds: xr.Dataset, var, steps, mc_steps, world_avg: bool=False, **plot_kwargs,
+        ds: xr.Dataset, var, steps, mc_steps, world_avg: bool = False, **plot_kwargs,
     ) -> None:
         """
         Specialized function for the 'behavior_mode' multiagent Dataset variable
@@ -839,7 +839,6 @@ class AVPlotter:
         """
         ...
 
-
     def ttc_vs_gk(
         self,
         save_path: str,
@@ -856,16 +855,15 @@ class AVPlotter:
 
         df = pd.DataFrame([], columns=['num_gk', 'ttc'], dtype=int)
         for i_ds, ds in enumerate(datasets):
-            n_controlled = ds.ego.size
+            n_ego = ds.ego.size
             ttc = ds.time_to_collision.values
             # Filter out the inf values
             ttc = ttc[ttc != np.nan].astype(int)
             if len(ttc) == 0:
                 print(f"No TTC values for dataset: {i_ds}")
 
-
             # Add to dataframe
-            df = pd.concat([df, pd.DataFrame({'num_gk': n_controlled, 'ttc': ttc})])
+            df = pd.concat([df, pd.DataFrame({'num_gk': n_ego, 'ttc': ttc})])
 
         # Set placeholder categories to make the x-axis numerical
         all_x_values = np.arange(0, df['num_gk'].max() + 1)
@@ -889,4 +887,3 @@ class AVPlotter:
             plt.savefig(save_path)
 
         plt.show()
-

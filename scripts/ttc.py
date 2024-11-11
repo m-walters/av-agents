@@ -30,7 +30,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module=r"gymnasium\.util
 
 
 def non_mc_worldsim(
-    world_idx: int, world_seed: int, env: AVRacetrack, num_collision_watch: int=1,
+    world_idx: int, world_seed: int, env: AVRacetrack, num_collision_watch: int = 1,
     profiler: cProfile.Profile | None
     = None
 ) -> tuple[int, dict]:
@@ -41,15 +41,15 @@ def non_mc_worldsim(
     obs, info = env.reset(seed=world_seed)
     uenv: "AVRacetrack" = env.unwrapped
 
-    duration, n_controlled = uenv.config['duration'], uenv.config['controlled_vehicles']
+    duration, n_ego = uenv.config['duration'], uenv.config['controlled_vehicles']
 
     result = {
-        "losses": np.full((duration, n_controlled), np.nan),
-        "reward": np.full((duration, n_controlled), np.nan),
-        "real_loss": np.full((duration, n_controlled), np.nan),
-        "crashed": np.full((duration, n_controlled), np.nan),
-        "defensive_reward": np.full((duration, n_controlled), np.nan),
-        "speed_reward": np.full((duration, n_controlled), np.nan),
+        "losses": np.full((duration, n_ego), np.nan),
+        "reward": np.full((duration, n_ego), np.nan),
+        "real_loss": np.full((duration, n_ego), np.nan),
+        "crashed": np.full((duration, n_ego), np.nan),
+        "defensive_reward": np.full((duration, n_ego), np.nan),
+        "speed_reward": np.full((duration, n_ego), np.nan),
         "time_to_collision": np.nan,  # Or int if found later
     }
 
@@ -90,7 +90,7 @@ def non_mc_worldsim(
 
 
 def mc_worldsim(
-    world_idx: int, world_seed: int, env: AVRacetrack, run_params: dict, gk_cfg: dict, num_collision_watch: int=1,
+    world_idx: int, world_seed: int, env: AVRacetrack, run_params: dict, gk_cfg: dict, num_collision_watch: int = 1,
     profiler: cProfile.Profile | None = None
 ) -> tuple[int, dict]:
     """
@@ -100,33 +100,31 @@ def mc_worldsim(
     obs, info = env.reset(seed=world_seed)
     uenv: "AVRacetrack" = env.unwrapped
 
-    duration, n_controlled = run_params['duration'], uenv.config['controlled_vehicles']
+    duration, n_ego = run_params['duration'], uenv.config['controlled_vehicles']
     num_mc_sweeps = len(run_params["mc_steps"])
     warmup_steps = run_params['warmup_steps']
 
     result = {
-        "losses": np.full((duration, n_controlled), np.nan),
-        "reward": np.full((duration, n_controlled), np.nan),
-        "real_loss": np.full((duration, n_controlled), np.nan),
-        "crashed": np.full((duration, n_controlled), np.nan),
-        "defensive_reward": np.full((duration, n_controlled), np.nan),
-        "speed_reward": np.full((duration, n_controlled), np.nan),
-        "behavior_mode": np.full((duration, n_controlled), np.nan),
+        "losses": np.full((duration, n_ego), np.nan),
+        "reward": np.full((duration, n_ego), np.nan),
+        "real_loss": np.full((duration, n_ego), np.nan),
+        "crashed": np.full((duration, n_ego), np.nan),
+        "defensive_reward": np.full((duration, n_ego), np.nan),
+        "speed_reward": np.full((duration, n_ego), np.nan),
+        "behavior_mode": np.full((duration, n_ego), np.nan),
         "time_to_collision": np.nan,  # Or int if found later
         # MC data
-        # "mc_loss": np.full((num_mc_sweeps, n_controlled), np.nan),
-        "loss_mean": np.full((num_mc_sweeps, n_controlled), np.nan),
-        "loss_p5": np.full((num_mc_sweeps, n_controlled), np.nan),
-        "loss_p95": np.full((num_mc_sweeps, n_controlled), np.nan),
-        "risk": np.full((num_mc_sweeps, n_controlled), np.nan),
-        "entropy": np.full((num_mc_sweeps, n_controlled), np.nan),
-        "energy": np.full((num_mc_sweeps, n_controlled), np.nan),
+        # "mc_loss": np.full((num_mc_sweeps, n_ego), np.nan),
+        "loss_mean": np.full((num_mc_sweeps, n_ego), np.nan),
+        "loss_p5": np.full((num_mc_sweeps, n_ego), np.nan),
+        "loss_p95": np.full((num_mc_sweeps, n_ego), np.nan),
+        "risk": np.full((num_mc_sweeps, n_ego), np.nan),
+        "entropy": np.full((num_mc_sweeps, n_ego), np.nan),
+        "energy": np.full((num_mc_sweeps, n_ego), np.nan),
     }
 
     # Init the gatekeeper
-    gk_cmd = gatekeeper.GatekeeperCommand(
-        uenv, gk_cfg, uenv.controlled_vehicles, world_seed
-    )
+    gk_cmd = gatekeeper.GatekeeperCommand(uenv, gk_cfg, world_seed)
 
     with logging_redirect_tqdm():
         i_mc = 0  # Tracking MC steps
@@ -137,7 +135,7 @@ def mc_worldsim(
             # We'll use the gatekeeper params for montecarlo control
             if step >= warmup_steps:
                 if step % gk_cmd.mc_period == 0:
-                    # Returned dimensions are [n_controlled]
+                    # Returned dimensions are [n_ego]
                     results = gk_cmd.run()
 
                     # Record data
@@ -192,9 +190,9 @@ def main(cfg: DictConfig):
     cfg, run_params, gk_cfg = run.init(cfg)
     run_dir = cfg.run_dir
 
-    ds, behavior_index = run.init_multiagent_results_dataset(
+    ds = run.init_multiagent_results_dataset(
         run_params['world_draws'], run_params['duration'], run_params['mc_steps'],
-        run_params['n_montecarlo'], gk_cfg['n_controlled']
+        run_params['n_montecarlo'], cfg.highway_env['controlled_vehicles'], gk_cfg
     )
     seed = run_params['seed']
     world_draws = run_params['world_draws']
@@ -228,8 +226,6 @@ def main(cfg: DictConfig):
         if msg:
             logger.info(msg)
         utils.Results.save_ds(ds, f"{run_dir}/results.nc")
-        # Save behavior index
-        utils.Results.save_json(behavior_index, f"{run_dir}/behavior_index.json")
 
     t_last = time.time()
     chkpt_time = time.time()
@@ -255,7 +251,8 @@ def main(cfg: DictConfig):
                     profiler.enable()
 
                 for i_world in tqdm(
-                        range(0, world_draws, num_cpu), desc="Worlds", unit_scale=num_cpu, disable=bool(profiler)
+                        range(0, world_draws, num_cpu), desc="Worlds", unit_scale=num_cpu,
+                        disable=bool(profiler), maxinterval=world_draws
                 ):
 
                     # Chunk the worlds by number of processes
@@ -313,7 +310,7 @@ def main(cfg: DictConfig):
                 #         # We'll use the gatekeeper params for montecarlo control
                 #         if step >= run_params['warmup_steps']:
                 #             if step % gk_cmd.mc_period == 0:
-                #                 # Returned dimensions are [n_controlled]
+                #                 # Returned dimensions are [n_ego]
                 #                 results = gk_cmd.run(pool)
                 #
                 #                 # Record data
@@ -380,9 +377,10 @@ def main(cfg: DictConfig):
             with multiprocessing.Pool(num_cpu, maxtasksperchild=10) as pool:
                 if profiler:
                     profiler.enable()
-                    
+
                 for i_world in tqdm(
-                        range(0, world_draws, num_cpu), desc="Worlds", unit_scale=num_cpu, disable=bool(profiler)
+                        range(0, world_draws, num_cpu), desc="Worlds", unit_scale=num_cpu,
+                        disable=bool(profiler), maxinterval=world_draws
                 ):
                     # Chunk the worlds by number of processes
                     end_world = min(i_world + num_cpu, world_draws)
@@ -410,7 +408,7 @@ def main(cfg: DictConfig):
                         ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
 
     # Automatically save latest
-    checkpoint_dataset("Saving final results")
+    checkpoint_dataset(f"Saving final results {run_dir}")
 
     if profiler:
         profiler.disable()

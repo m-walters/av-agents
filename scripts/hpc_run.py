@@ -1,9 +1,8 @@
 """
 Script for running on HPC
 """
-import subprocess
 import os
-
+import subprocess
 
 CONTROL_BEHAVIORS = {
     "nom": "sim.vehicles.highway.NominalParams",
@@ -25,6 +24,7 @@ CONTROL_BEHAVIORS = {
     # "def-1": "sim.vehicles.highway.Defensive1",
     # "def-2": "sim.vehicles.highway.Defensive2",
 }
+
 
 def run_baselines():
     seed = 86777

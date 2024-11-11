@@ -22,6 +22,25 @@ logger = logging.getLogger("av-sim")
 class Behaviors(Enum):
     NOMINAL = "nominal"
     CONSERVATIVE = "conservative"
+    OFFLINE = "offline"
+
+
+def behavior_to_num(behavior: Behaviors) -> int:
+    if behavior == Behaviors.NOMINAL:
+        return 0
+    elif behavior == Behaviors.CONSERVATIVE:
+        return 1
+    elif behavior == Behaviors.OFFLINE:
+        return 2
+
+
+def get_behavior_index() -> Dict[str, str]:
+    """netCDF serialization for saving doesn't like int key"""
+    return {
+        "0": Behaviors.NOMINAL.value,
+        "1": Behaviors.CONSERVATIVE.value,
+        "2": Behaviors.OFFLINE.value,
+    }
 
 
 class ControlPolicies(Enum):
@@ -33,24 +52,18 @@ class ControlPolicies(Enum):
     RISK_THRESHOLD = "risk_threshold"
 
 
-def behavior_to_num(behavior: Behaviors) -> int:
-    if behavior == Behaviors.NOMINAL:
-        return 0
-    elif behavior == Behaviors.CONSERVATIVE:
-        return 1
-
-
 class BehaviorConfig(TypedDict):
     enable: bool
     nominal_class: str
     nominal_risk_threshold: float
     defensive_class: str
     defensive_risk_threshold: float
+    offline_class: str
     control_policy: ControlPolicies
 
 
 class GatekeeperConfig(TypedDict):
-    n_controlled: int
+    n_online: int
     n_montecarlo: int
     mc_horizon: int
     mc_period: int
@@ -73,6 +86,7 @@ class Gatekeeper:
         self,
         gk_idx: int,
         vehicle: AVVehicleType,
+        online: bool,
         behavior_cfg: BehaviorConfig,
         rstar_range: tuple[float, float],
         seed: int,
@@ -81,6 +95,7 @@ class Gatekeeper:
         # Don't store the vehicle object because env duplicating will change the memory address during MC
         self.vehicle_id = vehicle.av_id
         self.rkey = NpyRKey(seed)
+        self.online = online
 
         # See AVHighway class for types
         # These must be callables in the Env class
@@ -91,15 +106,21 @@ class Gatekeeper:
         ]
 
         # Behavior control logic
-        self.behavior_ctrl_enabled = behavior_cfg["enable"]
         self.behavior = Behaviors.NOMINAL
-        self.control_policy = ControlPolicies(behavior_cfg["control_policy"])
 
+        self.behavior_ctrl_enabled = behavior_cfg["enable"]
+        self.control_policy = ControlPolicies(behavior_cfg["control_policy"])
         if self.behavior_ctrl_enabled:
             self.nominal_behavior = utils.class_from_path(behavior_cfg["nominal_class"])
             self.nominal_risk_threshold = rstar_range[0]
             self.defensive_behavior = utils.class_from_path(behavior_cfg["defensive_class"])
             self.defensive_risk_threshold = rstar_range[1]
+            self.offline_behavior = utils.class_from_path(behavior_cfg["offline_class"])
+            # Set the starting policy
+            if online:
+                vehicle.set_behavior_params(self.nominal_behavior)
+            else:
+                vehicle.set_behavior_params(self.offline_behavior)
 
     def get_vehicle(self, env):
         return env.vehicle_lookup[self.vehicle_id]
@@ -139,7 +160,8 @@ class Gatekeeper:
         """
         Update policy based on nbrhood cre
         """
-        if not self.behavior_ctrl_enabled:
+        if not self.behavior_ctrl_enabled or not self.online:
+            # Skip behavior monitoring
             return
 
         if self.control_policy == ControlPolicies.RISK_THRESHOLD:
@@ -169,16 +191,31 @@ class GatekeeperCommand:
         self,
         env: Union[highway.AVHighway, intersection.AVIntersection],
         gk_cfg: DictConfig[GatekeeperConfig],
-        control_vehicles: list[AVVehicleType],
         seed: int,
     ):
         """
         Spawn and assign new gatekeepers for each vehicle provided
+        Note that the 'online' vehicles are still tracked and measured for data and participation
+        in risk calculations and nbrhoods etc. The only difference is they will be skipped over when
+        considering policy update operations. They will also use the offline_class behavior mode (which
+        will typically be equal to nominal_class).
+
+        :param env: The environment
+        :param gk_cfg: The gatekeeper configuration
+        :param seed: seed
         """
-        if gk_cfg.n_controlled != len(control_vehicles):
+        self.n_ego: int = len(env.controlled_vehicles)
+        self.n_online = gk_cfg.n_online
+
+        if self.n_online > self.n_ego:
             raise ValueError(
-                f"GatekeeperCommand received {len(control_vehicles)}, but is configured "
-                f"for {gk_cfg.n_controlled}"
+                f"GatekeeperCommand requests {self.n_online} online vehicles of {self.n_ego} total."
+            )
+
+        if self.n_online != self.n_ego:
+            # This is okay, but notify that these are different
+            logger.warning(
+                f"{self.n_online} / {self.n_ego} ego vehicles online for behavior control"
             )
 
         behavior_config = gk_cfg.behavior_cfg
@@ -188,6 +225,16 @@ class GatekeeperCommand:
                 f"but the environment is configured for {env.config['default_control_behavior']}"
             )
 
+        if not behavior_config['enable'] and self.n_online > 0:
+            logger.warning(
+                f"GatekeeperCommand has behavior-operation disabled while n_online > 0"
+            )
+
+        if behavior_config['nominal_class'] != behavior_config['offline_class'] and self.n_online < self.n_ego:
+            logger.warning(
+                f"GatekeeperCommand has different nominal and offline classes while n_online < n_ego"
+            )
+
         self.env = env
         self.seed = seed
         self.rkey = NpyRKey(seed)
@@ -195,7 +242,6 @@ class GatekeeperCommand:
         self.n_montecarlo: int = gk_cfg.n_montecarlo
         self.mc_horizon: int = gk_cfg.mc_horizon
         self.mc_period: int = gk_cfg.mc_period
-        self.n_controlled: int = gk_cfg.n_controlled
         # For time-discounted risk accumulation
         self.enable_time_discounting = gk_cfg.enable_time_discounting
         self.gamma = gk_cfg.gamma
@@ -219,8 +265,9 @@ class GatekeeperCommand:
         self.nbr_distance = VehicleBase.MAX_SPEED * 0.7  # For GK neighborhood discovery
         self.gatekeepers: List["Gatekeeper"] = []
         self.gatekeeper_lookup: Dict[int, Gatekeeper] = {}
-        for i, v in enumerate(control_vehicles):
-            self._spawn_gatekeeper(v, i, behavior_config, (nominal_rstar, defensive_rstar))
+        for i, v in enumerate(env.controlled_vehicles):
+            online = i < self.n_online
+            self._spawn_gatekeeper(v, i, online, behavior_config, (nominal_rstar, defensive_rstar))
 
     @property
     def gatekept_vehicles(self):
@@ -237,13 +284,14 @@ class GatekeeperCommand:
             preference_prior=self.preference_prior, **gk_cfg.risk_model, seed=self.seed
         )
 
-    def _spawn_gatekeeper(self, vehicle: AVVehicleType, gk_idx, behavior_cfg, rstar_range):
+    def _spawn_gatekeeper(self, vehicle: AVVehicleType, gk_idx, online, behavior_cfg, rstar_range):
         """
         Spawn a gatekeeper for a vehicle
         """
         gk = Gatekeeper(
             gk_idx,
             vehicle,
+            online,
             behavior_cfg,
             rstar_range,
             self.rkey.next_seed()
@@ -260,11 +308,11 @@ class GatekeeperCommand:
         env = copy.deepcopy(self.env)
         env.seed_montecarlo(env, seed)
 
-        losses = np.zeros(self.n_controlled)
+        losses = np.zeros(self.n_ego)
         collisions = np.zeros_like(losses)
         collision_reward = 0  # Max penalty for a collision
         discount = 1
-        discounted_rewards = [0] * self.n_controlled
+        discounted_rewards = [0] * self.n_ego
         n_discounted_per = 1
         if self.enable_time_discounting:
             n_discounted_per = self.mc_horizon // self.risk_eval_period
@@ -318,9 +366,9 @@ class GatekeeperCommand:
         """
         Perform montecarlo simulations and calculate risk equations etc.
 
-        :return: Several result arrays. Dimensions [n_controlled, n_mc]
+        :return: Several result arrays. Dimensions [n_ego, n_mc]
         """
-        # losses = np.zeros((self.n_montecarlo, self.n_controlled))
+        # losses = np.zeros((self.n_montecarlo, self.n_ego))
         # collisions = np.zeros_like(losses)
 
         # Very sensitive that these seeds are python integers...
@@ -333,7 +381,7 @@ class GatekeeperCommand:
             # Stack results along first dimension
             results = np.stack(results, axis=0)
         else:
-            results = np.zeros((self.n_montecarlo, 2, self.n_controlled))
+            results = np.zeros((self.n_montecarlo, 2, self.n_ego))
             for i, seed in enumerate(seeds):
                 results[i] = self._mc_trajectory(seed)
 

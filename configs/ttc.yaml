@@ -62,6 +62,8 @@ multiprocessing_cpus: 2
 profiling: false
 
 gatekeeper:
+  # Number of vehicles that will have gatekeeper behavior operating on
+  n_online: 1
   # Time-discounting
   enable_time_discounting: false
   gamma: 0.96
@@ -79,3 +81,4 @@ gatekeeper:
     control_policy: "risk_threshold"
     nominal_class: "sim.vehicles.highway.HotshotParams"
     defensive_class: "sim.vehicles.highway.DefensiveParams"
+    offline_class: "sim.vehicles.highway.HotshotParams"

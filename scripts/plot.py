@@ -1,6 +1,7 @@
+import os
+
 import numpy as np
 import xarray as xr
-import os
 
 from sim import plotting
 
@@ -82,14 +83,14 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results/manuscript/hpc/test/ngk"
+    RESULTS_DIR = "../results/manuscript/test/online-garbage"
     save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
 
     data_tups = [
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-1/results.nc')), "NGK-1"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-2/results.nc')), "NGK-2"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-4/results.nc')), "NGK-4"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-8/results.nc')), "NGK-8"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-4/results.nc')), "NGK-4"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-8/results.nc')), "NGK-8"),
     ]
 
     truncate = None
@@ -167,14 +168,14 @@ def ttc_hist():
         # "def-2": "sim.vehicles.highway.Defensive2",
     }
 
-    RESULTS_DIR = "../results/manuscript/hpc/test/ngk"
+    RESULTS_DIR = "../results/manuscript/test/online-garbage"
     save_path = os.path.join(RESULTS_DIR, "ttc-baseline-hist.png")
 
     data_tups = [
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-1/results.nc')), "NGK-1"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-2/results.nc')), "NGK-2"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-4/results.nc')), "NGK-4"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-8/results.nc')), "NGK-8"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-4/results.nc')), "NGK-4"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-8/results.nc')), "NGK-8"),
     ]
 
     avplot = plotting.AVPlotter()

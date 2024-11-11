@@ -4,8 +4,8 @@ from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 
 import numpy as np
 from highway_env.road.lane import AbstractLane, lane_from_config, LineType, StraightLane
-from highway_env.vehicle.objects import Landmark
 from highway_env.road.road import Road
+from highway_env.vehicle.objects import Landmark
 
 # import jax.numpy as jnp
 # from jax import jit
@@ -404,6 +404,7 @@ class AVRoadNetwork(object):
                     graph_dict[_from][_to].append(lane.to_config())
         return graph_dict
 
+
 # Deprecated while unJaxed
 #
 # class JAX_AVOvalRoad(object):
@@ -633,6 +634,7 @@ class AVOvalRoad(object):
         - We will not have any self.objects
         - We leverage oval track shape to determine if a vehicle is in front or behind
     """
+
     def __init__(
         self,
         network: AVRoadNetwork = None,
@@ -659,6 +661,7 @@ class AVOvalRoad(object):
         # Vehicle to matrix index
         self.vehicle_lookup = {v: i for i, v in enumerate(self.vehicles)}
         # Init the vehicle positions and velocities
+        self.vehicle_positions = self.vehicle_velocities = self.vehicle_lanes = None
         self.refresh_vehicle_states(skip_matrices=True)
 
         # Init other vehicles relationship matrices
@@ -718,7 +721,6 @@ class AVOvalRoad(object):
         self.refresh_distance_matrix()
         self.refresh_relative_velocity_matrix()
         self.refresh_front_back()
-
 
     def close_objects_to(
         self,
@@ -841,10 +843,12 @@ class AVOvalRoad(object):
     def __repr__(self):
         return self.vehicles.__repr__()
 
+
 class AVRoad(Road):
     """
     Road override
     """
+
     def close_vehicles_to(
         self, vehicle: AVVehicle, distance: float, count: int | None = None,
         see_behind: bool = True, sort: bool = True
@@ -944,7 +948,7 @@ class AVRoad(Road):
         if not lane_index:
             return None, None
         lane = self.network.get_lane(lane_index)
-        s = self.network.get_lane(lane_index).local_coordinates(vehicle.position)[0]
+        # s = self.network.get_lane(lane_index).local_coordinates(vehicle.position)[0]
         s_front = s_rear = None
         v_front = v_rear = None
         for v in self.vehicles + self.objects:

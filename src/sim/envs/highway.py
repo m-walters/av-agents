@@ -441,7 +441,7 @@ class AVHighway(HighwayEnv):
 
             return reward
 
-        # Mutli-agent rewards
+        # Multi-agent rewards
         rewards = rewards or self._rewards(action)
         # Accumulated reward for each vehicle
         reward = np.array(

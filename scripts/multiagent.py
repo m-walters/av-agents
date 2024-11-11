@@ -3,9 +3,6 @@ Multiagent Gatekeeper simulation
 """
 import logging
 import multiprocessing
-import os
-import shutil
-import time
 
 import gymnasium as gym
 import hydra
@@ -36,9 +33,9 @@ def main(cfg: DictConfig):
     if run_params['world_draws'] > 1:
         raise ValueError("world_draws > 1 not configured for multiagent")
 
-    ds, behavior_index = run.init_multiagent_results_dataset(
+    ds = run.init_multiagent_results_dataset(
         run_params['world_draws'], run_params['duration'], run_params['mc_steps'],
-        run_params['n_montecarlo'], gk_cfg['n_controlled']
+        run_params['n_montecarlo'], cfg.highway_env['controlled_vehicles'], gk_cfg
     )
     seed = run_params['seed']
     env_cfg = cfg.highway_env
@@ -62,7 +59,8 @@ def main(cfg: DictConfig):
         video_dir = f"{run_dir}/recordings"
         video_prefix = "sim"
         env = recorder.AVRecorder(
-            gym.make(f"AVAgents/{cfg.get('env_type', 'racetrack-v0')}", render_mode=render_mode), video_dir, name_prefix=video_prefix
+            gym.make(f"AVAgents/{cfg.get('env_type', 'racetrack-v0')}", render_mode=render_mode), video_dir,
+            name_prefix=video_prefix
         )
 
     uenv: "AVHighway" = env.unwrapped
@@ -86,8 +84,6 @@ def main(cfg: DictConfig):
         if msg:
             logger.info(msg)
         utils.Results.save_ds(ds, f"{run_dir}/results.nc")
-        # Save behavior index
-        utils.Results.save_json(behavior_index, f"{run_dir}/behavior_index.json")
 
     if use_mp:
         with logging_redirect_tqdm():
@@ -99,7 +95,7 @@ def main(cfg: DictConfig):
                     # We'll use the gatekeeper params for montecarlo control
                     if step >= run_params['warmup_steps']:
                         if step % gk_cmd.mc_period == 0:
-                            # Returned dimensions are [n_controlled]
+                            # Returned dimensions are [n_ego]
                             results = gk_cmd.run(pool)
 
                             # Record data
@@ -153,7 +149,7 @@ def main(cfg: DictConfig):
                 # We'll use the gatekeeper params for montecarlo control
                 if step >= run_params['warmup_steps']:
                     if step % gk_cmd.mc_period == 0:
-                        # Returned dimensions are [n_controlled]
+                        # Returned dimensions are [n_ego]
                         results = gk_cmd.run(None)
 
                         # Record data
