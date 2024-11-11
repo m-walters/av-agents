@@ -82,11 +82,12 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results/manuscript/hpc/ngk"
+    RESULTS_DIR = "../results/manuscript/hpc/test/ngk"
     save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
 
     data_tups = [
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-1/results.nc')), "NGK-1"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-2/results.nc')), "NGK-2"),
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-4/results.nc')), "NGK-4"),
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-8/results.nc')), "NGK-8"),
     ]
@@ -166,23 +167,20 @@ def ttc_hist():
         # "def-2": "sim.vehicles.highway.Defensive2",
     }
 
-    RESULTS_DIR = "../results"
-    run_dir = os.path.join(RESULTS_DIR, "manuscript/hpc/ngk")
-    save_path = os.path.join(run_dir, "ttc-baseline-hist.png")
+    RESULTS_DIR = "../results/manuscript/hpc/test/ngk"
+    save_path = os.path.join(RESULTS_DIR, "ttc-baseline-hist.png")
 
-    runs = {
-        "ngk-1": "1 GK",
-        "ngk-4": "4 GK",
-        "ngk-8": "8 GK",
-    }
-    data_tuples = [
-        (xr.open_dataset(os.path.join(run_dir, f"{run}/results.nc")), name) for run, name in runs.items()
+    data_tups = [
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-1/results.nc')), "NGK-1"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-2/results.nc')), "NGK-2"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-4/results.nc')), "NGK-4"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-8/results.nc')), "NGK-8"),
     ]
 
     avplot = plotting.AVPlotter()
     avplot.ttc_hist(
         save_path,
-        data_tuples
+        data_tups
     )
 
 
