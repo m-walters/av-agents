@@ -314,7 +314,7 @@ class GatekeeperCommand:
 
         return losses, collisions
 
-    def run(self, pool: Optional["multiprocessing.Pool"]) -> dict:
+    def run(self, pool: Optional["multiprocessing.Pool"] = None) -> dict:
         """
         Perform montecarlo simulations and calculate risk equations etc.
 
