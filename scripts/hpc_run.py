@@ -77,77 +77,34 @@ def run_baselines():
             break
 
 
-def run_gk_gamma():
-    seed = 86777
-    script = "ttc.py"
-
-    num_cpus = 64
-    env_type = "racetrack-v0"
-    world_draws = 1000
-    duration = 200
-    warmup = 0
-    mc_period = 5
-    mc_horizon = 20
-    n_montecarlo = 1000
-    # Discounting
-    enable_time_discounting = "true"
-    # Profiling
-    profiling = "false"
-
-    # Name the run, and where it will be saved
-    RUN_DIR = "manuscript/hpc/av-8-gk-gamma"
-
-    configs = [
-        {
-            "name": os.path.join(RUN_DIR, name),
-            "seed": seed,
-            "highway_env.default_control_behavior": behavior,
-            "highway_env.controlled_vehicles": 8,
-            "multiprocessing_cpus": num_cpus,
-            "env_type": env_type,
-            "highway_env.duration": duration,
-            "highway_env.mc_horizon": mc_horizon,
-            "highway_env.n_montecarlo": n_montecarlo,
-            "world_draws": world_draws,
-            "warmup_steps": warmup,
-            "mc_period": mc_period,
-            "gatekeeper.enable_time_discounting": enable_time_discounting,
-            "profiling": profiling,
-
-        } for name, behavior in CONTROL_BEHAVIORS.items()
-    ]
-
-    for config in configs:
-        # Convert the config dict into a string
-        cfg_args = " ".join([f"{k}={v}" for k, v in config.items()])
-        command = f"python {script} {cfg_args}"
-        print(f"Running: {command}")
-        result = subprocess.run(command, shell=True)
-        if result.returncode != 0:
-            print(f"Command failed with return code {result.returncode}")
-            break
-
-
 def run_gk():
     seed = 86777
     script = "ttc.py"
 
     num_cpus = 64
     env_type = "racetrack-v0"
-    world_draws = 1000
-    duration = 200
+    default_control_behavior = "sim.vehicles.highway.HotshotParams"
+    world_draws = 40
+    duration = 60
     warmup = 0
-    mc_period = 5
+    num_control_vehicles = 8
+    num_vehicles_control_speed = 8
+    vehicles_count = 24
+    num_collision_watch = 8
+    # GK/MC Stuff
+    mc_period = 10
     mc_horizon = 20
-    n_montecarlo = 1000
-    # Discounting
+    n_montecarlo = 20
     enable_time_discounting = "false"
+    # Paradoxically our GK 'nominal' is the risky one
+    nominal_class = "sim.vehicles.highway.HotshotParams"
+    defensive_class = "sim.vehicles.highway.DefensiveParams"
+
     # Profiling
     profiling = "false"
 
     # Name the run, and where it will be saved
-    RUN_DIR = "manuscript/test/ngk"
-    num_collision_watch = 8
+    RUN_DIR = "manuscript/hpc/test/ngk"
     runs = {
         "ngk-1": 1,
         "ngk-2": 2,
@@ -159,8 +116,10 @@ def run_gk():
         {
             "name": os.path.join(RUN_DIR, name),
             "seed": seed,
-            "highway_env.default_control_behavior": "sim.vehicles.highway.HotshotParams",
+            "highway_env.default_control_behavior": default_control_behavior,
             "highway_env.controlled_vehicles": ngk,
+            "highway_env.num_vehicles_control_speed": num_vehicles_control_speed,
+            "highway_env.vehicles_count": vehicles_count,
             "multiprocessing_cpus": num_cpus,
             "env_type": env_type,
             "highway_env.duration": duration,
@@ -169,9 +128,11 @@ def run_gk():
             "world_draws": world_draws,
             "warmup_steps": warmup,
             "mc_period": mc_period,
+            "num_collision_watch": num_collision_watch,
             "gatekeeper.enable_time_discounting": enable_time_discounting,
+            "gatekeeper.behavior_cfg.nominal_class": nominal_class,
+            "gatekeeper.behavior_cfg.defensive_class": defensive_class,
             "profiling": profiling,
-
         } for name, ngk in runs.items()
     ]
 
