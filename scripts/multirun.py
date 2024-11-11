@@ -32,7 +32,6 @@ def run_baselines():
 
     num_cpus = 16
     env_type = "racetrack-v0"
-    any_control_collision = "true"
     world_draws = 500
     duration = 200
     warmup = 1e5
@@ -57,7 +56,6 @@ def run_baselines():
             "highway_env.controlled_vehicles": num_control_vehicles,
             "highway_env.num_vehicles_control_speed": num_vehicles_control_speed,
             "highway_env.vehicles_count": vehicles_count,
-            "any_control_collision": any_control_collision,
             "multiprocessing_cpus": num_cpus,
             "env_type": env_type,
             "highway_env.duration": duration,
@@ -88,19 +86,19 @@ def run_gk():
 
     num_cpus = 12
     env_type = "racetrack-v0"
-    any_control_collision = "true"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
-    world_draws = 100
-    duration = 100
+    world_draws = 40
+    duration = 60
     warmup = 0
     num_control_vehicles = 8
     num_vehicles_control_speed = 8
     vehicles_count = 24
+    num_collision_watch = 8
     # GK/MC Stuff
-    mc_period = 5
+    mc_period = 10
     mc_horizon = 20
-    n_montecarlo = 100
-    enable_time_discounting = "true"
+    n_montecarlo = 20
+    enable_time_discounting = "false"
     # Paradoxically our GK 'nominal' is the risky one
     nominal_class = "sim.vehicles.highway.HotshotParams"
     defensive_class = "sim.vehicles.highway.DefensiveParams"
@@ -109,18 +107,22 @@ def run_gk():
     profiling = "false"
 
     # Name the run, and where it will be saved
-    RUN_DIR = "hotshot-gk-sanity-test"
-    name = "hotshot-gk"
+    RUN_DIR = "manuscript/test/ngk"
+    runs = {
+        "ngk-1": 1,
+        "ngk-2": 2,
+        "ngk-4": 4,
+        "ngk-8": 8,
+    }
 
     configs = [
         {
             "name": os.path.join(RUN_DIR, name),
             "seed": seed,
             "highway_env.default_control_behavior": default_control_behavior,
-            "highway_env.controlled_vehicles": num_control_vehicles,
+            "highway_env.controlled_vehicles": ngk,
             "highway_env.num_vehicles_control_speed": num_vehicles_control_speed,
             "highway_env.vehicles_count": vehicles_count,
-            "any_control_collision": any_control_collision,
             "multiprocessing_cpus": num_cpus,
             "env_type": env_type,
             "highway_env.duration": duration,
@@ -129,11 +131,12 @@ def run_gk():
             "world_draws": world_draws,
             "warmup_steps": warmup,
             "mc_period": mc_period,
+            "num_collision_watch": num_collision_watch,
             "gatekeeper.enable_time_discounting": enable_time_discounting,
             "gatekeeper.behavior_cfg.nominal_class": nominal_class,
             "gatekeeper.behavior_cfg.defensive_class": defensive_class,
             "profiling": profiling,
-        }
+        } for name, ngk in runs.items()
     ]
 
     for config in configs:

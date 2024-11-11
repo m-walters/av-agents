@@ -82,13 +82,13 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results/tmp/ttc/"
+    RESULTS_DIR = "../results/manuscript/hpc/ngk"
     save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
 
     data_tups = [
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'results.nc')), "NGK-8"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'def/results.nc')), "Defensive"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'hotshot/results.nc')), "Hotshot"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-1/results.nc')), "NGK-1"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-4/results.nc')), "NGK-4"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-8/results.nc')), "NGK-8"),
     ]
 
     truncate = None
@@ -167,15 +167,22 @@ def ttc_hist():
     }
 
     RESULTS_DIR = "../results"
-    run_dir = os.path.join(RESULTS_DIR, "manuscript/av-8-extra")
+    run_dir = os.path.join(RESULTS_DIR, "manuscript/hpc/ngk")
     save_path = os.path.join(run_dir, "ttc-baseline-hist.png")
+
+    runs = {
+        "ngk-1": "1 GK",
+        "ngk-4": "4 GK",
+        "ngk-8": "8 GK",
+    }
+    data_tuples = [
+        (xr.open_dataset(os.path.join(run_dir, f"{run}/results.nc")), name) for run, name in runs.items()
+    ]
 
     avplot = plotting.AVPlotter()
     avplot.ttc_hist(
         save_path,
-        [
-            (xr.open_dataset(os.path.join(run_dir, f"{name}/results.nc")), name) for name in CONTROL_BEHAVIORS
-        ]
+        data_tuples
     )
 
 

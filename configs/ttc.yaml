@@ -42,7 +42,7 @@ highway_env:
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: 20
   n_montecarlo: 10
-  duration: 20
+  duration: 200
   normalize_reward: true
 #==============
 
@@ -50,21 +50,20 @@ seed: 867
 world_draws: 1
 warmup_steps: 1e5  # included within the duration
 mc_period: 5   # real-world steps between MC issuances
+num_collision_watch: 8 # Watch the first n vehicles for terminating collision
 
 # Temporary, probably will remove
 env_type: "racetrack-v0"
-# Whether we check for collisions for any of the control vehicles (true) or just the first one (false)
-any_control_collision: false
 
 # Multiprocessing configs
-use_mp: true
+use_mp: false
 multiprocessing_cpus: 2
 # Profiling
 profiling: false
 
 gatekeeper:
   # Time-discounting
-  enable_time_discounting: true
+  enable_time_discounting: false
   gamma: 0.96
   risk_eval_period: 5  # Every nth inner step, eval risk
   # Models

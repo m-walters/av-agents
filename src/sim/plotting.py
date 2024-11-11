@@ -87,7 +87,20 @@ class AVPlotter:
                 x=steps, y=y, **plot_kwargs
             )
         else:
-            raise NotImplementedError("World averaging not implemented for 'behavior_mode'")
+            # Shape of 'data' will be [duration]
+            data = ds[var].sum(['ego', 'world'], skipna=True)
+
+            # Dataframe with columns ['step', var]
+            df = data.to_dataframe().reset_index()
+            _ = plot_kwargs.pop("errorbar", None)
+            sns.lineplot(
+                data=df, x='step', y=var, errorbar='sd', **plot_kwargs
+            )
+            # bin_range = (0, df[var].max())
+            # sns.histplot(
+            #     x='step', y=var, bins=30, kde=False,
+            #     binrange=bin_range, **plot_kwargs
+            # )
 
     def create_animation(
         self,
@@ -598,8 +611,6 @@ class AVPlotter:
 
         # Check that all datasets have the same egos, steps, and mc_steps
         for ds, name in datasets:
-            assert np.array_equal(egos, ds.coords['ego'].values), \
-                f"Egos do not match for dataset {name}"
             assert np.array_equal(steps, ds.coords['step'].values), \
                 f"Steps do not match for dataset {name}"
             assert np.array_equal(mc_steps, ds.coords['mc_step'].values), \

@@ -30,7 +30,9 @@ warnings.filterwarnings("ignore", category=UserWarning, module=r"gymnasium\.util
 
 
 def non_mc_worldsim(
-    world_idx: int, world_seed: int, env: AVRacetrack, any_control_collision: bool, profiler: cProfile.Profile | None
+    world_idx: int, world_seed: int, env: AVRacetrack, num_collision_watch: int=1,
+    profiler: cProfile.Profile | None
+    = None
 ) -> tuple[int, dict]:
     """
     Run a single world simulation without MC
@@ -67,18 +69,13 @@ def non_mc_worldsim(
             result["defensive_reward"][step, :] = info["rewards"]["defensive_reward"]
             result["speed_reward"][step, :] = info["rewards"]["speed_reward"]
 
-            # Check if any of control vehicle crashed
-            if any_control_collision and any(crashed):
-                # if crash_tagged_id in [v.av_id for v in uenv.crashed]:
-                # Record the step which saw the first vehicle collision
-                result["time_to_collision"] = step
-                logger.info(f"Control vehicle collision (Step {step}): {crashed}\nExiting.")
-                break
-            elif not any_control_collision and uenv.controlled_vehicles[0].crashed:
-                # We are tracking the first controlled vehicle and it crashed
-                result["time_to_collision"] = step
-                logger.info(f"Control vehicle collision (Step {step}): {crashed}\nExiting.")
-                break
+            # Check the first n vehicles for collision
+            if num_collision_watch > 0:
+                if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
+                    # Record the step which saw the first vehicle collision
+                    result["time_to_collision"] = step
+                    logger.info(f"One of {num_collision_watch} watched vehicles collided (Step {step})\nExiting.")
+                    break
 
             if len(uenv.crashed) >= 6:
                 # That's tooooo many -- probably a jam
@@ -93,8 +90,8 @@ def non_mc_worldsim(
 
 
 def mc_worldsim(
-    world_idx: int, world_seed: int, env: AVRacetrack, run_params: dict, gk_cfg: dict, any_control_collision: bool,
-    profiler: cProfile.Profile | None
+    world_idx: int, world_seed: int, env: AVRacetrack, run_params: dict, gk_cfg: dict, num_collision_watch: int=1,
+    profiler: cProfile.Profile | None = None
 ) -> tuple[int, dict]:
     """
     Gatekeep world sim for world-multiprocessing
@@ -167,18 +164,13 @@ def mc_worldsim(
             result["defensive_reward"][step, :] = info["rewards"]["defensive_reward"]
             result["speed_reward"][step, :] = info["rewards"]["speed_reward"]
 
-            # Check if any of control vehicle crashed
-            if any_control_collision and any(controlled_crashed):  # type: ignore
-                # Record the step which saw the first vehicle collision
-                result["time_to_collision"] = step
-                logger.info(f"Control vehicle collision (Step {step}): {controlled_crashed}\nExiting.")
-                break
-
-            elif not any_control_collision and uenv.controlled_vehicles[0].crashed:
-                # We are tracking the first controlled vehicle and it crashed
-                result["time_to_collision"] = step
-                logger.info(f"Control vehicle collision (Step {step}): {controlled_crashed}\nExiting.")
-                break
+            # Check the first n vehicles for collision
+            if num_collision_watch > 0:
+                if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
+                    # Record the step which saw the first vehicle collision
+                    result["time_to_collision"] = step
+                    logger.info(f"One of {num_collision_watch} watched vehicles collided (Step {step})\nExiting.")
+                    break
 
             if len(uenv.crashed) >= 6:
                 # That's tooooo many -- probably a jam
@@ -244,7 +236,7 @@ def main(cfg: DictConfig):
     world_loop_times = []
 
     # We track a single controlled vehicle for crash so that we can compare its TTC across runs
-    any_control_collision = cfg.get("any_control_collision", True)
+    num_collision_watch = cfg.get("num_collision_watch", True)
 
     if cfg.get("profiling", False):
         # Create profiler
@@ -275,7 +267,7 @@ def main(cfg: DictConfig):
                             env,
                             run_params,
                             gk_cfg,
-                            any_control_collision,
+                            num_collision_watch,
                             profiler
                         ) for world_idx in range(i_world, end_world)
                     ]
@@ -289,6 +281,7 @@ def main(cfg: DictConfig):
                         ds["reward"][world_idx, :, :] = result_dict["reward"]
                         ds["real_loss"][world_idx, :, :] = result_dict["real_loss"]
                         ds["crashed"][world_idx, :, :] = result_dict["crashed"]
+                        ds["behavior_mode"][world_idx, :, :] = result_dict["behavior_mode"]
                         ds["defensive_reward"][world_idx, :, :] = result_dict["defensive_reward"]
                         ds["speed_reward"][world_idx, :, :] = result_dict["speed_reward"]
                         ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
@@ -347,18 +340,15 @@ def main(cfg: DictConfig):
                 #         ds["defensive_reward"][i_world, step, :] = info["rewards"]["defensive_reward"]
                 #         ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
                 #
-                #         # Check if any of control vehicle crashed
-                #         if any_control_collision and any(controlled_crashed):  # type: ignore
-                #             # Record the step which saw the first vehicle collision
-                #             ds["time_to_collision"] = step
-                #             logger.info(f"Control vehicle collision (Step {step}): {controlled_crashed}\nExiting.")
-                #             break
+                #         # Check the first n vehicles for collision
+                #         if num_collision_watch > 0:
+                #             if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
+                #                 # Record the step which saw the first vehicle collision
+                #                 result["time_to_collision"] = step
+                #                 logger.info(f"One of {num_collision_watch} watched vehicles collided (Step {
+                #                      step})\nExiting.")
+                #                 break
                 #
-                #         elif not any_control_collision and uenv.controlled_vehicles[0].crashed:
-                #             # We are tracking the first controlled vehicle and it crashed
-                #             ds["time_to_collision"] = step
-                #             logger.info(f"Control vehicle collision (Step {step}): {controlled_crashed}\nExiting.")
-                #             break
                 #
                 #         if len(uenv.crashed) >= 6:
                 #             # That's tooooo many -- probably a jam
@@ -401,7 +391,7 @@ def main(cfg: DictConfig):
                             world_idx,
                             world_seeds[world_idx],
                             env,
-                            any_control_collision,
+                            num_collision_watch,
                             profiler
                         ) for world_idx in range(i_world, end_world)
                     ]

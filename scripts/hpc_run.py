@@ -32,7 +32,6 @@ def run_baselines():
 
     num_cpus = 64
     env_type = "racetrack-v0"
-    any_control_collision = "true"
     world_draws = 5000
     duration = 200
     warmup = 1e5
@@ -53,7 +52,6 @@ def run_baselines():
             "seed": seed,
             "highway_env.default_control_behavior": behavior,
             "highway_env.controlled_vehicles": 8,
-            "any_control_collision": any_control_collision,
             "multiprocessing_cpus": num_cpus,
             "env_type": env_type,
             "highway_env.duration": duration,
@@ -85,7 +83,6 @@ def run_gk_gamma():
 
     num_cpus = 64
     env_type = "racetrack-v0"
-    any_control_collision = "true"
     world_draws = 1000
     duration = 200
     warmup = 0
@@ -106,7 +103,6 @@ def run_gk_gamma():
             "seed": seed,
             "highway_env.default_control_behavior": behavior,
             "highway_env.controlled_vehicles": 8,
-            "any_control_collision": any_control_collision,
             "multiprocessing_cpus": num_cpus,
             "env_type": env_type,
             "highway_env.duration": duration,
@@ -136,12 +132,8 @@ def run_gk():
     seed = 86777
     script = "ttc.py"
 
-    # Name the run, and where it will be saved
-    RUN_DIR = "manuscript/hpc/av-8-gk"
-
     num_cpus = 64
     env_type = "racetrack-v0"
-    any_control_collision = "true"
     world_draws = 1000
     duration = 200
     warmup = 0
@@ -153,13 +145,22 @@ def run_gk():
     # Profiling
     profiling = "false"
 
+    # Name the run, and where it will be saved
+    RUN_DIR = "manuscript/test/ngk"
+    num_collision_watch = 8
+    runs = {
+        "ngk-1": 1,
+        "ngk-2": 2,
+        "ngk-4": 4,
+        "ngk-8": 8,
+    }
+
     configs = [
         {
             "name": os.path.join(RUN_DIR, name),
             "seed": seed,
-            "highway_env.default_control_behavior": behavior,
-            "highway_env.controlled_vehicles": 8,
-            "any_control_collision": any_control_collision,
+            "highway_env.default_control_behavior": "sim.vehicles.highway.HotshotParams",
+            "highway_env.controlled_vehicles": ngk,
             "multiprocessing_cpus": num_cpus,
             "env_type": env_type,
             "highway_env.duration": duration,
@@ -171,7 +172,7 @@ def run_gk():
             "gatekeeper.enable_time_discounting": enable_time_discounting,
             "profiling": profiling,
 
-        } for name, behavior in CONTROL_BEHAVIORS.items()
+        } for name, ngk in runs.items()
     ]
 
     for config in configs:
