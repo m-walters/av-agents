@@ -93,9 +93,8 @@ def non_mc_worldsim(
 
 
 def mc_worldsim(
-    world_idx: int, world_seed: int, env: AVRacetrack, gk_cfg: dict, warmup_steps: int, any_control_collision: bool,
-profiler:
-    cProfile.Profile | None
+    world_idx: int, world_seed: int, env: AVRacetrack, run_params: dict, gk_cfg: dict, any_control_collision: bool,
+    profiler: cProfile.Profile | None
 ) -> tuple[int, dict]:
     """
     Gatekeep world sim for world-multiprocessing
@@ -104,8 +103,9 @@ profiler:
     obs, info = env.reset(seed=world_seed)
     uenv: "AVRacetrack" = env.unwrapped
 
-    duration, n_controlled = uenv.config['duration'], uenv.config['controlled_vehicles']
-    n_montecarlo = gk_cfg['n_montecarlo']
+    duration, n_controlled = run_params['duration'], uenv.config['controlled_vehicles']
+    num_mc_sweeps = len(run_params["mc_steps"])
+    warmup_steps = run_params['warmup_steps']
 
     result = {
         "losses": np.full((duration, n_controlled), np.nan),
@@ -117,13 +117,13 @@ profiler:
         "behavior_mode": np.full((duration, n_controlled), np.nan),
         "time_to_collision": np.nan,  # Or int if found later
         # MC data
-        # "mc_loss": np.full((n_montecarlo, n_controlled), np.nan),
-        "loss_mean": np.full((n_montecarlo, n_controlled), np.nan),
-        "loss_p5": np.full((n_montecarlo, n_controlled), np.nan),
-        "loss_p95": np.full((n_montecarlo, n_controlled), np.nan),
-        "risk": np.full((n_montecarlo, n_controlled), np.nan),
-        "entropy": np.full((n_montecarlo, n_controlled), np.nan),
-        "energy": np.full((n_montecarlo, n_controlled), np.nan),
+        # "mc_loss": np.full((num_mc_sweeps, n_controlled), np.nan),
+        "loss_mean": np.full((num_mc_sweeps, n_controlled), np.nan),
+        "loss_p5": np.full((num_mc_sweeps, n_controlled), np.nan),
+        "loss_p95": np.full((num_mc_sweeps, n_controlled), np.nan),
+        "risk": np.full((num_mc_sweeps, n_controlled), np.nan),
+        "entropy": np.full((num_mc_sweeps, n_controlled), np.nan),
+        "energy": np.full((num_mc_sweeps, n_controlled), np.nan),
     }
 
     # Init the gatekeeper
@@ -225,7 +225,7 @@ def main(cfg: DictConfig):
     uenv.update_config(env_cfg, reset=True)
 
     # Run world simulation
-    rkey = utils.JaxRKey(seed)
+    rkey = utils.NpyRKey(seed)
     # Generate seeds
     world_seeds = rkey.next_seeds(world_draws)
 
@@ -273,8 +273,8 @@ def main(cfg: DictConfig):
                             world_idx,
                             world_seeds[world_idx],
                             env,
+                            run_params,
                             gk_cfg,
-                            run_params['warmup_steps'],
                             any_control_collision,
                             profiler
                         ) for world_idx in range(i_world, end_world)

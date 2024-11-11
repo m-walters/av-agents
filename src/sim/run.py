@@ -80,6 +80,7 @@ def init_multiagent_results_dataset(
     if not (isinstance(mc_steps, utils.Array) and len(mc_steps) > 0):
         # We need to initialize with something
         mc_steps = np.array([0])
+
     num_mc_sweeps = len(mc_steps)
 
     # For mapping the 'behavior_mode' results

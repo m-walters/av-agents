@@ -69,7 +69,7 @@ def main(cfg: DictConfig):
     risk_model = getattr(models, cfg.risk.model)(preference_prior=preference_prior, **cfg.risk, seed=cfg.seed)
 
     # We have to get seeds based on global seed
-    rkey = utils.JaxRKey(seed)
+    rkey = utils.NpyRKey(seed)
     i_mc = 0
 
     for wdraw in range(run_params['world_draws']):

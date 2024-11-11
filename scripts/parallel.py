@@ -69,7 +69,7 @@ def main(cfg: DictConfig):
     # For now, all configs are the same
     envs.call("update_config", env_cfg, reset=False)
     # Need separate seeds for each environment
-    rkey = utils.JaxRKey(seed)
+    rkey = utils.NpyRKey(seed)
     seeds = [rkey.next_seed() for _ in range(world_draws)]
     i_mc = 0
 

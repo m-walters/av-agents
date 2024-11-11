@@ -787,8 +787,7 @@ def oval(racetrack: "RacetrackEnv") -> roads.AVOvalRoad:
         )
     )
 
-
-    return roads.AVOvalRoad(
+    return roads.AVRoad(
         network=net,
         np_random=racetrack.np_random,
         record_history=racetrack.config["show_trajectories"],

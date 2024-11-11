@@ -13,7 +13,7 @@ from omegaconf import DictConfig
 
 from sim import models
 from sim.envs import highway, intersection
-from sim.utils import JaxRKey
+from sim.utils import NpyRKey
 from sim.vehicles.highway import AVVehicleType, VehicleBase
 
 logger = logging.getLogger("av-sim")
@@ -80,7 +80,7 @@ class Gatekeeper:
         self.gk_idx = gk_idx  # Tracks this gatekeepers index in the results array for the GKCommand
         # Don't store the vehicle object because env duplicating will change the memory address during MC
         self.vehicle_id = vehicle.av_id
-        self.rkey = JaxRKey(seed)
+        self.rkey = NpyRKey(seed)
 
         # See AVHighway class for types
         # These must be callables in the Env class
@@ -190,7 +190,7 @@ class GatekeeperCommand:
 
         self.env = env
         self.seed = seed
-        self.rkey = JaxRKey(seed)
+        self.rkey = NpyRKey(seed)
         self.config = gk_cfg.copy()
         self.n_montecarlo: int = gk_cfg.n_montecarlo
         self.mc_horizon: int = gk_cfg.mc_horizon
@@ -381,7 +381,8 @@ class GatekeeperCommand:
             # Update the risk value for the nbrhood
             # JAX arrays are immutable. Instead of ``x[idx] = y``, use ``x = x.at[idx].set(y)`` or another
             # .at[] method: https://jax.readthedocs.io/en/latest/_autosummary/jax.numpy.ndarray.at.html
-            risk = risk.at[nbrhood_idx].set(nbrhood_cre)
+            # risk = risk.at[nbrhood_idx].set(nbrhood_cre)
+            risk[nbrhood_idx] = nbrhood_cre
 
             # Update the policies
             for gk in nbrhood:

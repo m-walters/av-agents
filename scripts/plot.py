@@ -82,12 +82,12 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results/manuscript/av-8-gk-gamma"
+    RESULTS_DIR = "../results/tmp/ttc/"
     save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
 
     data_tups = [
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'nom/results.nc')), "Nominal"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'def/results.nc')), "Defensive"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'results.nc')), "NGK-8"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'def/results.nc')), "Defensive"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'hotshot/results.nc')), "Hotshot"),
     ]
 
@@ -99,37 +99,37 @@ def compare_plot():
     #     (xr.open_dataset(RESULTS_DIR + "/tmp/results.nc"), r'$\beta = 1$'),
     # ]
 
-    # labels = [
-    #     "R_Def",
-    #     "R_Spd",
-    #     "Actual Loss",
-    #     "E[Loss]",
-    #     "E[Energy]",
-    #     "E[Entropy]",
-    #     "Risk",
-    #     "Crashed",
-    #     "Number in Conservative",
-    # ]
-    # # 4 rows, 2 columns
-    # axes_layout = [
-    #     ["R_Def", "Actual Loss"],
-    #     ["R_Spd", "E[Loss]"],
-    #     ["E[Energy]", "Risk"],
-    #     ["E[Entropy]", "Crashed"],
-    #     [None, "Number in Conservative"],
-    # ]
-
     labels = [
         "R_Def",
         "R_Spd",
         "Actual Loss",
+        "E[Loss]",
+        "E[Energy]",
+        "E[Entropy]",
+        "Risk",
         "Crashed",
+        # "Number in Conservative",
     ]
     # 4 rows, 2 columns
     axes_layout = [
         ["R_Def", "Actual Loss"],
-        ["R_Spd", "Crashed"],
+        ["R_Spd", "E[Loss]"],
+        ["E[Energy]", "Risk"],
+        ["E[Entropy]", "Crashed"],
+        # [None, "Number in Conservative"],
     ]
+
+    # labels = [
+    #     "R_Def",
+    #     "R_Spd",
+    #     "Actual Loss",
+    #     "Crashed",
+    # ]
+    # # 4 rows, 2 columns
+    # axes_layout = [
+    #     ["R_Def", "Actual Loss"],
+    #     ["R_Spd", "Crashed"],
+    # ]
     metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
 
     avplot = plotting.AVPlotter()

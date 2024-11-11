@@ -21,7 +21,7 @@ highway_env:
   controlled_vehicles: 8  # Number of ego vehicles
   control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
   other_vehicles_type: "sim.vehicles.highway.AlterIDMVehicle"
-  default_control_behavior: "sim.vehicles.highway.NominalParams"
+  default_control_behavior: "sim.vehicles.highway.HotshotParams"
   # Number of vehicles with the reward_speed target
   # Remainder will have a target speed lower than speed_limit
   num_vehicles_control_speed: 8
@@ -41,14 +41,14 @@ highway_env:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: 20
-  n_montecarlo: 20
-  duration: 400
+  n_montecarlo: 10
+  duration: 20
   normalize_reward: true
 #==============
 
 seed: 867
-world_draws: 100
-warmup_steps: 1000  # included within the duration
+world_draws: 1
+warmup_steps: 1e5  # included within the duration
 mc_period: 5   # real-world steps between MC issuances
 
 # Temporary, probably will remove

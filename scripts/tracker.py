@@ -66,7 +66,7 @@ def main(cfg: DictConfig):
     uenv.update_config(env_cfg, reset=False)
 
     # Run a world simulation
-    rkey = utils.JaxRKey(seed)
+    rkey = utils.NpyRKey(seed)
     obs, info = env.reset(seed=rkey.next_seed())
     i_mc = 0  # Tracking MC steps
 
