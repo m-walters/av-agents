@@ -105,6 +105,7 @@ def gk_configs(run_dir: str, tag: str | None = None):
     # Paradoxically our GK 'nominal' is the risky one
     nominal_class = "sim.vehicles.highway.HotshotParams"
     defensive_class = "sim.vehicles.highway.DefensiveParams"
+    offline_class = nominal_class
 
     # Profiling
     profiling = "false"
@@ -143,6 +144,7 @@ def gk_configs(run_dir: str, tag: str | None = None):
             "gatekeeper.n_online": online,
             "gatekeeper.behavior_cfg.nominal_class": nominal_class,
             "gatekeeper.behavior_cfg.defensive_class": defensive_class,
+            "gatekeeper.behavior_cfg.offline_class": offline_class,
             "profiling": profiling,
         } for name, online in runs.items()
     ]
@@ -163,12 +165,19 @@ def run_hpc_gk():
     # Name the run, and where it will be saved
     run_dir = "manuscript/hpc/online/test"
     tag = None
-
     script, configs = gk_configs(run_dir, tag)
+
     # Then just update the number of cores accordingly
-    num_cpu = 64
+    num_cpu = 96
+    world_draws = 1 * num_cpu
+    duration = 100
+    n_montecarlo = 100
+
     for config in configs:
         config["multiprocessing_cpus"] = num_cpu
+        config["world_draws"] = world_draws
+        config["highway_env.duration"] = duration
+        config["highway_env.n_montecarlo"] = n_montecarlo
 
     _run_configs(script, configs)
 
