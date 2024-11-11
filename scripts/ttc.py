@@ -130,7 +130,7 @@ def mc_worldsim(
 
     with logging_redirect_tqdm():
         i_mc = 0  # Tracking MC steps
-        for step in tqdm(range(duration), desc="Steps", leave=False, disable=bool(profiler)):
+        for step in tqdm(range(duration), desc="Steps", leave=False, disable=True):
             # First, record the gatekeeper behavior states
             result["behavior_mode"][step, :] = gk_cmd.collect_behaviors()
 
