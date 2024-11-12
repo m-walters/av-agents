@@ -142,7 +142,6 @@ def mc_worldsim(
                     # Returned dimensions are [n_ego]
                     # results = gk_cmd.run(pool)
                     results = gk_cmd.run(cores_per_world=cores_per_world)
-                    time.sleep(10)
 
                     # Record data
                     # result["mc_loss"][i_mc, :, :] = results["losses"]
