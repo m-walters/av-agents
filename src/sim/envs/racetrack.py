@@ -85,7 +85,7 @@ class AVRacetrack(RacetrackEnv):
             "reward_speed": 20,
             "speed_limit": 20,
             "crash_penalty": -1,  # The reward received when colliding with a vehicle.
-            "max_defensive_penalty": -3,  # Cap the defensive reward/penalty
+            "max_defensive_penalty": -6,  # Cap the defensive reward/penalty
             "control_vehicle_type": "sim.vehicles.highway.IDMVehicle",
             "other_vehicles_type": "sim.vehicles.highway.AlterIDMVehicle",
             "default_control_behavior": "sim.vehicles.highway.NominalParams",

@@ -54,6 +54,7 @@ class ControlPolicies(Enum):
 
 class BehaviorConfig(TypedDict):
     enable: bool
+    policy_change_delta: int
     nominal_class: str
     nominal_risk_threshold: float
     defensive_class: str
@@ -139,7 +140,8 @@ class Gatekeeper:
             vehicle.set_behavior_params(self.nominal_policy)
 
         # It's hazardous to immediately change the policy, so it must be done gradually
-        self.policy_change_delta = 10  # Number of steps to gradually apply the policy change over
+        self.policy_change_delta = behavior_cfg["policy_change_delta"]  # Number of steps to gradually apply the policy
+        # change over
         self.change_in_progress = False
         self.change_step = 0  # Current step in the policy change
 

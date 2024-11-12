@@ -40,11 +40,11 @@ def baseline_configs(run_dir: str, tag: str | None = None):
     cores_per_world = 1
     env_type = "highway-v0"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
-    world_draws = 100
+    world_draws = 50
     duration = 40
     num_control_vehicles = 12  # Total number ego on road, not GK-online though.
     num_vehicles_control_speed = 12
-    vehicles_count = 16
+    vehicles_count = 24
     num_collision_watch = 4
     # GK/MC Stuff
     n_online = 12
@@ -110,7 +110,7 @@ def online_configs(run_dir: str, tag: str | None = None):
     seed = 867
     script = "ttc.py"
 
-    num_cpus = 12
+    num_cpus = 6
     cores_per_world = 1
     env_type = "highway-v0"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
@@ -136,7 +136,7 @@ def online_configs(run_dir: str, tag: str | None = None):
     profiling = "false"
 
     runs = {
-        "online-4": 4,
+        # "online-4": 4,
         "online-12": 12,
     }
 
@@ -177,8 +177,8 @@ def online_configs(run_dir: str, tag: str | None = None):
 
 def run_online_exp():
     # Name the run, and where it will be saved
-    run_dir = "tmp/highway"
-    tag = None
+    run_dir = "tmp/pdelta"
+    tag = "pdelta10"
 
     script, configs = online_configs(run_dir, tag)
     _run_configs(script, configs)

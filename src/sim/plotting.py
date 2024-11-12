@@ -33,7 +33,7 @@ class AVPlotter:
         # We have different sets based on different contexts
         self.PLOT_OVERRIDES = {
             "Crashed": self.multiagent_crash_override,
-            "Number in Conservative": self.multiagent_behaviors_override,
+            "Fraction Defensive": self.multiagent_behaviors_override,
         }
 
     @staticmethod
@@ -795,6 +795,8 @@ class AVPlotter:
         self,
         save_path: str,
         _datasets: list[tuple[xr.Dataset, str]],
+        bin_range: tuple[int, int] | None = None,
+        kde: bool = True,
     ):
         # Get num world draws from ref
         ref_ds = _datasets[0][0]
@@ -813,13 +815,16 @@ class AVPlotter:
         col_wheel = self.get_color_wheel()
         # Plotting the distributions
         # Get the bin range as the 'duration' of the simulation
-        bin_range = (0, duration)
-        # bin_range = (0, 30)
+        if not bin_range:
+            bin_range = (0, duration)
+            # bin_range = (0, 30)
+
+        nbins = min(bin_range[1] - bin_range[0], 30)
 
         for i_ds, ds in enumerate(datasets):
             lbl = _datasets[i_ds][1]
             col = next(col_wheel)
-            sns.histplot(ds, bins=30, kde=True, label=lbl, color=col, binrange=bin_range)
+            sns.histplot(ds, bins=nbins, kde=kde, label=lbl, color=col, binrange=bin_range)
             print(f"{lbl}: {np.mean(ds)} ({len(ds)}/{world_draws} crashed)")
             # plt.axvline(np.mean(ds), color=col, linestyle='dashed', linewidth=1)
 

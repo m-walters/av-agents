@@ -54,7 +54,7 @@ class AVHighway(HighwayEnv):
                 "ego_spacing": 2,
                 "vehicles_density": 1,
                 "crash_penalty": -1,  # The reward received when colliding with a vehicle.
-                "max_defensive_penalty": -3,  # Cap the defensive reward/penalty
+                "max_defensive_penalty": -6,  # Cap the defensive reward/penalty
                 # The reward received when driving on the right-most lanes, linearly mapped to
                 # zero for other lanes.
                 "right_lane_reward": 0.1,
@@ -195,7 +195,7 @@ class AVHighway(HighwayEnv):
         for others in other_per_controlled:
             vehicle = control_vehicle_class.create_random(
                 self.road,
-                speed=25,
+                speed=0.8 * self.config["speed_limit"],
                 lane_id=self.config["initial_lane_id"],
                 spacing=self.config["ego_spacing"],
                 av_id=str(av_id),

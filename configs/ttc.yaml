@@ -23,14 +23,14 @@ highway_env:
   default_control_behavior: "sim.vehicles.highway.HotshotParams"
   # Vehicle numbers
   controlled_vehicles: 12  # Number of ego vehicles
-  vehicles_count: 18
+  vehicles_count: 24
   # Number of vehicles with the reward_speed target
   # Remainder will have a target speed lower than speed_limit
   num_vehicles_control_speed: 12
 
-  vehicles_density: 0.7
-  reward_speed: 30
-  speed_limit: 15
+  vehicles_density: 1.
+  reward_speed: 40
+  speed_limit: 20
   action:
     type: "MultiAgentAction"
     action_config:
@@ -55,7 +55,7 @@ mc_period: 5   # real-world steps between MC issuances
 num_collision_watch: 4 # Watch the first n vehicles for terminating collision
 
 # Temporary, probably will remove
-env_type: "racetrack-v0"
+env_type: "highway-v0"
 
 # Multiprocessing configs
 multiprocessing_cpus: 12
@@ -81,6 +81,7 @@ gatekeeper:
     model: "NullEntropyRiskModel"
   behavior_cfg:
     enable: true
+    policy_change_delta: 10
     # The GK policy for how vehicle behavior modes are selected
     control_policy: "risk_threshold"
     nominal_class: "sim.vehicles.highway.HotshotParams"

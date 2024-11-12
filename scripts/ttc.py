@@ -318,7 +318,7 @@ def main(cfg: DictConfig):
                 if num_collision_watch > 0:
                     if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
                         # Record the step which saw the first vehicle collision
-                        ds[0, "time_to_collision"] = step
+                        ds["time_to_collision"][0] = step
                         logger.info(
                             f"One of {num_collision_watch} watched vehicles collided (Step {step})\nExiting."
                         )
@@ -345,7 +345,9 @@ def main(cfg: DictConfig):
             try:
                 with ProcessPoolExecutor(max_workers=world_cores) as executor:
                     # Batch by world cores
-                    for world_start in range(0, world_draws, world_cores):
+                    for world_start in tqdm(
+                            range(0, world_draws, world_cores), total=world_draws, desc="Worlds", unit_scale=world_cores
+                    ):
                         world_end = min(world_start + world_cores, world_draws)
                         futures = []
                         for world_idx in range(world_start, world_end):
@@ -362,7 +364,7 @@ def main(cfg: DictConfig):
                             )
                             futures.append(future)
 
-                        for future in tqdm(as_completed(futures), total=world_draws, desc="Worlds"):
+                        for future in as_completed(futures):
                             world_idx, result_dict = future.result()
 
                             ds["reward"][world_idx, :, :] = result_dict["reward"]
@@ -385,129 +387,129 @@ def main(cfg: DictConfig):
                 executor.shutdown(wait=False, cancel_futures=True)  # Set wait=False to not block
                 raise  # Re-raise the KeyboardInterrupt to terminate the main program
 
-                    ###### multiprocessing style
-                    # if profiler:
-                    #     profiler.enable()
-                    # for i_world in tqdm(
-                    #         range(0, world_draws, world_cores), desc="Worlds", unit_scale=world_cores,
-                    #         disable=bool(profiler), maxinterval=world_draws
-                    # ):
-                    #
-                    # # Chunk the worlds by number of processes
-                    # end_world = min(i_world + world_cores, world_draws)
-                    # pool_args = [
-                    #     (
-                    #         world_idx,
-                    #         world_seeds[world_idx],
-                    #         env,
-                    #         run_params,
-                    #         gk_cfg,
-                    #         cores_per_world,
-                    #         num_collision_watch,
-                    #         profiler,
-                    #     ) for world_idx in range(i_world, end_world)
-                    # ]
-                    #
-                    # results = pool.starmap(
-                    #     mc_worldsim,
-                    #     pool_args,
-                    # )
-                    #
-                    # for world_idx, result_dict in results:
-                    #     ds["reward"][world_idx, :, :] = result_dict["reward"]
-                    #     ds["real_loss"][world_idx, :, :] = result_dict["real_loss"]
-                    #     ds["crashed"][world_idx, :, :] = result_dict["crashed"]
-                    #     ds["behavior_mode"][world_idx, :, :] = result_dict["behavior_mode"]
-                    #     ds["defensive_reward"][world_idx, :, :] = result_dict["defensive_reward"]
-                    #     ds["speed_reward"][world_idx, :, :] = result_dict["speed_reward"]
-                    #     ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
-                    #     # MC data
-                    #     ds["loss_mean"][world_idx, :, :] = result_dict["loss_mean"]
-                    #     ds["loss_p5"][world_idx, :, :] = result_dict["loss_p5"]
-                    #     ds["loss_p95"][world_idx, :, :] = result_dict["loss_p95"]
-                    #     ds["risk"][world_idx, :, :] = result_dict["risk"]
-                    #     ds["entropy"][world_idx, :, :] = result_dict["entropy"]
-                    #     ds["energy"][world_idx, :, :] = result_dict["energy"]
+            ###### multiprocessing style
+            # if profiler:
+            #     profiler.enable()
+            # for i_world in tqdm(
+            #         range(0, world_draws, world_cores), desc="Worlds", unit_scale=world_cores,
+            #         disable=bool(profiler), maxinterval=world_draws
+            # ):
+            #
+            # # Chunk the worlds by number of processes
+            # end_world = min(i_world + world_cores, world_draws)
+            # pool_args = [
+            #     (
+            #         world_idx,
+            #         world_seeds[world_idx],
+            #         env,
+            #         run_params,
+            #         gk_cfg,
+            #         cores_per_world,
+            #         num_collision_watch,
+            #         profiler,
+            #     ) for world_idx in range(i_world, end_world)
+            # ]
+            #
+            # results = pool.starmap(
+            #     mc_worldsim,
+            #     pool_args,
+            # )
+            #
+            # for world_idx, result_dict in results:
+            #     ds["reward"][world_idx, :, :] = result_dict["reward"]
+            #     ds["real_loss"][world_idx, :, :] = result_dict["real_loss"]
+            #     ds["crashed"][world_idx, :, :] = result_dict["crashed"]
+            #     ds["behavior_mode"][world_idx, :, :] = result_dict["behavior_mode"]
+            #     ds["defensive_reward"][world_idx, :, :] = result_dict["defensive_reward"]
+            #     ds["speed_reward"][world_idx, :, :] = result_dict["speed_reward"]
+            #     ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
+            #     # MC data
+            #     ds["loss_mean"][world_idx, :, :] = result_dict["loss_mean"]
+            #     ds["loss_p5"][world_idx, :, :] = result_dict["loss_p5"]
+            #     ds["loss_p95"][world_idx, :, :] = result_dict["loss_p95"]
+            #     ds["risk"][world_idx, :, :] = result_dict["risk"]
+            #     ds["entropy"][world_idx, :, :] = result_dict["entropy"]
+            #     ds["energy"][world_idx, :, :] = result_dict["energy"]
 
-                ###### old style
-                #
-                # for w_seed in tqdm(world_seeds, desc="Worlds", disable=bool(profiler)):
-                #     # Seed world
-                #     i_world += 1
-                #     obs, info = env.reset(seed=w_seed)
-                #     uenv: "AVRacetrack" = env.unwrapped
-                #
-                #     # Init the gatekeeper
-                #     gk_cmd = gatekeeper.GatekeeperCommand(
-                #         uenv, gk_cfg, uenv.controlled_vehicles, w_seed
-                #     )
-                #
-                #     i_mc = 0  # Tracking MC steps
-                #     for step in tqdm(range(run_params['duration']), desc="Steps", leave=False):
-                #         # First, record the gatekeeper behavior states
-                #         ds["behavior_mode"][i_world, step, :] = gk_cmd.collect_behaviors()
-                #
-                #         # We'll use the gatekeeper params for montecarlo control
-                #         if step >= run_params['warmup_steps']:
-                #             if step % gk_cmd.mc_period == 0:
-                #                 # Returned dimensions are [n_ego]
-                #                 results = gk_cmd.run(pool)
-                #
-                #                 # Record data
-                #                 # ds["mc_loss"][i_world, i_mc, :, :] = results["losses"]
-                #                 ds["loss_mean"][i_world, i_mc, :] = np.mean(results["losses"], axis=0)
-                #                 ds["loss_p5"][i_world, i_mc, :] = np.percentile(results["losses"], 5, axis=0)
-                #                 ds["loss_p95"][i_world, i_mc, :] = np.percentile(results["losses"], 95, axis=0)
-                #                 ds["risk"][i_world, i_mc, :] = results["risk"]
-                #                 ds["entropy"][i_world, i_mc, :] = results["entropy"]
-                #                 ds["energy"][i_world, i_mc, :] = results["energy"]
-                #                 i_mc += 1
-                #
-                #         # We do action after MC sim in case it informs actions
-                #         # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
-                #         action = env.action_space.sample()
-                #         # action = tuple(np.ones_like(action))
-                #         obs, reward, controlled_crashed, truncated, info = env.step(action)
-                #
-                        # # Record the actuals
-                        # ds["reward"][i_world, step, :] = reward
-                        # # Reward is normalized to [0,1]
-                        # ds["real_loss"][i_world, step, :] = 1 - reward
-                        # ds["crashed"][i_world, step, :] = controlled_crashed
-                        # ds["defensive_reward"][i_world, step, :] = info["rewards"]["defensive_reward"]
-                        # ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
-                        #
-                        # # Check the first n vehicles for collision
-                        # if num_collision_watch > 0:
-                        #     if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
-                        #         # Record the step which saw the first vehicle collision
-                        #         result["time_to_collision"] = step
-                        #         logger.info(f"One of {num_collision_watch} watched vehicles collided (Step {
-                        #              step})\nExiting.")
-                        #         break
-                        #
-                        #
-                        # if len(uenv.crashed) >= 6:
-                        #     # That's tooooo many -- probably a jam
-                        #     logger.info(f"Jam occurred (Step {step}). Exiting.")
-                        #     break
-                        #
-                        # if truncated:
-                        #     # Times up
-                        #     break
-                #
-                #     # Checkpoint world draws
-                #     if i_world + 1 < world_draws:
-                #         checkpoint_dataset(f"Checkpointing World {i_world}")
-                #
-                #     t_lap = time.time()
-                #     world_loop_times.append(t_lap - t_last)
-                #     # chkpt_time += t_lap - t_last
-                #     # if chkpt_time > checkpoint_interval:
-                #     #     chkpt_time = 0
-                #
-                #     logger.info(f"World Loop: {t_lap - t_last:.2f}s (Avg: {np.mean(world_loop_times):.2f}s)")
-                #     t_last = t_lap
+            ###### old style
+            #
+            # for w_seed in tqdm(world_seeds, desc="Worlds", disable=bool(profiler)):
+            #     # Seed world
+            #     i_world += 1
+            #     obs, info = env.reset(seed=w_seed)
+            #     uenv: "AVRacetrack" = env.unwrapped
+            #
+            #     # Init the gatekeeper
+            #     gk_cmd = gatekeeper.GatekeeperCommand(
+            #         uenv, gk_cfg, uenv.controlled_vehicles, w_seed
+            #     )
+            #
+            #     i_mc = 0  # Tracking MC steps
+            #     for step in tqdm(range(run_params['duration']), desc="Steps", leave=False):
+            #         # First, record the gatekeeper behavior states
+            #         ds["behavior_mode"][i_world, step, :] = gk_cmd.collect_behaviors()
+            #
+            #         # We'll use the gatekeeper params for montecarlo control
+            #         if step >= run_params['warmup_steps']:
+            #             if step % gk_cmd.mc_period == 0:
+            #                 # Returned dimensions are [n_ego]
+            #                 results = gk_cmd.run(pool)
+            #
+            #                 # Record data
+            #                 # ds["mc_loss"][i_world, i_mc, :, :] = results["losses"]
+            #                 ds["loss_mean"][i_world, i_mc, :] = np.mean(results["losses"], axis=0)
+            #                 ds["loss_p5"][i_world, i_mc, :] = np.percentile(results["losses"], 5, axis=0)
+            #                 ds["loss_p95"][i_world, i_mc, :] = np.percentile(results["losses"], 95, axis=0)
+            #                 ds["risk"][i_world, i_mc, :] = results["risk"]
+            #                 ds["entropy"][i_world, i_mc, :] = results["entropy"]
+            #                 ds["energy"][i_world, i_mc, :] = results["energy"]
+            #                 i_mc += 1
+            #
+            #         # We do action after MC sim in case it informs actions
+            #         # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
+            #         action = env.action_space.sample()
+            #         # action = tuple(np.ones_like(action))
+            #         obs, reward, controlled_crashed, truncated, info = env.step(action)
+            #
+                    # # Record the actuals
+                    # ds["reward"][i_world, step, :] = reward
+                    # # Reward is normalized to [0,1]
+                    # ds["real_loss"][i_world, step, :] = 1 - reward
+                    # ds["crashed"][i_world, step, :] = controlled_crashed
+                    # ds["defensive_reward"][i_world, step, :] = info["rewards"]["defensive_reward"]
+                    # ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
+                    #
+                    # # Check the first n vehicles for collision
+                    # if num_collision_watch > 0:
+                    #     if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
+                    #         # Record the step which saw the first vehicle collision
+                    #         result["time_to_collision"] = step
+                    #         logger.info(f"One of {num_collision_watch} watched vehicles collided (Step {
+                    #              step})\nExiting.")
+                    #         break
+                    #
+                    #
+                    # if len(uenv.crashed) >= 6:
+                    #     # That's tooooo many -- probably a jam
+                    #     logger.info(f"Jam occurred (Step {step}). Exiting.")
+                    #     break
+                    #
+                    # if truncated:
+                    #     # Times up
+                    #     break
+            #
+            #     # Checkpoint world draws
+            #     if i_world + 1 < world_draws:
+            #         checkpoint_dataset(f"Checkpointing World {i_world}")
+            #
+            #     t_lap = time.time()
+            #     world_loop_times.append(t_lap - t_last)
+            #     # chkpt_time += t_lap - t_last
+            #     # if chkpt_time > checkpoint_interval:
+            #     #     chkpt_time = 0
+            #
+            #     logger.info(f"World Loop: {t_lap - t_last:.2f}s (Avg: {np.mean(world_loop_times):.2f}s)")
+            #     t_last = t_lap
 
     else:
         # No Gatekeeper MC

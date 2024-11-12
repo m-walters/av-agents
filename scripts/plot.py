@@ -16,7 +16,7 @@ LABEL_TO_METRIC = {
     "Fraction Ego Crashed": "crashed",
     "Crashed": "crashed",
     "Fraction Conservative": "behavior_mode",
-    "Number in Conservative": "behavior_mode",
+    "Fraction Defensive": "behavior_mode",
 }
 
 
@@ -83,7 +83,7 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results/tmp/highway/pdelta"
+    RESULTS_DIR = "../results/tmp/highway/"
     save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
 
     data_tups = [
@@ -92,11 +92,12 @@ def compare_plot():
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "NGK-4"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-8/results.nc')), "NGK-8"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "NGK-12"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-16/results.nc')), "NGK-16"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-4/results.nc')), "NGK-4"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-nom/results.nc')), "Nom"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-def/results.nc')), "Def"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-hotshot/results.nc')), "Hotshot"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-nom/results.nc')), "Nom"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-def/results.nc')), "Def"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-hotshot/results.nc')), "Hotshot"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-nom/results.nc')), "Nom"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
     ]
 
     truncate = None
@@ -116,7 +117,7 @@ def compare_plot():
         "E[Entropy]",
         "Risk",
         "Crashed",
-        "Number in Conservative",
+        "Fraction Defensive",
     ]
     # 4 rows, 2 columns
     axes_layout = [
@@ -124,7 +125,7 @@ def compare_plot():
         ["R_Spd", "E[Loss]"],
         ["E[Energy]", "Risk"],
         ["E[Entropy]", "Crashed"],
-        [None, "Number in Conservative"],
+        [None, "Fraction Defensive"],
     ]
 
     # labels = [
@@ -153,7 +154,7 @@ def compare_plot():
 
 def ttc_hist():
 
-    RESULTS_DIR = "../results/tmp/highway/pdelta"
+    RESULTS_DIR = "../results/tmp/highway/"
     save_path = os.path.join(RESULTS_DIR, "ttc_hist.png")
 
     data_tups = [
@@ -164,15 +165,21 @@ def ttc_hist():
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "NGK-12"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-16/results.nc')), "NGK-16"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-4/results.nc')), "NGK-4"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-nom/results.nc')), "Nom"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-def/results.nc')), "Def"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-hotshot/results.nc')), "Hotshot"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-nom/results.nc')), "Nom"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
     ]
+
+    # bin_range = (0, 20)
+    bin_range = None
+    kde = False
 
     avplot = plotting.AVPlotter()
     avplot.ttc_hist(
         save_path,
-        data_tups
+        data_tups,
+        bin_range=bin_range,
+        kde=kde,
     )
 
 
