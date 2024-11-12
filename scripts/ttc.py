@@ -7,6 +7,7 @@ import multiprocessing
 import os
 import time
 import warnings
+from concurrent.futures import as_completed, ProcessPoolExecutor
 
 import gymnasium as gym
 import hydra
@@ -90,8 +91,9 @@ def non_mc_worldsim(
 
 
 def mc_worldsim(
-    world_idx: int, world_seed: int, env: AVRacetrack, run_params: dict, gk_cfg: dict, num_collision_watch: int = 1,
-    profiler: cProfile.Profile | None = None
+    world_idx: int, world_seed: int, env: AVRacetrack, run_params: dict,
+    gk_cfg: DictConfig[gatekeeper.GatekeeperConfig], cores_per_world: int,
+    num_collision_watch: int = 1, profiler: cProfile.Profile | None = None
 ) -> tuple[int, dict]:
     """
     Gatekeep world sim for world-multiprocessing
@@ -125,59 +127,62 @@ def mc_worldsim(
 
     # Init the gatekeeper
     gk_cmd = gatekeeper.GatekeeperCommand(uenv, gk_cfg, world_seed)
+    i_mc = 0  # Tracking MC steps
 
     with logging_redirect_tqdm():
-        i_mc = 0  # Tracking MC steps
-        for step in tqdm(range(duration), desc="Steps", leave=False, disable=True):
-            # First, record the gatekeeper behavior states
-            result["behavior_mode"][step, :] = gk_cmd.collect_behaviors()
+        # with multiprocessing.Pool(cores_per_world, maxtasksperchild=100) as pool:
+        with ProcessPoolExecutor(max_workers=cores_per_world) as executor:
+            for step in tqdm(range(duration), desc="Steps", leave=False, disable=False):
+                # First, record the gatekeeper behavior states
+                result["behavior_mode"][step, :] = gk_cmd.collect_behaviors()
 
-            # We'll use the gatekeeper params for montecarlo control
-            if step >= warmup_steps:
-                if step % gk_cmd.mc_period == 0:
-                    # Returned dimensions are [n_ego]
-                    results = gk_cmd.run()
+                # We'll use the gatekeeper params for montecarlo control
+                if step >= warmup_steps:
+                    if step % gk_cmd.mc_period == 0:
+                        # Returned dimensions are [n_ego]
+                        # results = gk_cmd.run(pool)
+                        results = gk_cmd.run(futures_executor=executor)
 
-                    # Record data
-                    # result["mc_loss"][i_mc, :, :] = results["losses"]
-                    result["loss_mean"][i_mc, :] = np.mean(results["losses"], axis=0)
-                    result["loss_p5"][i_mc, :] = np.percentile(results["losses"], 5, axis=0)
-                    result["loss_p95"][i_mc, :] = np.percentile(results["losses"], 95, axis=0)
-                    result["risk"][i_mc, :] = results["risk"]
-                    result["entropy"][i_mc, :] = results["entropy"]
-                    result["energy"][i_mc, :] = results["energy"]
-                    i_mc += 1
+                        # Record data
+                        # result["mc_loss"][i_mc, :, :] = results["losses"]
+                        result["loss_mean"][i_mc, :] = np.mean(results["losses"], axis=0)
+                        result["loss_p5"][i_mc, :] = np.percentile(results["losses"], 5, axis=0)
+                        result["loss_p95"][i_mc, :] = np.percentile(results["losses"], 95, axis=0)
+                        result["risk"][i_mc, :] = results["risk"]
+                        result["entropy"][i_mc, :] = results["entropy"]
+                        result["energy"][i_mc, :] = results["energy"]
+                        i_mc += 1
 
-            # We do action after MC sim in case it informs actions
-            # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
-            action = env.action_space.sample()
-            # action = tuple(np.ones_like(action))
-            obs, reward, controlled_crashed, truncated, info = env.step(action)
+                # We do action after MC sim in case it informs actions
+                # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
+                action = env.action_space.sample()
+                # action = tuple(np.ones_like(action))
+                obs, reward, controlled_crashed, truncated, info = env.step(action)
 
-            # Record the actuals
-            result["reward"][step, :] = reward
-            # Reward is normalized to [0,1]
-            result["real_loss"][step, :] = 1 - reward
-            result["crashed"][step, :] = controlled_crashed
-            result["defensive_reward"][step, :] = info["rewards"]["defensive_reward"]
-            result["speed_reward"][step, :] = info["rewards"]["speed_reward"]
+                # Record the actuals
+                result["reward"][step, :] = reward
+                # Reward is normalized to [0,1]
+                result["real_loss"][step, :] = 1 - reward
+                result["crashed"][step, :] = controlled_crashed
+                result["defensive_reward"][step, :] = info["rewards"]["defensive_reward"]
+                result["speed_reward"][step, :] = info["rewards"]["speed_reward"]
 
-            # Check the first n vehicles for collision
-            if num_collision_watch > 0:
-                if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
-                    # Record the step which saw the first vehicle collision
-                    result["time_to_collision"] = step
-                    logger.info(f"One of {num_collision_watch} watched vehicles collided (Step {step})\nExiting.")
+                # Check the first n vehicles for collision
+                if num_collision_watch > 0:
+                    if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
+                        # Record the step which saw the first vehicle collision
+                        result["time_to_collision"] = step
+                        logger.info(f"One of {num_collision_watch} watched vehicles collided (Step {step})\nExiting.")
+                        break
+
+                if len(uenv.crashed) >= 6:
+                    # That's tooooo many -- probably a jam
+                    logger.info(f"Jam occurred (Step {step}). Exiting.")
                     break
 
-            if len(uenv.crashed) >= 6:
-                # That's tooooo many -- probably a jam
-                logger.info(f"Jam occurred (Step {step}). Exiting.")
-                break
-
-            if truncated:
-                # Times up
-                break
+                if truncated:
+                    # Times up
+                    break
 
     return world_idx, result
 
@@ -187,6 +192,7 @@ def main(cfg: DictConfig):
     """
     Set the parameters and run the sim
     """
+    # Allegedly helps nested process pooling
     cfg, run_params, gk_cfg = run.init(cfg)
     run_dir = cfg.run_dir
 
@@ -241,55 +247,97 @@ def main(cfg: DictConfig):
         profiler = None
 
     num_cpu = cfg.get('multiprocessing_cpus', 1)
+    cores_per_world = cfg.get('cores_per_world', 1)
+    if num_cpu % cores_per_world != 0:
+        raise ValueError("Number of CPUs must be divisible by cores_per_world")
+    world_cores = num_cpu // cores_per_world
 
     # If mc_steps is empty, this is a baseline run for collision testing
     if run_params['mc_steps'].size > 0:
         with logging_redirect_tqdm():
-            with multiprocessing.Pool(num_cpu, maxtasksperchild=4) as pool:
-                # i_world = -1  # tqdm doesn't handle the enumerate tuples well
-                if profiler:
-                    profiler.enable()
-
-                for i_world in tqdm(
-                        range(0, world_draws, num_cpu), desc="Worlds", unit_scale=num_cpu,
-                        disable=bool(profiler), maxinterval=world_draws
-                ):
-
-                    # Chunk the worlds by number of processes
-                    end_world = min(i_world + num_cpu, world_draws)
-                    pool_args = [
-                        (
-                            world_idx,
-                            world_seeds[world_idx],
-                            env,
-                            run_params,
-                            gk_cfg,
-                            num_collision_watch,
-                            profiler
-                        ) for world_idx in range(i_world, end_world)
-                    ]
-
-                    results = pool.starmap(
+            # with multiprocessing.Pool(world_cores, maxtasksperchild=4) as pool:
+            with ProcessPoolExecutor(max_workers=world_cores) as executor:
+                futures = []
+                # for world_start in range(0, world_draws, world_cores):
+                #     world_end = min(world_start + world_cores, world_draws)
+                #     for world_idx in range(world_start, world_end):
+                for world_idx in range(world_draws):
+                    future = executor.submit(  # type: ignore
                         mc_worldsim,
-                        pool_args,
+                        world_idx,
+                        world_seeds[world_idx],
+                        env,
+                        run_params,
+                        gk_cfg,
+                        cores_per_world,
+                        num_collision_watch,
+                        profiler,
                     )
+                    futures.append(future)
 
-                    for world_idx, result_dict in results:
-                        ds["reward"][world_idx, :, :] = result_dict["reward"]
-                        ds["real_loss"][world_idx, :, :] = result_dict["real_loss"]
-                        ds["crashed"][world_idx, :, :] = result_dict["crashed"]
-                        ds["behavior_mode"][world_idx, :, :] = result_dict["behavior_mode"]
-                        ds["defensive_reward"][world_idx, :, :] = result_dict["defensive_reward"]
-                        ds["speed_reward"][world_idx, :, :] = result_dict["speed_reward"]
-                        ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
-                        # MC data
-                        ds["loss_mean"][world_idx, :, :] = result_dict["loss_mean"]
-                        ds["loss_p5"][world_idx, :, :] = result_dict["loss_p5"]
-                        ds["loss_p95"][world_idx, :, :] = result_dict["loss_p95"]
-                        ds["risk"][world_idx, :, :] = result_dict["risk"]
-                        ds["entropy"][world_idx, :, :] = result_dict["entropy"]
-                        ds["energy"][world_idx, :, :] = result_dict["energy"]
+                for future in tqdm(as_completed(futures), total=len(futures), desc="Worlds"):
+                    world_idx, result_dict = future.result()
 
+                    ds["reward"][world_idx, :, :] = result_dict["reward"]
+                    ds["real_loss"][world_idx, :, :] = result_dict["real_loss"]
+                    ds["crashed"][world_idx, :, :] = result_dict["crashed"]
+                    ds["behavior_mode"][world_idx, :, :] = result_dict["behavior_mode"]
+                    ds["defensive_reward"][world_idx, :, :] = result_dict["defensive_reward"]
+                    ds["speed_reward"][world_idx, :, :] = result_dict["speed_reward"]
+                    ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
+                    # MC data
+                    ds["loss_mean"][world_idx, :, :] = result_dict["loss_mean"]
+                    ds["loss_p5"][world_idx, :, :] = result_dict["loss_p5"]
+                    ds["loss_p95"][world_idx, :, :] = result_dict["loss_p95"]
+                    ds["risk"][world_idx, :, :] = result_dict["risk"]
+                    ds["entropy"][world_idx, :, :] = result_dict["entropy"]
+                    ds["energy"][world_idx, :, :] = result_dict["energy"]
+
+                    ###### multiprocessing style
+                    # if profiler:
+                    #     profiler.enable()
+                    # for i_world in tqdm(
+                    #         range(0, world_draws, world_cores), desc="Worlds", unit_scale=world_cores,
+                    #         disable=bool(profiler), maxinterval=world_draws
+                    # ):
+                    #
+                    # # Chunk the worlds by number of processes
+                    # end_world = min(i_world + world_cores, world_draws)
+                    # pool_args = [
+                    #     (
+                    #         world_idx,
+                    #         world_seeds[world_idx],
+                    #         env,
+                    #         run_params,
+                    #         gk_cfg,
+                    #         cores_per_world,
+                    #         num_collision_watch,
+                    #         profiler,
+                    #     ) for world_idx in range(i_world, end_world)
+                    # ]
+                    #
+                    # results = pool.starmap(
+                    #     mc_worldsim,
+                    #     pool_args,
+                    # )
+                    #
+                    # for world_idx, result_dict in results:
+                    #     ds["reward"][world_idx, :, :] = result_dict["reward"]
+                    #     ds["real_loss"][world_idx, :, :] = result_dict["real_loss"]
+                    #     ds["crashed"][world_idx, :, :] = result_dict["crashed"]
+                    #     ds["behavior_mode"][world_idx, :, :] = result_dict["behavior_mode"]
+                    #     ds["defensive_reward"][world_idx, :, :] = result_dict["defensive_reward"]
+                    #     ds["speed_reward"][world_idx, :, :] = result_dict["speed_reward"]
+                    #     ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
+                    #     # MC data
+                    #     ds["loss_mean"][world_idx, :, :] = result_dict["loss_mean"]
+                    #     ds["loss_p5"][world_idx, :, :] = result_dict["loss_p5"]
+                    #     ds["loss_p95"][world_idx, :, :] = result_dict["loss_p95"]
+                    #     ds["risk"][world_idx, :, :] = result_dict["risk"]
+                    #     ds["entropy"][world_idx, :, :] = result_dict["entropy"]
+                    #     ds["energy"][world_idx, :, :] = result_dict["energy"]
+
+                ###### old style
                 #
                 # for w_seed in tqdm(world_seeds, desc="Worlds", disable=bool(profiler)):
                 #     # Seed world
@@ -416,4 +464,5 @@ def main(cfg: DictConfig):
 
 
 if __name__ == '__main__':
+    multiprocessing.set_start_method("spawn", force=True)
     main()

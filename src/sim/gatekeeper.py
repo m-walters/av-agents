@@ -6,6 +6,7 @@ import logging
 import multiprocessing
 from enum import Enum
 from typing import Dict, List, Optional, TypedDict, Union
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
 from highway_env import utils
@@ -35,7 +36,6 @@ def behavior_to_num(behavior: Behaviors) -> int:
 
 
 def get_behavior_index() -> Dict[str, str]:
-    """netCDF serialization for saving doesn't like int key"""
     return {
         "0": Behaviors.NOMINAL.value,
         "1": Behaviors.CONSERVATIVE.value,
@@ -105,9 +105,6 @@ class Gatekeeper:
             "crash_reward",
         ]
 
-        # Behavior control logic
-        self.behavior = Behaviors.NOMINAL
-
         self.behavior_ctrl_enabled = behavior_cfg["enable"]
         self.control_policy = ControlPolicies(behavior_cfg["control_policy"])
         if self.behavior_ctrl_enabled:
@@ -118,8 +115,10 @@ class Gatekeeper:
             self.offline_behavior = utils.class_from_path(behavior_cfg["offline_class"])
             # Set the starting policy
             if online:
+                self.behavior = Behaviors.NOMINAL
                 vehicle.set_behavior_params(self.nominal_behavior)
             else:
+                self.behavior = Behaviors.OFFLINE
                 vehicle.set_behavior_params(self.offline_behavior)
 
     def get_vehicle(self, env):
@@ -362,9 +361,15 @@ class GatekeeperCommand:
 
         return losses, collisions
 
-    def run(self, pool: Optional["multiprocessing.Pool"] = None) -> dict:
+    def run(
+        self,
+        pool: Optional["multiprocessing.Pool"] = None,
+        futures_executor: Optional["ProcessPoolExecutor"] = None
+    ) -> (
+            dict):
         """
         Perform montecarlo simulations and calculate risk equations etc.
+        Can send one of pool or futures_executor for parallelization
 
         :return: Several result arrays. Dimensions [n_ego, n_mc]
         """
@@ -380,6 +385,10 @@ class GatekeeperCommand:
             results = pool.map(self._mc_trajectory, seeds)
             # Stack results along first dimension
             results = np.stack(results, axis=0)
+        elif futures_executor:
+            # Issue trajectories to workers
+            futures = [futures_executor.submit(self._mc_trajectory, seed) for seed in seeds]
+            results = np.stack([f.result() for f in as_completed(futures)], axis=0)
         else:
             results = np.zeros((self.n_montecarlo, 2, self.n_ego))
             for i, seed in enumerate(seeds):

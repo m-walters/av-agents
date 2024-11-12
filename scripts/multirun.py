@@ -3,6 +3,7 @@ One-off script for running multiple runs
 """
 import os
 import subprocess
+import multiprocessing
 
 CONTROL_BEHAVIORS = {
     "nom": "sim.vehicles.highway.NominalParams",
@@ -87,11 +88,12 @@ def gk_configs(run_dir: str, tag: str | None = None):
     seed = 86777
     script = "ttc.py"
 
-    num_cpus = 6
+    num_cpus = 8
+    cores_per_world = 4
     env_type = "racetrack-v0"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
-    world_draws = 6
-    duration = 10
+    world_draws = 4
+    duration = 100
     warmup = 0
     num_control_vehicles = 8  # Total number ego on road, not GK-online though.
     num_vehicles_control_speed = 8
@@ -100,7 +102,7 @@ def gk_configs(run_dir: str, tag: str | None = None):
     # GK/MC Stuff
     mc_period = 5
     mc_horizon = 20
-    n_montecarlo = 5
+    n_montecarlo = 20
     enable_time_discounting = "false"
     # Paradoxically our GK 'nominal' is the risky one
     nominal_class = "sim.vehicles.highway.HotshotParams"
@@ -114,8 +116,8 @@ def gk_configs(run_dir: str, tag: str | None = None):
     runs = {
         "online-1": 1,
         "online-2": 2,
-        "online-4": 4,
-        "online-8": 8,
+        # "online-4": 4,
+        # "online-8": 8,
     }
 
     def get_name(base: str):
@@ -132,6 +134,7 @@ def gk_configs(run_dir: str, tag: str | None = None):
             "highway_env.num_vehicles_control_speed": num_vehicles_control_speed,
             "highway_env.vehicles_count": vehicles_count,
             "multiprocessing_cpus": num_cpus,
+            "cores_per_world": cores_per_world,
             "env_type": env_type,
             "highway_env.duration": duration,
             "highway_env.mc_horizon": mc_horizon,
@@ -197,6 +200,7 @@ def _run_configs(script: str, configs: list[dict]):
 if __name__ == '__main__':
     # Accept first argument as function name to be called
     import sys
+    multiprocessing.set_start_method("spawn", force=True)
 
     if len(sys.argv) < 2:
         raise ValueError("Please provide a function name to call")

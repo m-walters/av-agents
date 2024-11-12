@@ -58,6 +58,7 @@ env_type: "racetrack-v0"
 # Multiprocessing configs
 use_mp: false
 multiprocessing_cpus: 2
+cores_per_world: 1
 # Profiling
 profiling: false
 

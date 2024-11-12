@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import json
 import xarray as xr
 
 """
@@ -53,6 +54,9 @@ class AVPlotter:
         """
         Specialized function for the 'crashed' multiagent Dataset variable
         """
+        # Get number that were online
+        n_online = ds.attrs["n_online"]
+
         if not world_avg:
             y = ds[var].sum(dim='ego').values
             sns.lineplot(
@@ -81,14 +85,14 @@ class AVPlotter:
         """
         Specialized function for the 'behavior_mode' multiagent Dataset variable
         """
+        # Get number that were online
+        n_online = ds.attrs["n_online"]
+
         if not world_avg:
-            y = ds[var].sum(dim='ego').values
-            sns.lineplot(
-                x=steps, y=y, **plot_kwargs
-            )
+            raise NotImplementedError("Behavior mode is not implemented for non-world averaged data")
         else:
-            # Shape of 'data' will be [duration]
-            data = ds[var].sum(['ego', 'world'], skipna=True)
+            # Take the mean across the world and online egos
+            data = ds[var].sel(ego=range(n_online)).mean(['ego'], skipna=True)
 
             # Dataframe with columns ['step', var]
             df = data.to_dataframe().reset_index()
@@ -96,6 +100,10 @@ class AVPlotter:
             sns.lineplot(
                 data=df, x='step', y=var, errorbar='sd', **plot_kwargs
             )
+            # sns.lineplot(
+            #     data=df, x='step', y=var, color=cols[idx], ax=ax,
+            #     errorbar='sd', legend=False, label=ds_name,
+            # )
             # bin_range = (0, df[var].max())
             # sns.histplot(
             #     x='step', y=var, bins=30, kde=False,

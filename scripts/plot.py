@@ -83,14 +83,13 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results/manuscript/test/online-garbage"
+    RESULTS_DIR = "../results/manuscript/test/online"
     save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
 
     data_tups = [
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-4/results.nc')), "NGK-4"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-8/results.nc')), "NGK-8"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "NGK-4"),
     ]
 
     truncate = None
@@ -110,7 +109,7 @@ def compare_plot():
         "E[Entropy]",
         "Risk",
         "Crashed",
-        # "Number in Conservative",
+        "Number in Conservative",
     ]
     # 4 rows, 2 columns
     axes_layout = [
@@ -118,7 +117,7 @@ def compare_plot():
         ["R_Spd", "E[Loss]"],
         ["E[Energy]", "Risk"],
         ["E[Entropy]", "Crashed"],
-        # [None, "Number in Conservative"],
+        [None, "Number in Conservative"],
     ]
 
     # labels = [
@@ -146,36 +145,13 @@ def compare_plot():
 
 
 def ttc_hist():
-
-    CONTROL_BEHAVIORS = {
-        "nom": "sim.vehicles.highway.NominalParams",
-        # "cons": "sim.vehicles.highway.ConservativeParams",
-        "def": "sim.vehicles.highway.DefensiveParams",
-        "hotshot": "sim.vehicles.highway.HotshotParams",
-        # "polite-incr": "sim.vehicles.highway.PolitenessIncr",
-        # "polite-decr": "sim.vehicles.highway.PolitenessDecr",
-        # "timedist-incr": "sim.vehicles.highway.TimeDistWantedIncr",
-        # "timedist-decr": "sim.vehicles.highway.TimeDistWantedDecr",
-        # "acc-max-incr": "sim.vehicles.highway.AccMaxIncr",
-        # "acc-max-decr": "sim.vehicles.highway.AccMaxDecr",
-        # "comf-brake-incr": "sim.vehicles.highway.ComfBrakingIncr",
-        # "comf-brake-decr": "sim.vehicles.highway.ComfBrakingDecr",
-        # "reckmax1": "sim.vehicles.highway.ReckMax1",
-        # "reckmax2": "sim.vehicles.highway.ReckMax2",
-        # "reckmax3": "sim.vehicles.highway.ReckMax3",
-        # "def-HE": "sim.vehicles.highway.DefensiveHE",
-        # "def-1": "sim.vehicles.highway.Defensive1",
-        # "def-2": "sim.vehicles.highway.Defensive2",
-    }
-
-    RESULTS_DIR = "../results/manuscript/test/online-garbage"
+    RESULTS_DIR = "../results/manuscript/test/online"
     save_path = os.path.join(RESULTS_DIR, "ttc-baseline-hist.png")
 
     data_tups = [
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-4/results.nc')), "NGK-4"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'ngk-8/results.nc')), "NGK-8"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "NGK-4"),
     ]
 
     avplot = plotting.AVPlotter()
