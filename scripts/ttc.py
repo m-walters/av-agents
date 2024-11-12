@@ -55,7 +55,8 @@ def non_mc_worldsim(
     }
 
     with logging_redirect_tqdm():
-        for step in tqdm(range(duration), desc="Steps", leave=False, disable=False):
+        # for step in tqdm(range(duration), desc="Steps", leave=False, disable=False):
+        for step in range(duration):
             # We do action after MC sim in case it informs actions
             # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
             action = env.action_space.sample()
