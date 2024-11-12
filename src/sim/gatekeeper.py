@@ -20,26 +20,26 @@ from sim.vehicles.highway import AVVehicleType, VehicleBase
 logger = logging.getLogger("av-sim")
 
 
-class Behaviors(Enum):
+class Policies(Enum):
     NOMINAL = "nominal"
     CONSERVATIVE = "conservative"
     OFFLINE = "offline"
 
 
-def behavior_to_num(behavior: Behaviors) -> int:
-    if behavior == Behaviors.NOMINAL:
+def policy_to_num(behavior: Policies) -> int:
+    if behavior == Policies.NOMINAL:
         return 0
-    elif behavior == Behaviors.CONSERVATIVE:
+    elif behavior == Policies.CONSERVATIVE:
         return 1
-    elif behavior == Behaviors.OFFLINE:
+    elif behavior == Policies.OFFLINE:
         return 2
 
 
-def get_behavior_index() -> Dict[str, str]:
+def get_policy_index() -> Dict[str, str]:
     return {
-        "0": Behaviors.NOMINAL.value,
-        "1": Behaviors.CONSERVATIVE.value,
-        "2": Behaviors.OFFLINE.value,
+        "0": Policies.NOMINAL.value,
+        "1": Policies.CONSERVATIVE.value,
+        "2": Policies.OFFLINE.value,
     }
 
 
@@ -107,20 +107,41 @@ class Gatekeeper:
 
         self.behavior_ctrl_enabled = behavior_cfg["enable"]
         self.control_policy = ControlPolicies(behavior_cfg["control_policy"])
+        self.policy_map = {}
 
         if self.behavior_ctrl_enabled:
-            self.nominal_behavior = utils.class_from_path(behavior_cfg["nominal_class"])
+            self.nominal_policy = utils.class_from_path(behavior_cfg["nominal_class"])
             self.nominal_risk_threshold = rstar_range[0]
-            self.defensive_behavior = utils.class_from_path(behavior_cfg["defensive_class"])
+            self.defensive_policy = utils.class_from_path(behavior_cfg["defensive_class"])
             self.defensive_risk_threshold = rstar_range[1]
-            self.offline_behavior = utils.class_from_path(behavior_cfg["offline_class"])
+            self.offline_policy = utils.class_from_path(behavior_cfg["offline_class"])
+
+            self.policy_map = {
+                Policies.NOMINAL: self.nominal_policy,
+                Policies.CONSERVATIVE: self.defensive_policy,
+                Policies.OFFLINE: self.offline_policy,
+            }
+
             # Set the starting policy
             if online:
-                self.behavior = Behaviors.NOMINAL
-                vehicle.set_behavior_params(self.nominal_behavior)
+                self.policy = Policies.NOMINAL
+                self.target_policy = Policies.NOMINAL
+                vehicle.set_behavior_params(self.nominal_policy)
             else:
-                self.behavior = Behaviors.OFFLINE
-                vehicle.set_behavior_params(self.offline_behavior)
+                self.policy = Policies.OFFLINE
+                self.target_policy = Policies.OFFLINE
+                vehicle.set_behavior_params(self.offline_policy)
+        else:
+            # Default to nominal behavior
+            self.nominal_policy = utils.class_from_path(behavior_cfg["nominal_class"])
+            self.policy = Policies.NOMINAL
+            self.target_policy = Policies.NOMINAL
+            vehicle.set_behavior_params(self.nominal_policy)
+
+        # It's hazardous to immediately change the policy, so it must be done gradually
+        self.policy_change_delta = 10  # Number of steps to gradually apply the policy change over
+        self.change_in_progress = False
+        self.change_step = 0  # Current step in the policy change
 
     def get_vehicle(self, env):
         return env.vehicle_lookup[self.vehicle_id]
@@ -165,17 +186,63 @@ class Gatekeeper:
             return
 
         if self.control_policy == ControlPolicies.RISK_THRESHOLD:
-            if self.behavior == Behaviors.NOMINAL and nbrhood_cre > self.nominal_risk_threshold:
-                # Get the vehicle and change its policy
+            if self.policy == Policies.NOMINAL and nbrhood_cre > self.nominal_risk_threshold:
                 vehicle = self.get_vehicle(env)
                 logger.debug(f"MW TOGGLING TO DEFENSIVE {vehicle}")
-                vehicle.set_behavior_params(self.defensive_behavior)
-                self.behavior = Behaviors.CONSERVATIVE
-            elif self.behavior == Behaviors.CONSERVATIVE and nbrhood_cre < self.defensive_risk_threshold:
+                # vehicle.set_behavior_params(self.defensive_policy)
+                # self.policy = Policies.CONSERVATIVE
+                self.target_policy = Policies.CONSERVATIVE
+                self.change_in_progress = True
+
+            elif self.policy == Policies.CONSERVATIVE and nbrhood_cre < self.defensive_risk_threshold:
                 vehicle = self.get_vehicle(env)
-                vehicle.set_behavior_params(self.nominal_behavior)
                 logger.debug(f"MW TOGGLING TO NOMINAL {vehicle}")
-                self.behavior = Behaviors.NOMINAL
+                # vehicle.set_behavior_params(self.nominal_policy)
+                self.target_policy = Policies.NOMINAL
+                self.change_in_progress = True
+
+    def step_policy_change(self, env):
+        """
+        Step the policy change
+        """
+        if not self.change_in_progress:
+            return
+
+        self.change_step += 1
+        if self.change_step >= self.policy_change_delta:
+            self.complete_policy_change(env)
+        else:
+            self.increment_policy(env)
+
+    def increment_policy(self, env):
+        """
+        Increment the policy params towards target
+        """
+        # We can restrict ourselves to only the params that we will be modifying
+        valid_params = [
+            "POLITENESS",
+            "DISTANCE_WANTED",
+            "TIME_WANTED",
+            "LANE_CHANGE_MAX_BRAKING_IMPOSED",
+        ]
+
+        vehicle = self.get_vehicle(env)
+        initial_params = self.policy_map[self.policy]
+        target_params = self.policy_map[self.target_policy]
+        for p in valid_params:
+            init_val = getattr(initial_params, p)
+            target_val = getattr(target_params, p)
+            current_val = getattr(vehicle, p)
+            current_val += (target_val - init_val) / self.policy_change_delta
+            setattr(vehicle, p, current_val)
+
+    def complete_policy_change(self, env):
+        self.change_in_progress = False
+        self.change_step = 0
+        vehicle = self.get_vehicle(env)
+        vehicle.set_behavior_params(self.policy_map[self.target_policy])
+        self.policy = self.target_policy
+
 
     def __str__(self):
         return f"Gatekeeper[{self.gk_idx} | {self.vehicle_id}]"
@@ -366,6 +433,13 @@ class GatekeeperCommand:
 
         return losses, collisions
 
+    def step_gk_policies(self, env):
+        """
+        Step the policy changes for all GKs
+        """
+        for gk in self.gatekeepers:
+            gk.step_policy_change(env)
+
     def run(
         self,
         pool: Optional["multiprocessing.Pool"] = None,
@@ -393,8 +467,9 @@ class GatekeeperCommand:
             results = pool.map(self._mc_trajectory, seeds)
             # Stack results along first dimension
             results = np.stack(results, axis=0)
-        elif cores_per_world:
+        elif cores_per_world and cores_per_world > 1:
             # Issue trajectories to workers
+            # We treat cores == 1 as being a world-sim per core, so we don't want to parallelize
             with ProcessPoolExecutor(max_workers=cores_per_world) as executor:
                 try:
                     futures = [executor.submit(self._mc_trajectory, seed) for seed in seeds]
@@ -496,4 +571,4 @@ class GatekeeperCommand:
         return found_gks
 
     def collect_behaviors(self):
-        return np.array([behavior_to_num(gk.behavior) for gk in self.gatekeepers])
+        return np.array([policy_to_num(gk.policy) for gk in self.gatekeepers])

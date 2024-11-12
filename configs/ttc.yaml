@@ -3,7 +3,7 @@ defaults:
   - _self_
 
 # Note this can still be overridden with 'name' in the command line
-name: tmp/ttc
+name: tmp/highway
 run_dir: ../results/${name}
 
 hydra:
@@ -22,14 +22,14 @@ highway_env:
   other_vehicles_type: "sim.vehicles.highway.AlterIDMVehicle"
   default_control_behavior: "sim.vehicles.highway.HotshotParams"
   # Vehicle numbers
-  controlled_vehicles: 16  # Number of ego vehicles
-  vehicles_count: 24
+  controlled_vehicles: 12  # Number of ego vehicles
+  vehicles_count: 18
   # Number of vehicles with the reward_speed target
   # Remainder will have a target speed lower than speed_limit
-  num_vehicles_control_speed: 16
+  num_vehicles_control_speed: 12
 
-  vehicles_density: 2
-  reward_speed: 35
+  vehicles_density: 0.7
+  reward_speed: 30
   speed_limit: 15
   action:
     type: "MultiAgentAction"
@@ -42,15 +42,15 @@ highway_env:
     observation_config:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
-  mc_horizon: 20
+  mc_horizon: 1
   n_montecarlo: 20
-  duration: 40
+  duration: 100
   normalize_reward: true
 #==============
 
 seed: 867
-world_draws: 12
-warmup_steps: 0  # included within the duration
+world_draws: 40
+warmup_steps: 1e5  # included within the duration
 mc_period: 5   # real-world steps between MC issuances
 num_collision_watch: 4 # Watch the first n vehicles for terminating collision
 
@@ -60,14 +60,14 @@ env_type: "racetrack-v0"
 # Multiprocessing configs
 multiprocessing_cpus: 12
 # Note that you'll be using an additional CPU for each world parent (but they're low usage)
-cores_per_world: 3
+cores_per_world: 4
 # Profiling
 profiling: false
 video: false
 
 gatekeeper:
   # Number of vehicles that will have gatekeeper behavior operating on
-  n_online: 4
+  n_online: 12
   # Time-discounting
   enable_time_discounting: false
   gamma: 0.96

@@ -798,7 +798,7 @@ class AVPlotter:
     ):
         # Get num world draws from ref
         ref_ds = _datasets[0][0]
-        world_draws = ref_ds.coords['world'].values[-1]
+        world_draws = ref_ds.coords['world'].values[-1] + 1  # zero-based
         duration = ref_ds.coords['step'].values[-1]
 
         # Compile datasets

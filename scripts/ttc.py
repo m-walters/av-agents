@@ -55,7 +55,7 @@ def non_mc_worldsim(
     }
 
     with logging_redirect_tqdm():
-        for step in tqdm(range(duration), desc="Steps", leave=False, disable=bool(profiler)):
+        for step in tqdm(range(duration), desc="Steps", leave=False, disable=False):
             # We do action after MC sim in case it informs actions
             # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
             action = env.action_space.sample()
@@ -132,9 +132,11 @@ def mc_worldsim(
     with logging_redirect_tqdm():
         # with multiprocessing.Pool(cores_per_world, maxtasksperchild=100) as pool:
         # with ProcessPoolExecutor(max_workers=cores_per_world) as executor:
-        for step in tqdm(range(duration), desc="Steps", leave=False, disable=False):
+        for step in tqdm(range(duration), desc="Steps", leave=False, disable=True):
             # First, record the gatekeeper behavior states
             result["behavior_mode"][step, :] = gk_cmd.collect_behaviors()
+            # Advance the policy deltas
+            gk_cmd.step_gk_policies(uenv)
 
             # We'll use the gatekeeper params for montecarlo control
             if step >= warmup_steps:
@@ -275,15 +277,17 @@ def main(cfg: DictConfig):
 
                 # First, record the gatekeeper behavior states
                 ds["behavior_mode"][0, step, :] = gk_cmd.collect_behaviors()
+                # Advance the policy deltas
+                gk_cmd.step_gk_policies(uenv)
 
                 # We'll use the gatekeeper params for montecarlo control
                 if step >= run_params['warmup_steps']:
                     if step % gk_cmd.mc_period == 0:
                         # Returned dimensions are [n_ego]
                         results = gk_cmd.run(None)
-                        print("MW RESULTS:\n")
-                        pprint(results)
-                        # input("...")
+                        # print("MW RESULTS:\n")
+                        # pprint(results)
+                        input("...")
 
                         # Record data
 

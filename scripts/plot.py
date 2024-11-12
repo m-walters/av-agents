@@ -83,7 +83,7 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results/tmp"
+    RESULTS_DIR = "../results/tmp/highway/pdelta"
     save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
 
     data_tups = [
@@ -91,9 +91,12 @@ def compare_plot():
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "NGK-4"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-8/results.nc')), "NGK-8"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'ttc/results.nc')), "NGK-8"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-16/results.nc')), "NGK-16"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-4/results.nc')), "NGK-4"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "NGK-12"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-16/results.nc')), "NGK-16"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-4/results.nc')), "NGK-4"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-nom/results.nc')), "Nom"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-def/results.nc')), "Def"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-hotshot/results.nc')), "Hotshot"),
     ]
 
     truncate = None
@@ -149,16 +152,21 @@ def compare_plot():
 
 
 def ttc_hist():
-    RESULTS_DIR = "../results/tmp"
-    save_path = os.path.join(RESULTS_DIR, "ttc-baseline-hist.png")
+
+    RESULTS_DIR = "../results/tmp/highway/pdelta"
+    save_path = os.path.join(RESULTS_DIR, "ttc_hist.png")
 
     data_tups = [
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "NGK-4"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-8/results.nc')), "NGK-8"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-16/results.nc')), "NGK-16"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-4/results.nc')), "NGK-4"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "NGK-12"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-16/results.nc')), "NGK-16"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-4/results.nc')), "NGK-4"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-nom/results.nc')), "Nom"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-def/results.nc')), "Def"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baseline-hotshot/results.nc')), "Hotshot"),
     ]
 
     avplot = plotting.AVPlotter()

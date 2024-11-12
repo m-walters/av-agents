@@ -10,7 +10,7 @@ import xarray as xr
 from omegaconf import DictConfig, OmegaConf, open_dict
 
 from sim import utils
-from sim.gatekeeper import GatekeeperConfig, get_behavior_index
+from sim.gatekeeper import GatekeeperConfig, get_policy_index
 
 import json
 
@@ -128,7 +128,7 @@ def init_multiagent_results_dataset(
         attrs={
             "n_online": gk_cfg['n_online'],
             # The behavior index maps the values tracked in `behavior_mode` to their type here.
-            "behavior_index": json.dumps(get_behavior_index())
+            "behavior_index": json.dumps(get_policy_index())
         },
     )
 

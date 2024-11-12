@@ -2,44 +2,87 @@
 defaults:
   - _self_
 
-# Overrides for the env config
+# Note this can still be overridden with 'name' in the command line
+name: tmp/highway
+run_dir: ../results/${name}
+
+hydra:
+  run:
+    dir: ${run_dir}
+  # Format the logging so that it overwrites instead of appending
+  job_logging:
+    handlers:
+      file:
+        filename: ${run_dir}/out.log
+        mode: w
+
 # See AVHighway for defaults
-env:
-  vehicles_count: 50
-  vehicles_density: 2
-  reward_speed: &reward_speed 50
-  speed_limit: 50
-  duration: 60
-  mc_horizon: 5
-  n_montecarlo: 100
-#  mc_period: 5
+highway_env:
+  control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
+  other_vehicles_type: "sim.vehicles.highway.AlterIDMVehicle"
+  default_control_behavior: "sim.vehicles.highway.HotshotParams"
+  # Vehicle numbers
+  controlled_vehicles: 12  # Number of ego vehicles
+  vehicles_count: 12
+  # Number of vehicles with the reward_speed target
+  # Remainder will have a target speed lower than speed_limit
+  num_vehicles_control_speed: 12
+
+  vehicles_density: 1
+  reward_speed: 15
+  speed_limit: 15
+  action:
+    type: "MultiAgentAction"
+    action_config:
+      type: "DiscreteMetaAction"
+      lateral: true
+      longitudinal: true
+  observation:
+    type: "MultiAgentObservation"
+    observation_config:
+      type: "Kinematics"
+#      features: ["presence", "x", "y", "vx", "vy"]
+  mc_horizon: 1
+  n_montecarlo: 20
+  duration: 100
+  normalize_reward: true
 #==============
-seed: 8675309
+
+seed: 867
 world_draws: 40
-warmup_steps: 20  # included within the duration
+warmup_steps: 0  # included within the duration
+mc_period: 5   # real-world steps between MC issuances
+num_collision_watch: 4 # Watch the first n vehicles for terminating collision
 
-# Params for world sampling
-params:
-  - name: vehicles_density
-    sampler:
-      _target_: pymc.Uniform
-      _args_:
-        - vehicles_density
-        - 0.5
-        - 2.0
-  - name: duration  # Just for testing
-    fixed_value: 40
+# Temporary, probably will remove
+env_type: "highway-v0"
 
-policy:
-  model: "ProfitMaximizingPolicy"
-loss:
-  model: "LossModel"
-  alpha: 10
-  reward_speed: *reward_speed
-  beta: 1
-  scale: 0.1
-preference_prior:
-  model: "ExponentialPreferencePrior"
-  p_star: 0.5
-risk:
-  model: "MonteCarloRiskModel"
+# Multiprocessing configs
+multiprocessing_cpus: 12
+# Note that you'll be using an additional CPU for each world parent (but they're low usage)
+cores_per_world: 4
+# Profiling
+profiling: false
+video: false
+
+gatekeeper:
+  # Number of vehicles that will have gatekeeper behavior operating on
+  n_online: 12
+  # Time-discounting
+  enable_time_discounting: false
+  gamma: 0.96
+  risk_eval_period: 5  # Every nth inner step, eval risk
+  # Models
+  preference_prior:
+    model: "ExponentialPreferencePrior"
+    p_star: 0.1
+    l_star: 0.2
+  risk_model:
+    model: "NullEntropyRiskModel"
+  behavior_cfg:
+    enable: true
+    # The GK policy for how vehicle behavior modes are selected
+    control_policy: "risk_threshold"
+    nominal_class: "sim.vehicles.highway.HotshotParams"
+    defensive_class: "sim.vehicles.highway.DefensiveParams"
+    offline_class: "sim.vehicles.highway.HotshotParams"

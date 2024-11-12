@@ -28,79 +28,27 @@ CONTROL_BEHAVIORS = {
 }
 
 
-def run_baselines():
-    seed = 86777
-    script = "ttc.py"
-
-    num_cpus = 16
-    env_type = "racetrack-v0"
-    world_draws = 500
-    duration = 200
-    warmup = 1e5
-    num_control_vehicles = 8
-    num_vehicles_control_speed = 8
-    vehicles_count = 24
-    # Profiling
-    profiling = "false"
-
-    # Name the run, and where it will be saved
-    RUN_DIR = "manuscript/av-8-baselines"
-
-    policies = [
-        "nom", "def", "hotshot",
-    ]
-
-    configs = [
-        {
-            "name": os.path.join(RUN_DIR, policy),
-            "seed": seed,
-            "highway_env.default_control_behavior": CONTROL_BEHAVIORS[policy],
-            "highway_env.controlled_vehicles": num_control_vehicles,
-            "highway_env.num_vehicles_control_speed": num_vehicles_control_speed,
-            "highway_env.vehicles_count": vehicles_count,
-            "multiprocessing_cpus": num_cpus,
-            "env_type": env_type,
-            "highway_env.duration": duration,
-            "world_draws": world_draws,
-            "warmup_steps": warmup,
-            "profiling": profiling,
-
-        } for policy in policies
-    ]
-
-    for config in configs:
-        # Convert the config dict into a string
-        cfg_args = " ".join([f"{k}={v}" for k, v in config.items()])
-        command = f"python {script} {cfg_args}"
-        print(f"Running: {command}")
-        result = subprocess.run(command, shell=True)
-        if result.returncode != 0:
-            print(f"Command failed with return code {result.returncode}")
-            break
-
-
-def gk_configs(run_dir: str, tag: str | None = None):
+def baseline_configs(run_dir: str, tag: str | None = None):
     """
-    Generate the GK configs
-
     :param run_dir: Indicate the run dir
     :param tag: Optional tag to prepend the run names
     """
-    seed = 86777
+    seed = 867
     script = "ttc.py"
 
-    num_cpus = 8
-    cores_per_world = 4
-    env_type = "racetrack-v0"
+    num_cpus = 12
+    cores_per_world = 1
+    env_type = "highway-v0"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
-    world_draws = 6
-    duration = 50
-    warmup = 0
-    num_control_vehicles = 8  # Total number ego on road, not GK-online though.
-    num_vehicles_control_speed = 8
-    vehicles_count = 24
-    num_collision_watch = 8
+    world_draws = 100
+    duration = 40
+    num_control_vehicles = 12  # Total number ego on road, not GK-online though.
+    num_vehicles_control_speed = 12
+    vehicles_count = 16
+    num_collision_watch = 4
     # GK/MC Stuff
+    n_online = 12
+    warmup = 1e5
     mc_period = 5
     mc_horizon = 20
     n_montecarlo = 20
@@ -113,12 +61,10 @@ def gk_configs(run_dir: str, tag: str | None = None):
     # Profiling
     profiling = "false"
 
-    # Number online
     runs = {
-        "online-1": 1,
-        "online-2": 2,
-        # "online-4": 4,
-        # "online-8": 8,
+        "nom": "sim.vehicles.highway.NominalParams",
+        "def": "sim.vehicles.highway.DefensiveParams",
+        "hotshot": "sim.vehicles.highway.HotshotParams",
     }
 
     def get_name(base: str):
@@ -130,7 +76,7 @@ def gk_configs(run_dir: str, tag: str | None = None):
         {
             "name": os.path.join(run_dir, get_name(name)),
             "seed": seed,
-            "highway_env.default_control_behavior": default_control_behavior,
+            "highway_env.default_control_behavior": BEHAVIOR,
             "highway_env.controlled_vehicles": num_control_vehicles,
             "highway_env.num_vehicles_control_speed": num_vehicles_control_speed,
             "highway_env.vehicles_count": vehicles_count,
@@ -145,43 +91,150 @@ def gk_configs(run_dir: str, tag: str | None = None):
             "mc_period": mc_period,
             "num_collision_watch": num_collision_watch,
             "gatekeeper.enable_time_discounting": enable_time_discounting,
-            "gatekeeper.n_online": online,
-            "gatekeeper.behavior_cfg.nominal_class": nominal_class,
+            "gatekeeper.n_online": n_online,
+            "gatekeeper.behavior_cfg.nominal_class": BEHAVIOR,
             "gatekeeper.behavior_cfg.defensive_class": defensive_class,
-            "gatekeeper.behavior_cfg.offline_class": offline_class,
+            "gatekeeper.behavior_cfg.offline_class": BEHAVIOR,
             "profiling": profiling,
-        } for name, online in runs.items()
+        } for name, BEHAVIOR in runs.items()
     ]
 
     return script, configs
 
 
-def run_gk():
+def online_configs(run_dir: str, tag: str | None = None):
+    """
+    :param run_dir: Indicate the run dir
+    :param tag: Optional tag to prepend the run names
+    """
+    seed = 867
+    script = "ttc.py"
+
+    num_cpus = 12
+    cores_per_world = 1
+    env_type = "highway-v0"
+    default_control_behavior = "sim.vehicles.highway.HotshotParams"
+    world_draws = 20
+    duration = 40
+    num_control_vehicles = 12  # Total number ego on road, not GK-online though.
+    num_vehicles_control_speed = 12
+    vehicles_count = 16
+    num_collision_watch = 4
+    # GK/MC Stuff
+    # n_online = 12
+    warmup = 0
+    mc_period = 5
+    mc_horizon = 10
+    n_montecarlo = 20
+    enable_time_discounting = "false"
+    # Paradoxically our GK 'nominal' is the risky one
+    nominal_class = "sim.vehicles.highway.HotshotParams"
+    defensive_class = "sim.vehicles.highway.DefensiveParams"
+    offline_class = nominal_class
+
+    # Profiling
+    profiling = "false"
+
+    runs = {
+        "online-4": 4,
+        "online-12": 12,
+    }
+
+    def get_name(base: str):
+        if not tag:
+            return base
+        return f"{tag}-{base}"
+
+    configs = [
+        {
+            "name": os.path.join(run_dir, get_name(name)),
+            "seed": seed,
+            "highway_env.default_control_behavior": nominal_class,
+            "highway_env.controlled_vehicles": num_control_vehicles,
+            "highway_env.num_vehicles_control_speed": num_vehicles_control_speed,
+            "highway_env.vehicles_count": vehicles_count,
+            "multiprocessing_cpus": num_cpus,
+            "cores_per_world": cores_per_world,
+            "env_type": env_type,
+            "highway_env.duration": duration,
+            "highway_env.mc_horizon": mc_horizon,
+            "highway_env.n_montecarlo": n_montecarlo,
+            "world_draws": world_draws,
+            "warmup_steps": warmup,
+            "mc_period": mc_period,
+            "num_collision_watch": num_collision_watch,
+            "gatekeeper.enable_time_discounting": enable_time_discounting,
+            "gatekeeper.n_online": n_online,
+            "gatekeeper.behavior_cfg.nominal_class": nominal_class,
+            "gatekeeper.behavior_cfg.defensive_class": defensive_class,
+            "gatekeeper.behavior_cfg.offline_class": offline_class,
+            "profiling": profiling,
+        } for name, n_online in runs.items()
+    ]
+
+    return script, configs
+
+
+def run_online_exp():
     # Name the run, and where it will be saved
-    run_dir = "manuscript/test/online"
+    run_dir = "tmp/highway"
     tag = None
 
-    script, configs = gk_configs(run_dir, tag)
+    script, configs = online_configs(run_dir, tag)
     _run_configs(script, configs)
 
 
-def run_hpc_gk():
+def run_baseline():
     # Name the run, and where it will be saved
-    run_dir = "manuscript/hpc/online/test"
+    run_dir = "tmp/highway"
+    tag = "baselines"
+
+    script, configs = baseline_configs(run_dir, tag)
+    _run_configs(script, configs)
+
+
+def run_hpc_online_exp():
+    # Name the run, and where it will be saved
+    run_dir = "manuscript/hpc/highway"
     tag = None
-    script, configs = gk_configs(run_dir, tag)
+    script, configs = online_configs(run_dir, tag)
 
     # Then just update the number of cores accordingly
     num_cpu = 96
-    world_draws = 1 * num_cpu
+    cores_per_world = 1
+    world_draws = 100
     duration = 100
     n_montecarlo = 100
 
     for config in configs:
         config["multiprocessing_cpus"] = num_cpu
+        config["cores_per_world"] = cores_per_world
         config["world_draws"] = world_draws
         config["highway_env.duration"] = duration
         config["highway_env.n_montecarlo"] = n_montecarlo
+
+    _run_configs(script, configs)
+
+
+def run_hpc_baseline():
+    # Name the run, and where it will be saved
+    run_dir = "manuscript/hpc/highway"
+    tag = "baselines"
+    script, configs = baseline_configs(run_dir, tag)
+
+    # Then just update the number of cores accordingly
+    num_cpu = 64
+    cores_per_world = 1
+    world_draws = 1000
+    duration = 100
+    # n_montecarlo = 100
+
+    for config in configs:
+        config["multiprocessing_cpus"] = num_cpu
+        config["cores_per_world"] = cores_per_world
+        config["world_draws"] = world_draws
+        config["highway_env.duration"] = duration
+        # config["highway_env.n_montecarlo"] = n_montecarlo
 
     _run_configs(script, configs)
 
