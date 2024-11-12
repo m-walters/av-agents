@@ -11,6 +11,7 @@ from concurrent.futures import as_completed, ProcessPoolExecutor
 import gymnasium as gym
 import hydra
 import numpy as np
+import time
 import pymc as pm
 from omegaconf import DictConfig
 from tqdm import tqdm
@@ -130,58 +131,59 @@ def mc_worldsim(
 
     with logging_redirect_tqdm():
         # with multiprocessing.Pool(cores_per_world, maxtasksperchild=100) as pool:
-        with ProcessPoolExecutor(max_workers=cores_per_world) as executor:
-            for step in tqdm(range(duration), desc="Steps", leave=False, disable=False):
-                # First, record the gatekeeper behavior states
-                result["behavior_mode"][step, :] = gk_cmd.collect_behaviors()
+        # with ProcessPoolExecutor(max_workers=cores_per_world) as executor:
+        for step in tqdm(range(duration), desc="Steps", leave=False, disable=False):
+            # First, record the gatekeeper behavior states
+            result["behavior_mode"][step, :] = gk_cmd.collect_behaviors()
 
-                # We'll use the gatekeeper params for montecarlo control
-                if step >= warmup_steps:
-                    if step % gk_cmd.mc_period == 0:
-                        # Returned dimensions are [n_ego]
-                        # results = gk_cmd.run(pool)
-                        results = gk_cmd.run(futures_executor=executor)
+            # We'll use the gatekeeper params for montecarlo control
+            if step >= warmup_steps:
+                if step % gk_cmd.mc_period == 0:
+                    # Returned dimensions are [n_ego]
+                    # results = gk_cmd.run(pool)
+                    results = gk_cmd.run(cores_per_world=cores_per_world)
+                    time.sleep(10)
 
-                        # Record data
-                        # result["mc_loss"][i_mc, :, :] = results["losses"]
-                        result["loss_mean"][i_mc, :] = np.mean(results["losses"], axis=0)
-                        result["loss_p5"][i_mc, :] = np.percentile(results["losses"], 5, axis=0)
-                        result["loss_p95"][i_mc, :] = np.percentile(results["losses"], 95, axis=0)
-                        result["risk"][i_mc, :] = results["risk"]
-                        result["entropy"][i_mc, :] = results["entropy"]
-                        result["energy"][i_mc, :] = results["energy"]
-                        i_mc += 1
+                    # Record data
+                    # result["mc_loss"][i_mc, :, :] = results["losses"]
+                    result["loss_mean"][i_mc, :] = np.mean(results["losses"], axis=0)
+                    result["loss_p5"][i_mc, :] = np.percentile(results["losses"], 5, axis=0)
+                    result["loss_p95"][i_mc, :] = np.percentile(results["losses"], 95, axis=0)
+                    result["risk"][i_mc, :] = results["risk"]
+                    result["entropy"][i_mc, :] = results["entropy"]
+                    result["energy"][i_mc, :] = results["energy"]
+                    i_mc += 1
 
-                # We do action after MC sim in case it informs actions
-                # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
-                action = env.action_space.sample()
-                # action = tuple(np.ones_like(action))
-                obs, reward, controlled_crashed, truncated, info = env.step(action)
+            # We do action after MC sim in case it informs actions
+            # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
+            action = env.action_space.sample()
+            # action = tuple(np.ones_like(action))
+            obs, reward, controlled_crashed, truncated, info = env.step(action)
 
-                # Record the actuals
-                result["reward"][step, :] = reward
-                # Reward is normalized to [0,1]
-                result["real_loss"][step, :] = 1 - reward
-                result["crashed"][step, :] = controlled_crashed
-                result["defensive_reward"][step, :] = info["rewards"]["defensive_reward"]
-                result["speed_reward"][step, :] = info["rewards"]["speed_reward"]
+            # Record the actuals
+            result["reward"][step, :] = reward
+            # Reward is normalized to [0,1]
+            result["real_loss"][step, :] = 1 - reward
+            result["crashed"][step, :] = controlled_crashed
+            result["defensive_reward"][step, :] = info["rewards"]["defensive_reward"]
+            result["speed_reward"][step, :] = info["rewards"]["speed_reward"]
 
-                # Check the first n vehicles for collision
-                if num_collision_watch > 0:
-                    if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
-                        # Record the step which saw the first vehicle collision
-                        result["time_to_collision"] = step
-                        logger.info(f"One of {num_collision_watch} watched vehicles collided (Step {step})\nExiting.")
-                        break
-
-                if len(uenv.crashed) >= 6:
-                    # That's tooooo many -- probably a jam
-                    logger.info(f"Jam occurred (Step {step}). Exiting.")
+            # Check the first n vehicles for collision
+            if num_collision_watch > 0:
+                if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
+                    # Record the step which saw the first vehicle collision
+                    result["time_to_collision"] = step
+                    logger.info(f"One of {num_collision_watch} watched vehicles collided (Step {step})\nExiting.")
                     break
 
-                if truncated:
-                    # Times up
-                    break
+            if len(uenv.crashed) >= 6:
+                # That's tooooo many -- probably a jam
+                logger.info(f"Jam occurred (Step {step}). Exiting.")
+                break
+
+            if truncated:
+                # Times up
+                break
 
     return world_idx, result
 
@@ -272,7 +274,6 @@ def main(cfg: DictConfig):
         with logging_redirect_tqdm():
             for step in tqdm(range(run_params['duration']), desc="Steps"):
 
-
                 # First, record the gatekeeper behavior states
                 ds["behavior_mode"][0, step, :] = gk_cmd.collect_behaviors()
 
@@ -357,7 +358,7 @@ def main(cfg: DictConfig):
                             )
                             futures.append(future)
 
-                        for future in tqdm(as_completed(futures), total=len(futures), desc="Worlds"):
+                        for future in tqdm(as_completed(futures), total=world_draws, desc="Worlds"):
                             world_idx, result_dict = future.result()
 
                             ds["reward"][world_idx, :, :] = result_dict["reward"]

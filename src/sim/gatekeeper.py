@@ -369,7 +369,7 @@ class GatekeeperCommand:
     def run(
         self,
         pool: Optional["multiprocessing.Pool"] = None,
-        futures_executor: Optional["ProcessPoolExecutor"] = None
+        cores_per_world: int | None = None,
     ) -> dict:
         """
         Perform montecarlo simulations and calculate risk equations etc.
@@ -393,15 +393,16 @@ class GatekeeperCommand:
             results = pool.map(self._mc_trajectory, seeds)
             # Stack results along first dimension
             results = np.stack(results, axis=0)
-        elif futures_executor:
+        elif cores_per_world:
             # Issue trajectories to workers
-            try:
-                futures = [futures_executor.submit(self._mc_trajectory, seed) for seed in seeds]
-                results = np.stack([f.result() for f in as_completed(futures)], axis=0)
-            except KeyboardInterrupt as e:
-                futures_executor.shutdown(wait=False, cancel_futures=True)
-                print("KeyboardInterrupt detected. Terminating workers...")
-                raise e
+            with ProcessPoolExecutor(max_workers=cores_per_world) as executor:
+                try:
+                    futures = [executor.submit(self._mc_trajectory, seed) for seed in seeds]
+                    results = np.stack([f.result() for f in as_completed(futures)], axis=0)
+                except KeyboardInterrupt as e:
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    print("KeyboardInterrupt detected. Terminating workers...")
+                    raise e
         else:
             results = np.zeros((self.n_montecarlo, 2, self.n_ego))
             for i, seed in enumerate(seeds):

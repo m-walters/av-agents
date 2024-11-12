@@ -42,14 +42,14 @@ highway_env:
     observation_config:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
-  mc_horizon: 1
-  n_montecarlo: 1
-  duration: 100
+  mc_horizon: 20
+  n_montecarlo: 20
+  duration: 40
   normalize_reward: true
 #==============
 
 seed: 867
-world_draws: 24
+world_draws: 12
 warmup_steps: 0  # included within the duration
 mc_period: 5   # real-world steps between MC issuances
 num_collision_watch: 4 # Watch the first n vehicles for terminating collision
@@ -59,7 +59,8 @@ env_type: "racetrack-v0"
 
 # Multiprocessing configs
 multiprocessing_cpus: 12
-cores_per_world: 1
+# Note that you'll be using an additional CPU for each world parent (but they're low usage)
+cores_per_world: 3
 # Profiling
 profiling: false
 video: false
