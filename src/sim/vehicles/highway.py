@@ -90,13 +90,13 @@ class DefensiveParams(NominalParams):
     TIME_WANTED = 2.0
 
 
-class DefensiveParams2(NominalParams):
-    """
-    Try to be even safer than DefensiveParams
-    """
-    POLITENESS = 0.5
-    DISTANCE_WANTED = 6.0 + ControlledVehicle.LENGTH
-    TIME_WANTED = 2.0
+# class DefensiveParams2(NominalParams):
+#     """
+#     Try to be even safer than DefensiveParams
+#     """
+#     POLITENESS = 0.5
+#     DISTANCE_WANTED = 6.0 + ControlledVehicle.LENGTH
+#     TIME_WANTED = 2.0
 
 
 class HotshotParams(NominalParams):
@@ -116,8 +116,10 @@ class AlterParams(NominalParams):
     """
     Like Nominal, but more lane-changing
     """
-    POLITENESS = 0.
+    POLITENESS = 0.1
     LANE_CHANGE_MAX_BRAKING_IMPOSED = 10.0
+    #
+    # TIME_WANTED = 2.0
 
 
 class IDMVehicle(NominalParams, VehicleBase, AggressiveVehicle):

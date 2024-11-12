@@ -107,6 +107,7 @@ class Gatekeeper:
 
         self.behavior_ctrl_enabled = behavior_cfg["enable"]
         self.control_policy = ControlPolicies(behavior_cfg["control_policy"])
+
         if self.behavior_ctrl_enabled:
             self.nominal_behavior = utils.class_from_path(behavior_cfg["nominal_class"])
             self.nominal_risk_threshold = rstar_range[0]
@@ -167,11 +168,13 @@ class Gatekeeper:
             if self.behavior == Behaviors.NOMINAL and nbrhood_cre > self.nominal_risk_threshold:
                 # Get the vehicle and change its policy
                 vehicle = self.get_vehicle(env)
+                logger.debug(f"MW TOGGLING TO DEFENSIVE {vehicle}")
                 vehicle.set_behavior_params(self.defensive_behavior)
                 self.behavior = Behaviors.CONSERVATIVE
             elif self.behavior == Behaviors.CONSERVATIVE and nbrhood_cre < self.defensive_risk_threshold:
                 vehicle = self.get_vehicle(env)
                 vehicle.set_behavior_params(self.nominal_behavior)
+                logger.debug(f"MW TOGGLING TO NOMINAL {vehicle}")
                 self.behavior = Behaviors.NOMINAL
 
     def __str__(self):
@@ -259,6 +262,7 @@ class GatekeeperCommand:
         # which in the Loss-normalized [0,1] case, the max risk is k = -log(p_star)/l_star
         nominal_rstar = -np.log(gk_cfg['preference_prior']['p_star']) * 1.1
         defensive_rstar = nominal_rstar * 0.9 / 1.1
+        logger.debug(f"MW RISK THRESHOLD RANGE: {nominal_rstar} | {defensive_rstar}")
 
         # Init GKs
         self.nbr_distance = VehicleBase.MAX_SPEED * 0.7  # For GK neighborhood discovery
@@ -335,6 +339,7 @@ class GatekeeperCommand:
                 if j + 1 < self.mc_horizon:
                     # Only eval at end
                     continue
+
                 for i_gk, gk in enumerate(self.gatekeepers):
                     if collisions[i_gk]:
                         # Add the crashed reward
@@ -365,8 +370,7 @@ class GatekeeperCommand:
         self,
         pool: Optional["multiprocessing.Pool"] = None,
         futures_executor: Optional["ProcessPoolExecutor"] = None
-    ) -> (
-            dict):
+    ) -> dict:
         """
         Perform montecarlo simulations and calculate risk equations etc.
         Can send one of pool or futures_executor for parallelization
@@ -379,6 +383,10 @@ class GatekeeperCommand:
         # Very sensitive that these seeds are python integers...
         seeds = [int(s) for s in self.rkey.next_seeds(self.n_montecarlo)]
 
+        logger.debug(f"MW GK-RUN START")
+        logger.debug(f"MW VEHICLE POLITENESS\nAgg: 0 | Alt: 0.1 | Nom 0.3 | Def 0.5\n"
+              f"{[v.POLITENESS for v in self.env.controlled_vehicles]}")
+
         if pool:
             # Issue trajectories to workers
             # Use starmap if you need to provide more arguments
@@ -387,8 +395,13 @@ class GatekeeperCommand:
             results = np.stack(results, axis=0)
         elif futures_executor:
             # Issue trajectories to workers
-            futures = [futures_executor.submit(self._mc_trajectory, seed) for seed in seeds]
-            results = np.stack([f.result() for f in as_completed(futures)], axis=0)
+            try:
+                futures = [futures_executor.submit(self._mc_trajectory, seed) for seed in seeds]
+                results = np.stack([f.result() for f in as_completed(futures)], axis=0)
+            except KeyboardInterrupt as e:
+                futures_executor.shutdown(wait=False, cancel_futures=True)
+                print("KeyboardInterrupt detected. Terminating workers...")
+                raise e
         else:
             results = np.zeros((self.n_montecarlo, 2, self.n_ego))
             for i, seed in enumerate(seeds):
@@ -429,11 +442,14 @@ class GatekeeperCommand:
 
         assert len(set(measured_gks)) == len(measured_gks), f"Duplicated GK measured"
 
+        logger.debug(f"MW RISK DEBUG: SHAPE: {risk.shape} | MEAN {risk.mean()} | MAT {risk}")
+
         for nbrhood in nbrhoods:
             # Average the CRE for the nbrhood
             # Convert GKs to their 0-based indices
             nbrhood_idx = np.array([_gk.gk_idx for _gk in nbrhood])
             nbrhood_cre = np.array(risk[nbrhood_idx].mean())
+            logger.debug(f"MW NBRHOOD {nbrhood_idx}: {nbrhood_cre}")
 
             # Update the risk value for the nbrhood
             # JAX arrays are immutable. Instead of ``x[idx] = y``, use ``x = x.at[idx].set(y)`` or another
@@ -444,6 +460,8 @@ class GatekeeperCommand:
             # Update the policies
             for gk in nbrhood:
                 gk.update_policy(nbrhood_cre, self.env)
+
+        logger.debug(f"MW POST NBRHOOD RISK: MEAN {risk.mean()} | MAT {risk}")
 
         return {
             "losses": losses,

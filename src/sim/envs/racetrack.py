@@ -297,8 +297,6 @@ class AVRacetrack(RacetrackEnv):
                 if hasattr(vehicle, "randomize_behavior"):
                     vehicle.randomize_behavior()
 
-        logger.debug(f"Created {len(self.road.vehicles)} vehicles")
-
         # Init the road vehicle matrices
         if hasattr(self.road, "refresh_vehicle_states"):
             self.road.refresh_vehicle_states()
@@ -342,7 +340,6 @@ class AVRacetrack(RacetrackEnv):
         score = self.config['alpha'] * np.exp(
             - (forward_speed - self.config['reward_speed']) ** 2 / (self.config['alpha'] ** 2)
         )
-        logger.debug(f">>> SPEED REWARD: v_forward {forward_speed:0.4f} | score {score:0.4f}")
 
         if self.config['normalize_reward']:
             max_score = self.config['alpha']
@@ -377,7 +374,6 @@ class AVRacetrack(RacetrackEnv):
         # See our AV Project, "Vehicle Agent" section for derivation
         # In IDMVehicle.act you can see acceleration getting clipped by [-ACC_MAX, ACC_MAX]
         beta = 1 / (2 * self.ACC_MAX)
-        logger.debug(f">> BETA: {beta}")
 
         n_nbr = 0
         penalty = 0
@@ -429,7 +425,6 @@ class AVRacetrack(RacetrackEnv):
             _penalty = beta * relative_speed ** 2 / (dist * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
             penalty += _penalty
 
-        logger.debug(f"COLLISION PENALTY: {penalty}\n across {n_nbr} nbrs")
         # Average over the neighbors
         # penalty /= n_nbr if n_nbr > 0 else 1
 

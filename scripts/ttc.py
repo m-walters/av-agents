@@ -5,7 +5,6 @@ import cProfile
 import logging
 import multiprocessing
 import os
-import time
 import warnings
 from concurrent.futures import as_completed, ProcessPoolExecutor
 
@@ -18,7 +17,7 @@ from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 import sim.params as sim_params
-from sim import gatekeeper, run, utils
+from sim import gatekeeper, run, utils, recorder
 from sim.envs.racetrack import AVRacetrack
 
 # Name of file in configs, set this to your liking
@@ -214,8 +213,20 @@ def main(cfg: DictConfig):
         param_collection.draw(world_draws)
 
     # Create our gym Env
-    render_mode = None  # No visuals because of multiprocessing
-    env = gym.make(f"AVAgents/{cfg.get('env_type', 'racetrack-v0')}", render_mode=render_mode)
+    video = cfg.get("video", False)
+    if video:
+        if world_draws > 1:
+            raise ValueError("world_draws > 1 while trying to perform video")
+        render_mode = 'rgb_array'
+        video_dir = f"{run_dir}/recordings"
+        video_prefix = "sim"
+        env = recorder.AVRecorder(
+            gym.make(f"AVAgents/{cfg.get('env_type', 'racetrack-v0')}", render_mode=render_mode), video_dir,
+            name_prefix=video_prefix
+        )
+    else:
+        render_mode = None  # No visuals because of multiprocessing
+        env = gym.make(f"AVAgents/{cfg.get('env_type', 'racetrack-v0')}", render_mode=render_mode)
 
     uenv: "AVRacetrack" = env.unwrapped
     uenv.update_config(env_cfg, reset=True)
@@ -233,10 +244,6 @@ def main(cfg: DictConfig):
             logger.info(msg)
         utils.Results.save_ds(ds, f"{run_dir}/results.nc")
 
-    t_last = time.time()
-    chkpt_time = time.time()
-    world_loop_times = []
-
     # We track a single controlled vehicle for crash so that we can compare its TTC across runs
     num_collision_watch = cfg.get("num_collision_watch", True)
 
@@ -252,8 +259,82 @@ def main(cfg: DictConfig):
         raise ValueError("Number of CPUs must be divisible by cores_per_world")
     world_cores = num_cpu // cores_per_world
 
+    if video:
+        # For debugging, just a single world
+        # Init the gatekeeper
+        w_seed = world_seeds[0]
+        gk_cmd = gatekeeper.GatekeeperCommand(uenv, gk_cfg, w_seed)
+        i_mc = 0  # Tracking MC steps
+        obs, info = env.reset(seed=w_seed)
+
+        from pprint import pprint
+
+        with logging_redirect_tqdm():
+            for step in tqdm(range(run_params['duration']), desc="Steps"):
+
+
+                # First, record the gatekeeper behavior states
+                ds["behavior_mode"][0, step, :] = gk_cmd.collect_behaviors()
+
+                # We'll use the gatekeeper params for montecarlo control
+                if step >= run_params['warmup_steps']:
+                    if step % gk_cmd.mc_period == 0:
+                        # Returned dimensions are [n_ego]
+                        results = gk_cmd.run(None)
+                        print("MW RESULTS:\n")
+                        pprint(results)
+                        # input("...")
+
+                        # Record data
+
+                        ds["loss_mean"][0, i_mc, :] = np.mean(results["losses"], axis=0)
+                        ds["loss_p5"][0, i_mc, :] = np.percentile(results["losses"], 5, axis=0)
+                        ds["loss_p95"][0, i_mc, :] = np.percentile(results["losses"], 95, axis=0)
+                        ds["risk"][0, i_mc, :] = results["risk"]
+                        ds["entropy"][0, i_mc, :] = results["entropy"]
+                        ds["energy"][0, i_mc, :] = results["energy"]
+                        i_mc += 1
+
+                # We do action after MC sim in case it informs actions
+                # For IDM-type vehicles, this doesn't really mean anything -- they do what they want
+                action = env.action_space.sample()
+                # action = tuple(np.ones_like(action))
+                obs, reward, controlled_crashed, truncated, info = env.step(action)
+
+                # Record the actuals
+                ds["reward"][0, step, :] = reward
+                # Reward is normalized to [0,1]
+                ds["real_loss"][0, step, :] = 1 - reward
+                ds["crashed"][0, step, :] = controlled_crashed
+                ds["defensive_reward"][0, step, :] = info["rewards"]["defensive_reward"]
+                ds["speed_reward"][0, step, :] = info["rewards"]["speed_reward"]
+
+                # Check the first n vehicles for collision
+                if num_collision_watch > 0:
+                    if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
+                        # Record the step which saw the first vehicle collision
+                        ds[0, "time_to_collision"] = step
+                        logger.info(
+                            f"One of {num_collision_watch} watched vehicles collided (Step {step})\nExiting."
+                        )
+                        break
+
+                if len(uenv.crashed) >= 6:
+                    # That's tooooo many -- probably a jam
+                    logger.info(f"Jam occurred (Step {step}). Exiting.")
+                    break
+
+                if truncated:
+                    # Times up
+                    break
+
+        # Conclude the video
+        env.close()
+        # Save frames
+        np.save(f"{run_dir}/frames.npy", env.video_recorder.recorded_frames)
+
     # If mc_steps is empty, this is a baseline run for collision testing
-    if run_params['mc_steps'].size > 0:
+    elif run_params['mc_steps'].size > 0:
         with logging_redirect_tqdm():
             # with multiprocessing.Pool(world_cores, maxtasksperchild=4) as pool:
             try:
@@ -296,7 +377,7 @@ def main(cfg: DictConfig):
 
             except KeyboardInterrupt:
                 print("KeyboardInterrupt detected. Terminating workers...")
-                executor.shutdown(wait=False)  # Set wait=False to not block
+                executor.shutdown(wait=False, cancel_futures=True)  # Set wait=False to not block
                 raise  # Re-raise the KeyboardInterrupt to terminate the main program
 
                     ###### multiprocessing style
@@ -383,32 +464,32 @@ def main(cfg: DictConfig):
                 #         # action = tuple(np.ones_like(action))
                 #         obs, reward, controlled_crashed, truncated, info = env.step(action)
                 #
-                #         # Record the actuals
-                #         ds["reward"][i_world, step, :] = reward
-                #         # Reward is normalized to [0,1]
-                #         ds["real_loss"][i_world, step, :] = 1 - reward
-                #         ds["crashed"][i_world, step, :] = controlled_crashed
-                #         ds["defensive_reward"][i_world, step, :] = info["rewards"]["defensive_reward"]
-                #         ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
-                #
-                #         # Check the first n vehicles for collision
-                #         if num_collision_watch > 0:
-                #             if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
-                #                 # Record the step which saw the first vehicle collision
-                #                 result["time_to_collision"] = step
-                #                 logger.info(f"One of {num_collision_watch} watched vehicles collided (Step {
-                #                      step})\nExiting.")
-                #                 break
-                #
-                #
-                #         if len(uenv.crashed) >= 6:
-                #             # That's tooooo many -- probably a jam
-                #             logger.info(f"Jam occurred (Step {step}). Exiting.")
-                #             break
-                #
-                #         if truncated:
-                #             # Times up
-                #             break
+                        # # Record the actuals
+                        # ds["reward"][i_world, step, :] = reward
+                        # # Reward is normalized to [0,1]
+                        # ds["real_loss"][i_world, step, :] = 1 - reward
+                        # ds["crashed"][i_world, step, :] = controlled_crashed
+                        # ds["defensive_reward"][i_world, step, :] = info["rewards"]["defensive_reward"]
+                        # ds["speed_reward"][i_world, step, :] = info["rewards"]["speed_reward"]
+                        #
+                        # # Check the first n vehicles for collision
+                        # if num_collision_watch > 0:
+                        #     if any([v.crashed for v in uenv.controlled_vehicles[:num_collision_watch]]):
+                        #         # Record the step which saw the first vehicle collision
+                        #         result["time_to_collision"] = step
+                        #         logger.info(f"One of {num_collision_watch} watched vehicles collided (Step {
+                        #              step})\nExiting.")
+                        #         break
+                        #
+                        #
+                        # if len(uenv.crashed) >= 6:
+                        #     # That's tooooo many -- probably a jam
+                        #     logger.info(f"Jam occurred (Step {step}). Exiting.")
+                        #     break
+                        #
+                        # if truncated:
+                        #     # Times up
+                        #     break
                 #
                 #     # Checkpoint world draws
                 #     if i_world + 1 < world_draws:
@@ -470,5 +551,5 @@ def main(cfg: DictConfig):
 
 
 if __name__ == '__main__':
-    multiprocessing.set_start_method("spawn", force=True)
+    # multiprocessing.set_start_method("spawn", force=True)
     main()

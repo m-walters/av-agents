@@ -3,6 +3,7 @@ One-off script for running multiple runs
 """
 import os
 import subprocess
+import time
 import multiprocessing
 
 CONTROL_BEHAVIORS = {
@@ -92,8 +93,8 @@ def gk_configs(run_dir: str, tag: str | None = None):
     cores_per_world = 4
     env_type = "racetrack-v0"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
-    world_draws = 4
-    duration = 100
+    world_draws = 6
+    duration = 50
     warmup = 0
     num_control_vehicles = 8  # Total number ego on road, not GK-online though.
     num_vehicles_control_speed = 8
@@ -191,6 +192,8 @@ def _run_configs(script: str, configs: list[dict]):
         cfg_args = " ".join([f"{k}={v}" for k, v in config.items()])
         command = f"python {script} {cfg_args}"
         print(f"Running: {command}")
+        print("\n\nRemember, this shit hard to kill. Use pkill -f '.*/av_env/bin/python' \n")
+        time.sleep(5)
         result = subprocess.run(command, shell=True)
         if result.returncode != 0:
             print(f"Command failed with return code {result.returncode}")
@@ -200,7 +203,7 @@ def _run_configs(script: str, configs: list[dict]):
 if __name__ == '__main__':
     # Accept first argument as function name to be called
     import sys
-    multiprocessing.set_start_method("spawn", force=True)
+    # multiprocessing.set_start_method("spawn", force=True)
 
     if len(sys.argv) < 2:
         raise ValueError("Please provide a function name to call")

@@ -108,7 +108,6 @@ def main(cfg: DictConfig):
             ds["defensive_reward"][wdraw, step] = info["rewards"]["defensive_reward"]
             ds["speed_reward"][wdraw, step] = info["rewards"]["speed_reward"]
 
-            logger.debug(f"REWARD: {reward}")
             if terminated or truncated:
                 if terminated:
                     logger.info(f"Collision (terminated) at {step}")

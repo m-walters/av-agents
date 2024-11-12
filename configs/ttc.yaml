@@ -18,17 +18,19 @@ hydra:
 
 # See AVHighway for defaults
 highway_env:
-  controlled_vehicles: 8  # Number of ego vehicles
   control_vehicle_type: "sim.vehicles.highway.IDMVehicle"
   other_vehicles_type: "sim.vehicles.highway.AlterIDMVehicle"
   default_control_behavior: "sim.vehicles.highway.HotshotParams"
+  # Vehicle numbers
+  controlled_vehicles: 16  # Number of ego vehicles
+  vehicles_count: 24
   # Number of vehicles with the reward_speed target
   # Remainder will have a target speed lower than speed_limit
-  num_vehicles_control_speed: 8
-  vehicles_count: 24
+  num_vehicles_control_speed: 16
+
   vehicles_density: 2
-  reward_speed: 30
-  speed_limit: 20
+  reward_speed: 35
+  speed_limit: 15
   action:
     type: "MultiAgentAction"
     action_config:
@@ -40,31 +42,31 @@ highway_env:
     observation_config:
       type: "Kinematics"
 #      features: ["presence", "x", "y", "vx", "vy"]
-  mc_horizon: 20
-  n_montecarlo: 10
-  duration: 200
+  mc_horizon: 1
+  n_montecarlo: 1
+  duration: 100
   normalize_reward: true
 #==============
 
 seed: 867
-world_draws: 1
-warmup_steps: 1e5  # included within the duration
+world_draws: 24
+warmup_steps: 0  # included within the duration
 mc_period: 5   # real-world steps between MC issuances
-num_collision_watch: 8 # Watch the first n vehicles for terminating collision
+num_collision_watch: 4 # Watch the first n vehicles for terminating collision
 
 # Temporary, probably will remove
 env_type: "racetrack-v0"
 
 # Multiprocessing configs
-use_mp: false
-multiprocessing_cpus: 2
+multiprocessing_cpus: 12
 cores_per_world: 1
 # Profiling
 profiling: false
+video: false
 
 gatekeeper:
   # Number of vehicles that will have gatekeeper behavior operating on
-  n_online: 1
+  n_online: 4
   # Time-discounting
   enable_time_discounting: false
   gamma: 0.96

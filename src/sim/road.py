@@ -967,14 +967,14 @@ class AVRoad(Road):
                     if rel_pos_enum == APPROACHES.AHEAD:
                         if not s_front or dist < s_front:
                             if vehicle.av_id == "1":
-                                print(f"MW UPDATING FRONT {v.av_id} | {dist}")
+                                logger.debug(f"MW UPDATING FRONT {v.av_id} | {dist}")
                             s_front = dist
                             v_front = v
                     else:
                         # Vehicle is behind
                         if not s_rear or dist < s_rear:
                             if vehicle.av_id == "1":
-                                print(f"MW UPDATING REAR {v.av_id} | {dist}")
+                                logger.debug(f"MW UPDATING REAR {v.av_id} | {dist}")
                             s_rear = dist
                             v_rear = v
                     continue
@@ -990,11 +990,11 @@ class AVRoad(Road):
                             f"MW NEXT ROAD [{v.av_id}] -- {rel_pos_enum} | {rel_vel_enum} | {rel_pos} | {rel_vel} |"
                             f" {dist}"
                         )
-                        print(f"MW UPCOMING POSNS -- {vehicle.position} | {v.position} | {rel_pos}")
-                        print(f"MW UPCOMING VELS -- {vehicle.velocity} | {v.velocity} | {rel_vel}")
+                        logger.debug(f"MW UPCOMING POSNS -- {vehicle.position} | {v.position} | {rel_pos}")
+                        logger.debug(f"MW UPCOMING VELS -- {vehicle.velocity} | {v.velocity} | {rel_vel}")
                     if not s_front or dist < s_front:
                         if vehicle.av_id == "1":
-                            print(f"MW UPDATING FRONT {v.av_id} | {dist}")
+                            logger.debug(f"MW UPDATING FRONT {v.av_id} | {dist}")
                         s_front = dist
                         v_front = v
                     continue
@@ -1011,7 +1011,7 @@ class AVRoad(Road):
                     continue
 
         if vehicle.av_id == "1":
-            print(f"MW FINAL DIST -- {s_rear} | {s_front}")
+            logger.debug(f"MW FINAL DIST -- {s_rear} | {s_front}")
         return v_front, v_rear
 
     def neighbour_vehicles(self, vehicle: AVVehicle, lane_index: LaneIndex = None) \
