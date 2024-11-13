@@ -346,7 +346,7 @@ def main(cfg: DictConfig):
                 with ProcessPoolExecutor(max_workers=world_cores) as executor:
                     # Batch by world cores
                     for world_start in tqdm(
-                            range(0, world_draws, world_cores), total=world_draws, desc="Worlds", unit_scale=world_cores
+                            range(0, world_draws, world_cores), desc="Worlds", unit_scale=world_cores
                     ):
                         world_end = min(world_start + world_cores, world_draws)
                         futures = []
