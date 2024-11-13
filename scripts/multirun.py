@@ -200,10 +200,10 @@ def run_hpc_online_exp():
 
     # Then just update the number of cores accordingly
     num_cpu = 96
-    cores_per_world = 1
-    world_draws = 100
+    cores_per_world = 32
+    world_draws = 200
     duration = 100
-    n_montecarlo = 100
+    n_montecarlo = 64
 
     for config in configs:
         config["multiprocessing_cpus"] = num_cpu
