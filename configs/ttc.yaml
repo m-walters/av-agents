@@ -44,13 +44,14 @@ highway_env:
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: 1
   n_montecarlo: 20
-  duration: 20
+  duration: 100
   normalize_reward: true
 #==============
 
 seed: 867
-world_draws: 20
-warmup_steps: 10  # included within the duration
+world_draws: 1
+
+warmup_steps: 1e5  # included within the duration
 mc_period: 5   # real-world steps between MC issuances
 num_collision_watch: 4 # Watch the first n vehicles for terminating collision
 

@@ -53,7 +53,7 @@ class AVHighway(HighwayEnv):
                 "duration": 40,  # [s]
                 "ego_spacing": 2,
                 "vehicles_density": 1,
-                "crash_penalty": -1,  # The reward received when colliding with a vehicle.
+                "crash_penalty": -4,  # The reward received when colliding with a vehicle.
                 "max_defensive_penalty": -6,  # Cap the defensive reward/penalty
                 # The reward received when driving on the right-most lanes, linearly mapped to
                 # zero for other lanes.
@@ -83,7 +83,7 @@ class AVHighway(HighwayEnv):
             "n_montecarlo": 10,
             # MonteCarlo horizon; Note that a given step is sim_freq // policy_freq frames (see self._simulate)
             "mc_horizon": 5,
-            "alpha": 10.,
+            "alpha": 8.,
             "beta": 0.25,
             "default_control_behavior": "sim.vehicles.highway.NominalParams",
             # Number of vehicles with the reward_speed target
@@ -283,6 +283,8 @@ class AVHighway(HighwayEnv):
     def crash_reward(self, vehicle: AVVehicle | None = None) -> float:
         """
         Negative penalty for crashing
+
+        To emphasize the negative consequences of crashing, we do not normalize to -1
         """
         vehicle = vehicle or self.vehicle
         return self.config['crash_penalty'] if vehicle.crashed else 0
@@ -422,13 +424,18 @@ class AVHighway(HighwayEnv):
         """
         if not self.multiagent:
             rewards = rewards or self._rewards(action)
-            reward = sum(rewards.values())
-
+            # Add speed and subtract defensive 'reward' [-1, 0]
+            reward = rewards["speed_reward"] - rewards["defensive_reward"]
             if self.config["normalize_reward"]:
+                # Normalize to [0,1]
+                reward /= 2.
+                # Add the crash penalty if incurred
+                reward += rewards["crash_reward"]
+
                 # Best is 1 for the normalized speed reward
                 # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
                 best = 1
-                worst = -2
+                worst = self.config['crash_penalty']
                 reward = utils.lmap(
                     reward,
                     [worst, best],
@@ -436,24 +443,33 @@ class AVHighway(HighwayEnv):
                 )
 
                 assert 0 <= reward <= 1
+            else:
+                reward += rewards["crash_reward"]
 
             return reward
 
         # Multi-agent rewards
         rewards = rewards or self._rewards(action)
         # Accumulated reward for each vehicle
+        # Forced normalize_reward
         reward = np.array(
             [
-                sum(reward_tup) for reward_tup in zip(
-                rewards["defensive_reward"], rewards["speed_reward"], rewards["crash_reward"]
-            )
+                (r_tup[1] - r_tup[0]) / 2. + r_tup[2]
+                for r_tup in zip(rewards["defensive_reward"], rewards["speed_reward"], rewards["crash_reward"])
             ]
         )
+        # reward = np.array(
+        #     [
+        #         sum(reward_tup) for reward_tup in zip(
+        #         rewards["defensive_reward"], rewards["speed_reward"], rewards["crash_reward"]
+        #     )
+        #     ]
+        # )
         if self.config["normalize_reward"]:
             # Best is 1 for the normalized speed reward
             # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
             best = 1
-            worst = -2
+            worst = self.config['crash_penalty']
             reward = utils.lmap(
                 reward,
                 [worst, best],

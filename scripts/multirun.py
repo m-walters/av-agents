@@ -40,8 +40,8 @@ def baseline_configs(run_dir: str, tag: str | None = None):
     cores_per_world = 1
     env_type = "highway-v0"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
-    world_draws = 50
-    duration = 40
+    world_draws = 1000
+    duration = 50
     num_control_vehicles = 12  # Total number ego on road, not GK-online though.
     num_vehicles_control_speed = 12
     vehicles_count = 24
@@ -62,7 +62,7 @@ def baseline_configs(run_dir: str, tag: str | None = None):
     profiling = "false"
 
     runs = {
-        "nom": "sim.vehicles.highway.NominalParams",
+        # "nom": "sim.vehicles.highway.NominalParams",
         "def": "sim.vehicles.highway.DefensiveParams",
         "hotshot": "sim.vehicles.highway.HotshotParams",
     }
@@ -185,7 +185,7 @@ def run_online_exp():
 
 def run_baseline():
     # Name the run, and where it will be saved
-    run_dir = "tmp/highway"
+    run_dir = "tmp/crash-test-4"
     tag = "baselines"
 
     script, configs = baseline_configs(run_dir, tag)

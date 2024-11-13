@@ -162,12 +162,12 @@ class Gatekeeper:
         rewards = {
             reward: getattr(env, reward)(vehicle) for reward in self.reward_types
         }
-        reward = sum(rewards.values())
+        reward = (rewards['speed_reward'] - rewards['defensive_reward']) / 2. + rewards['crash_reward']
         if env.config["normalize_reward"]:
             # Best is 1 for the normalized speed reward
             # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
             best = 1
-            worst = -2
+            worst = env.config["crash_penalty"]
             reward = utils.lmap(
                 reward,
                 [worst, best],
