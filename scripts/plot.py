@@ -83,7 +83,7 @@ def compare_plot():
     """
     title = None
 
-    RESULTS_DIR = "../results/tmp/highway/"
+    RESULTS_DIR = "../results/manuscript/freezer/hpc/baselines"
     save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
 
     data_tups = [
@@ -154,7 +154,7 @@ def compare_plot():
 
 def ttc_hist():
 
-    RESULTS_DIR = "../results/tmp/highway/"
+    RESULTS_DIR = "../results/manuscript/freezer/hpc/baselines"
     save_path = os.path.join(RESULTS_DIR, "ttc_hist.png")
 
     data_tups = [
