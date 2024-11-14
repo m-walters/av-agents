@@ -32,6 +32,8 @@ class AVHighway(HighwayEnv):
         self.vehicle_lookup = {}  # Get vehicle by its ID
         self.multiagent: bool = False
         self.alter_vehicles: list[AVVehicle] = []
+        self.collision_count = 0  # Initialize collision count
+        self.total_steps = 0  # Initialize total steps
         super().__init__(config, render_mode)
 
     @classmethod
@@ -150,6 +152,11 @@ class AVHighway(HighwayEnv):
         self.define_spaces()  # First, to set the controlled vehicle class depending on action space
         self.time = self.steps = 0
         self.done = False
+
+        # Resetting collision count and total steps here
+        self.collision_count = 0  # Reset collision count
+        self.total_steps = 0      # Reset total steps
+
         self._reset()
         self.define_spaces()  # Second, to link the obs and actions to the vehicles once the scene is created
 
@@ -247,6 +254,13 @@ class AVHighway(HighwayEnv):
 
         self.time += 1 / self.config["policy_frequency"]
         self._simulate(action)
+
+        # Increment the total_steps counter
+        self.total_steps += 1
+
+        # Check for collisions and update the collision_count
+        if any(vehicle.crashed for vehicle in self.road.vehicles):
+            self.collision_count += 1  # Increment collision count if any vehicle has crashed
 
         obs = self.observation_type.observe()
         info = self._info(obs, action)
@@ -599,3 +613,7 @@ class AVHighway(HighwayEnv):
             if v not in self.controlled_vehicles:
                 setattr(v, field, value)
         return env_copy
+        
+    def calculate_risk(self) -> float:
+        """Calculate the risk based on collisions and total steps."""
+        return self.collision_count / self.total_steps if self.total_steps > 0 else 0
