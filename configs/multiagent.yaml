@@ -66,4 +66,4 @@ gatekeeper:
   behavior_cfg:
     enable: true
     nominal_class: "sim.vehicles.highway.NominalParams"
-    conservative_class: "sim.vehicles.highway.ConservativeParams"
+    defensive_class: "sim.vehicles.highway.ConservativeParams"

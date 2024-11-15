@@ -2,14 +2,11 @@ import logging
 from abc import ABC
 from typing import Tuple
 
-import jax.numpy as jnp
 import numpy as np
 from scipy.special import logsumexp
 from scipy.stats import differential_entropy as entr
 
-from sim.utils import (
-    Array, JaxGaussian, JaxRKey, Number
-)
+from sim.utils import (Array, NpyRKey, Number)
 
 logger = logging.getLogger("av-sim")
 
@@ -21,7 +18,7 @@ class ModelBase(ABC):
 
     def __init__(self, *args, **kwargs):
         # We leave kwargs open
-        self.key = JaxRKey(seed=kwargs.get("seed", 8675309))
+        self.key = NpyRKey(seed=kwargs.get("seed", 8675309))
 
 
 class LossModel(ModelBase):
@@ -39,32 +36,35 @@ class LossModel(ModelBase):
         :param v: speed of vehicle
         :param neighbors: num_neighbors x 3 array, columns are [distance, speed, lane]
         """
-        speed_loss = - self.alpha * jnp.exp(-(v - self.reward_speed) ** 2 / self.alpha)
-        collision_loss = self.beta * jnp.mean(
-            1 / (2 ** neighbors[:, 2]) * jnp.divide(jnp.max(0, v - neighbors[:, 1]), neighbors[:, 0])
+        speed_loss = - self.alpha * np.exp(-(v - self.reward_speed) ** 2 / self.alpha)
+        collision_loss = self.beta * np.mean(
+            1 / (2 ** neighbors[:, 2]) * np.divide(np.max(0, v - neighbors[:, 1]), neighbors[:, 0])
         )
         loss = speed_loss + collision_loss
-        return loss, -10 * jnp.ones(loss.shape)  # Set log_probs to -10 to show high precision
+        return loss, -10 * np.ones(loss.shape)  # Set log_probs to -10 to show high precision
 
 
-class NoisyLossModel(LossModel):
-    def __init__(self, scale: float, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.scale = scale
-
-    def __call__(self, v: float, neighbors: Array) -> Tuple[Array, Array]:
-        """
-        Return loss and log-prob arrays of shape [m, world_draws]
-        where m is either 1 for the "real" timestep or n_montecarlo for planning
-
-        :param v: speed of vehicle
-        :param neighbors: num_neighbors x 3 array, columns are [distance, speed, lane]
-        """
-        loss, _ = super(NoisyLossModel, self).__call__(v, neighbors)
-        key = self.key.next_key()
-        jax_loss = jnp.asarray(loss)
-        rloss, log_probs = JaxGaussian.sample(key, jax_loss, self.scale)
-        return rloss, log_probs
+####
+# Deprecated until we put Jax back online
+#
+# class NoisyLossModel(LossModel):
+#     def __init__(self, scale: float, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         self.scale = scale
+#
+#     def __call__(self, v: float, neighbors: Array) -> Tuple[Array, Array]:
+#         """
+#         Return loss and log-prob arrays of shape [m, world_draws]
+#         where m is either 1 for the "real" timestep or n_montecarlo for planning
+#
+#         :param v: speed of vehicle
+#         :param neighbors: num_neighbors x 3 array, columns are [distance, speed, lane]
+#         """
+#         loss, _ = super(NoisyLossModel, self).__call__(v, neighbors)
+#         key = self.key.next_key()
+#         jax_loss = jnp.asarray(loss)
+#         rloss, log_probs = JaxGaussian.sample(key, jax_loss, self.scale)
+#         return rloss, log_probs
 
 
 class SoftmaxPreferencePrior(ModelBase):
@@ -90,7 +90,7 @@ class SoftmaxPreferencePrior(ModelBase):
             # Get fancy with scipy
             return -self.kappa * Lt - logsumexp(-self.kappa * Lt, axis=0)
         else:
-            return jnp.exp(-self.kappa * Lt) / jnp.sum(jnp.exp(-self.kappa * Lt), axis=0)
+            return np.exp(-self.kappa * Lt) / np.sum(np.exp(-self.kappa * Lt), axis=0)
 
 
 class ExponentialPreferencePrior(ModelBase):
@@ -111,7 +111,7 @@ class ExponentialPreferencePrior(ModelBase):
 
     @property
     def k(self):
-        return -jnp.log(self.p_star) / self.l_star
+        return -np.log(self.p_star) / self.l_star
 
     def __call__(self, Lt: Array, take_log: bool = True) -> Array:
         """
@@ -122,7 +122,7 @@ class ExponentialPreferencePrior(ModelBase):
         if take_log:
             return -self.k * Lt
         else:
-            return jnp.exp(-self.k * Lt)
+            return np.exp(-self.k * Lt)
 
 
 class SatisficingPreferencePrior(ModelBase):
@@ -143,7 +143,7 @@ class SatisficingPreferencePrior(ModelBase):
 
     @property
     def k(self):
-        return -jnp.log(self.p_star) / self.l_star
+        return -np.log(self.p_star) / self.l_star
 
     def __call__(self, Lt: Array, take_log: bool = True) -> Array:
         """
@@ -152,9 +152,9 @@ class SatisficingPreferencePrior(ModelBase):
         Returns an array of shape [m, world_draws]
         """
         if take_log:
-            return -self.k * jnp.maximum(0, Lt)
+            return -self.k * np.maximum(0, Lt)
         else:
-            return jnp.exp(-self.k * jnp.maximum(0, Lt))
+            return np.exp(-self.k * np.maximum(0, Lt))
 
 
 class EFERiskModel(ModelBase):
@@ -214,4 +214,4 @@ class NullEntropyRiskModel(EFERiskModel):
         """
         Zero out the entropy term
         """
-        return jnp.zeros(Lt.shape[1])
+        return np.zeros(Lt.shape[1])

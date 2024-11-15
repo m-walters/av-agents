@@ -1,6 +1,8 @@
+import os
+
 import numpy as np
 import xarray as xr
-import os
+import seaborn as sns
 
 from sim import plotting
 
@@ -14,8 +16,7 @@ LABEL_TO_METRIC = {
     "Risk": "risk",
     "Fraction Ego Crashed": "crashed",
     "Crashed": "crashed",
-    "Fraction Conservative": "behavior_mode",
-    "Number in Conservative": "behavior_mode",
+    "Fraction Defensive": "behavior_mode",
 }
 
 
@@ -76,16 +77,19 @@ def multiagent_plot():
     )
 
 
-def comparison_plot():
-    # Comparison plot
-    RESULTS_DIR = "../results"
-    save_path = RESULTS_DIR + "/freezer/nc8/behavior_compare.png"
+def compare_plot():
+    """
+    Generic comparison plot
+    """
+    title = None
 
-    data_tups = [
-        (xr.open_dataset(f"{RESULTS_DIR}/freezer/nc8/ttc-baseline-cons/results.nc"), "Cons."),
-        (xr.open_dataset(f"{RESULTS_DIR}/freezer/nc8/ttc-baseline-nom/results.nc"), "Nom."),
-        (xr.open_dataset(f"{RESULTS_DIR}/freezer/nc8/ttc-baseline-hotshot/results.nc"), "Hotshot"),
-    ]
+    truncate = None
+
+    # save_dir = RESULTS_DIR + "/tmp"
+    # data_tups = [
+    #     (xr.open_dataset(RESULTS_DIR + "/tmp/results.nc"), r'$\beta = 10$'),
+    #     (xr.open_dataset(RESULTS_DIR + "/tmp/results.nc"), r'$\beta = 1$'),
+    # ]
 
     labels = [
         "R_Def",
@@ -96,168 +100,125 @@ def comparison_plot():
         "E[Entropy]",
         "Risk",
         "Crashed",
-        "Number in Conservative",
+        "Fraction Defensive",
     ]
-    metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
-
     # 4 rows, 2 columns
     axes_layout = [
         ["R_Def", "Actual Loss"],
         ["R_Spd", "E[Loss]"],
         ["E[Energy]", "Risk"],
         ["E[Entropy]", "Crashed"],
-        ["Number in Conservative", None],
+        [None, "Fraction Defensive"],
     ]
-
-    avplot = plotting.AVPlotter()
-    avplot.comparison_plot(
-        save_path,
-        data_tups,
-        metric_label_map,
-        axes_layout=axes_layout,
-        # truncate = 0,
-    )
-
-
-def compare_plot():
-    """
-    Generic comparison plot
-    """
-    title = None
-
-    RESULTS_DIR = "../results/manuscript/av-8-extra"
-    save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
-
-    data_tups = [
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'nom/results.nc')), "Nominal"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'def/results.nc')), "Defensive"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'hotshot/results.nc')), "Hotshot"),
-    ]
-
-    truncate = None
-
-    # save_dir = RESULTS_DIR + "/tmp"
-    # data_tups = [
-    #     (xr.open_dataset(RESULTS_DIR + "/tmp/results.nc"), r'$\beta = 10$'),
-    #     (xr.open_dataset(RESULTS_DIR + "/tmp/results.nc"), r'$\beta = 1$'),
-    # ]
 
     # labels = [
     #     "R_Def",
     #     "R_Spd",
     #     "Actual Loss",
-    #     "E[Loss]",
-    #     "E[Energy]",
-    #     "E[Entropy]",
-    #     "Risk",
     #     "Crashed",
-    #     "Number in Conservative",
     # ]
     # # 4 rows, 2 columns
     # axes_layout = [
     #     ["R_Def", "Actual Loss"],
-    #     ["R_Spd", "E[Loss]"],
-    #     ["E[Energy]", "Risk"],
-    #     ["E[Entropy]", "Crashed"],
-    #     [None, "Number in Conservative"],
+    #     ["R_Spd", "Crashed"],
     # ]
-
-    labels = [
-        "R_Def",
-        "R_Spd",
-        "Actual Loss",
-        # "Crashed",
-    ]
-    # 4 rows, 2 columns
-    axes_layout = [
-        ["R_Def", "Actual Loss"],
-        ["R_Spd", None],
-    ]
     metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
 
-    avplot = plotting.AVPlotter()
+
+    # RESULTS_DIR = "../results/manuscript/freezer/crash-4"
+    RESULTS_DIR = "../results/tmp/"
+    save_path = os.path.join(RESULTS_DIR, "combined-metrics.png")
+    data_tups = [
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "NGK-4"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-8/results.nc')), "NGK-8"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "NGK-12"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-nom/results.nc')), "Nom"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-def/results.nc')), "Def"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-hotshot/results.nc')), "Hotshot"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-nom/results.nc')), "Nom"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ttc/results.nc')), "tmp"),
+    ]
+    styles = [
+        "-",
+        "-",
+        "--",
+        "--",
+    ]
+    avplot = plotting.AVPlotter(
+        sns_context="notebook"
+    )
+
+    colors = [
+        avplot.color_map["online-4"],
+        avplot.color_map["online-12"],
+        avplot.color_map["defensive"],
+        avplot.color_map["hotshot"],
+    ]
+
     avplot.comparison_plot(
         save_path,
         data_tups,
         metric_label_map,
+        styles=styles,
+        colors=colors,
         axes_layout=axes_layout,
         truncate=truncate,
         title=title,
     )
 
 
-def ttc_baseline_hist():
-    """
-    Plot the baseline histogram
-    """
-    RESULTS_DIR = "../results/"
-    run_dir = os.path.join(RESULTS_DIR, "tmp/nc8/oval-av1-crash/")
-    save_path = os.path.join(run_dir, "ttc-baseline-hist.png")
+def ttc_hist():
+
+
+    RESULTS_DIR = "../results/freezer/crash-4"
+    save_path = os.path.join(RESULTS_DIR, "online-exp-ttc.png")
+    data_tups = [
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "NGK-4"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-8/results.nc')), "NGK-8"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "NGK-12"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-16/results.nc')), "NGK-16"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-4/results.nc')), "NGK-4"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-nom/results.nc')), "Nom"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
+    ]
+
+    # bin_range = (0, 20)
+    bin_range = None
+    kde = False
 
     avplot = plotting.AVPlotter()
-    avplot.ttc_baselines_hist(
+    avplot.ttc_hist(
         save_path,
-        nominal_ds=xr.open_dataset(os.path.join(run_dir, "ttc-baseline-nom/results.nc")),
-        conservative_ds=xr.open_dataset(os.path.join(run_dir, "ttc-baseline-cons/results.nc")),
-        hotshot_ds=xr.open_dataset(os.path.join(run_dir, "ttc-baseline-hotshot/results.nc")),
+        data_tups,
+        bin_range=bin_range,
+        kde=kde,
     )
 
 
-def ttc_spec_plot():
-
-    SPEC_BEHAVIORS = {
-        "nom": "sim.vehicles.highway.NominalParams",
-        # "cons": "sim.vehicles.highway.ConservativeParams",
-        "def": "sim.vehicles.highway.DefensiveParams",
-        "hotshot": "sim.vehicles.highway.HotshotParams",
-        # "polite-incr": "sim.vehicles.highway.PolitenessIncr",
-        # "polite-decr": "sim.vehicles.highway.PolitenessDecr",
-        # "timedist-incr": "sim.vehicles.highway.TimeDistWantedIncr",
-        # "timedist-decr": "sim.vehicles.highway.TimeDistWantedDecr",
-        # "acc-max-incr": "sim.vehicles.highway.AccMaxIncr",
-        # "acc-max-decr": "sim.vehicles.highway.AccMaxDecr",
-        # "comf-brake-incr": "sim.vehicles.highway.ComfBrakingIncr",
-        # "comf-brake-decr": "sim.vehicles.highway.ComfBrakingDecr",
-        # "reckmax1": "sim.vehicles.highway.ReckMax1",
-        # "reckmax2": "sim.vehicles.highway.ReckMax2",
-        # "reckmax3": "sim.vehicles.highway.ReckMax3",
-        # "def-HE": "sim.vehicles.highway.DefensiveHE",
-        # "def-1": "sim.vehicles.highway.Defensive1",
-        # "def-2": "sim.vehicles.highway.Defensive2",
-    }
-
-    RESULTS_DIR = "../results"
-    run_dir = os.path.join(RESULTS_DIR, "manuscript/av-8-gk-gamma")
-    save_path = os.path.join(run_dir, "ttc-baseline-hist.png")
-
-    avplot = plotting.AVPlotter()
-    avplot.spec_baselines_hist(
-        save_path,
-        [
-            (xr.open_dataset(os.path.join(run_dir, f"{name}/results.nc")), name) for name in SPEC_BEHAVIORS
-        ]
-    )
-
-
-def ttc_vs_gk():
+def ttc_vs_online():
     """
     Time-to-Collision vs Number controlled by GK
     """
     title = None
 
-    RESULTS_DIR = "../results/freezer"
-    save_dir = RESULTS_DIR + "/"
-    data = [
-        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-1/results.nc"),
-        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-2/results.nc"),
-        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-4/results.nc"),
-        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-8/results.nc"),
+    RESULTS_DIR = "../results/manuscript/freezer/crash-4"
+    save_path = os.path.join(RESULTS_DIR, "ttc-violin.png")
+    datasets = [
+        xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')),
+        xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')),
     ]
 
     avplot = plotting.AVPlotter()
-    avplot.ttc_vs_gk(
-        f"{save_dir}/ttc-vs-gk.png",
-        data
+    avplot.ttc_vs_online(
+        save_path,
+        datasets
     )
 
 

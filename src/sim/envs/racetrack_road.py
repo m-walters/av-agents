@@ -5,6 +5,7 @@ from highway_env.road.road import Road, RoadNetwork
 
 from sim import road as roads
 
+
 def racetrack_road1(racetrack: "RacetrackEnv") -> Road:
 
     net = RoadNetwork()
@@ -501,7 +502,7 @@ def big_ring(racetrack: "RacetrackEnv") -> Road:
         "b",
         CircularLane(
             center,
-            radius + w*2,
+            radius + w * 2,
             th1,
             th2,
             width=w,
@@ -511,10 +512,10 @@ def big_ring(racetrack: "RacetrackEnv") -> Road:
         )
     )
 
-    num_extras = (360-chunk) // chunk
+    num_extras = (360 - chunk) // chunk
     letters = "bcdefghijklmnopqrstuvwxyz"
-    deg_pairs = [(np.deg2rad(i*chunk), np.deg2rad((i+1)*chunk)) for i in range(1,num_extras+1)]
-    letter_pairs = [[letters[i], letters[i+1]] for i in range(num_extras)]
+    deg_pairs = [(np.deg2rad(i * chunk), np.deg2rad((i + 1) * chunk)) for i in range(1, num_extras + 1)]
+    letter_pairs = [[letters[i], letters[i + 1]] for i in range(num_extras)]
     letter_pairs[-1][-1] = "a"
 
     for letter_pair, deg_pair in zip(letter_pairs, deg_pairs):
@@ -552,7 +553,7 @@ def big_ring(racetrack: "RacetrackEnv") -> Road:
             letter_pair[1],
             CircularLane(
                 center,
-                radius + w*2,
+                radius + w * 2,
                 th1,
                 th2,
                 width=w,
@@ -608,7 +609,6 @@ def big_ring(racetrack: "RacetrackEnv") -> Road:
     #     )
     # )
 
-
     return roads.AVRoad(
         network=net,
         np_random=racetrack.np_random,
@@ -619,7 +619,7 @@ def big_ring(racetrack: "RacetrackEnv") -> Road:
 def oval(racetrack: "RacetrackEnv") -> roads.AVOvalRoad:
     net = RoadNetwork()
     w = 5
-    w2 = 2*w
+    w2 = 2 * w
     L = 120
     R = 20
     offset = np.array([-L / 2, 0])
@@ -696,7 +696,7 @@ def oval(racetrack: "RacetrackEnv") -> roads.AVOvalRoad:
         "c",
         CircularLane(
             center,
-            R + w*2,
+            R + w * 2,
             th1,
             th2,
             width=w,
@@ -777,7 +777,7 @@ def oval(racetrack: "RacetrackEnv") -> roads.AVOvalRoad:
         "a",
         CircularLane(
             center,
-            R + w*2,
+            R + w * 2,
             th1,
             th2,
             width=w,
@@ -787,8 +787,7 @@ def oval(racetrack: "RacetrackEnv") -> roads.AVOvalRoad:
         )
     )
 
-
-    return roads.AVOvalRoad(
+    return roads.AVRoad(
         network=net,
         np_random=racetrack.np_random,
         record_history=racetrack.config["show_trajectories"],

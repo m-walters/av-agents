@@ -48,10 +48,10 @@ class NominalParams:
     DELTA_RANGE = [3.5, 4.5]
 
     """Desired jam distance to the front vehicle."""
-    DISTANCE_WANTED = 3.0 + ControlledVehicle.LENGTH  # [m]
+    DISTANCE_WANTED = 2.0 + ControlledVehicle.LENGTH  # [m]
 
     """Desired time gap to the front vehicle."""
-    TIME_WANTED = 1.  # [s]
+    TIME_WANTED = .6  # [s]
 
     # Lateral policy parameters
     # See IDMVehicle.mobil() for what these mainly do
@@ -86,17 +86,17 @@ class DefensiveParams(NominalParams):
     - Increased TimeDist
     """
     POLITENESS = 0.5
-    DISTANCE_WANTED = 6.0 + ControlledVehicle.LENGTH
-    TIME_WANTED = 2.0
+    DISTANCE_WANTED = 3.0 + ControlledVehicle.LENGTH
+    TIME_WANTED = 1.5
 
 
-class DefensiveParams2(NominalParams):
-    """
-    Try to be even safer than DefensiveParams
-    """
-    POLITENESS = 0.5
-    DISTANCE_WANTED = 6.0 + ControlledVehicle.LENGTH
-    TIME_WANTED = 2.0
+# class DefensiveParams2(NominalParams):
+#     """
+#     Try to be even safer than DefensiveParams
+#     """
+#     POLITENESS = 0.5
+#     DISTANCE_WANTED = 6.0 + ControlledVehicle.LENGTH
+#     TIME_WANTED = 2.0
 
 
 class HotshotParams(NominalParams):
@@ -114,10 +114,13 @@ class HotshotParams(NominalParams):
 
 class AlterParams(NominalParams):
     """
-    Like Nominal, but more lane-changing
+    Nominal, but they dgaf about lane change risk.
     """
     POLITENESS = 0.
-    LANE_CHANGE_MAX_BRAKING_IMPOSED = 10.0
+    LANE_CHANGE_MIN_ACC_GAIN = 0.2
+    LANE_CHANGE_MAX_BRAKING_IMPOSED = 20.0
+    #
+    # TIME_WANTED = 2.0
 
 
 class IDMVehicle(NominalParams, VehicleBase, AggressiveVehicle):

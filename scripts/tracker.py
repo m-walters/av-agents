@@ -66,7 +66,7 @@ def main(cfg: DictConfig):
     uenv.update_config(env_cfg, reset=False)
 
     # Run a world simulation
-    rkey = utils.JaxRKey(seed)
+    rkey = utils.NpyRKey(seed)
     obs, info = env.reset(seed=rkey.next_seed())
     i_mc = 0  # Tracking MC steps
 
@@ -80,7 +80,7 @@ def main(cfg: DictConfig):
                 risk, entropy, energy = risk_model(losses, loss_log_probs)
 
                 # Record data
-                ds["mc_loss"][0, i_mc, :] = losses
+                # ds["mc_loss"][0, i_mc, :] = losses
                 ds["loss_mean"][0, i_mc] = np.mean(losses)
                 ds["loss_p5"][0, i_mc] = np.percentile(losses, 5)
                 ds["loss_p95"][0, i_mc] = np.percentile(losses, 95)
@@ -101,7 +101,6 @@ def main(cfg: DictConfig):
         ds["speed_reward"][0, step] = info["rewards"]["speed_reward"]
         ds["crash_reward"][0, step] = info["rewards"]["crash_reward"]
 
-        logger.debug(f"REWARD: {reward}")
         if terminated or truncated:
             if terminated:
                 logger.info(f"Collision (terminated) at {step}")

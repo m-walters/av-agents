@@ -10,7 +10,9 @@ import xarray as xr
 from omegaconf import DictConfig, OmegaConf, open_dict
 
 from sim import utils
-from sim.gatekeeper import Behaviors, GatekeeperConfig
+from sim.gatekeeper import GatekeeperConfig, get_policy_index
+
+import json
 
 logger = logging.getLogger("av-sim")
 
@@ -75,57 +77,60 @@ def init_multiagent_results_dataset(
     duration: int,
     mc_steps: utils.Array,
     n_montecarlo: int,
-    n_controlled: int,
-) -> Tuple[xr.Dataset, dict]:
+    n_ego: int,
+    gk_cfg: DictConfig[GatekeeperConfig],
+) -> xr.Dataset:
     if not (isinstance(mc_steps, utils.Array) and len(mc_steps) > 0):
         # We need to initialize with something
         mc_steps = np.array([0])
-    num_mc_sweeps = len(mc_steps)
 
-    # For mapping the 'behavior_mode' results
-    behavior_index = {
-        0: Behaviors.NOMINAL.value,
-        1: Behaviors.CONSERVATIVE.value,
-    }
+    num_mc_sweeps = len(mc_steps)
 
     return xr.Dataset(
         {
             ### Data recorded every world step
             # Rewards
-            "reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
+            "reward": (("world", "step", "ego"), np.full((world_draws, duration, n_ego), np.nan)),
             # Record the realized loss
-            "real_loss": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
-            "defensive_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
-            "speed_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
-            "crashed": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
+            "real_loss": (("world", "step", "ego"), np.full((world_draws, duration, n_ego), np.nan)),
+            "defensive_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_ego), np.nan)),
+            "speed_reward": (("world", "step", "ego"), np.full((world_draws, duration, n_ego), np.nan)),
+            "crashed": (("world", "step", "ego"), np.full((world_draws, duration, n_ego), np.nan)),
             # Record the step which saw the first vehicle collision
             "time_to_collision": (("world",), np.full((world_draws,), np.nan)),
             # For gatekeeper analysis
             # 0 for nominal, 1 for conservative, etc...
-            "behavior_mode": (("world", "step", "ego"), np.full((world_draws, duration, n_controlled), np.nan)),
+            "behavior_mode": (("world", "step", "ego"), np.full((world_draws, duration, n_ego), np.nan)),
+            "n_online": ((), 0),
             ### Data recorded from MC Sweeps
-            "risk": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
-            "entropy": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
-            "energy": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
+            "risk": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_ego), np.nan)),
+            "entropy": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_ego), np.nan)),
+            "energy": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_ego), np.nan)),
             # Tracking the MC losses -- These are predicted losses
-            "mc_loss": (
-                ("world", "mc_step", "sample", "ego"),
-                np.full((world_draws, num_mc_sweeps, n_montecarlo, n_controlled), np.nan)
-            ),
-            "loss_mean": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
+            # Let's disable this for now to save memory
+            # "mc_loss": (
+            #     ("world", "mc_step", "sample", "ego"),
+            #     np.full((world_draws, num_mc_sweeps, n_montecarlo, n_ego), np.nan)
+            # ),
+            "loss_mean": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_ego), np.nan)),
             # 5% percentile
-            "loss_p5": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
+            "loss_p5": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_ego), np.nan)),
             # 95% percentile
-            "loss_p95": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_controlled), np.nan)),
+            "loss_p95": (("world", "mc_step", "ego"), np.full((world_draws, num_mc_sweeps, n_ego), np.nan)),
         },
         coords={
             "world": np.arange(world_draws),
-            "ego": np.arange(n_controlled),
+            "ego": np.arange(n_ego),
             "step": np.arange(duration),
             "mc_step": mc_steps,
             "sample": np.arange(n_montecarlo),
         },
-    ), behavior_index
+        attrs={
+            "n_online": gk_cfg['n_online'],
+            # The behavior index maps the values tracked in `behavior_mode` to their type here.
+            "behavior_index": json.dumps(get_policy_index())
+        },
+    )
 
 
 def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams", DictConfig[GatekeeperConfig]]:
@@ -186,7 +191,6 @@ def init(cfg: DictConfig) -> Tuple[DictConfig, "RunParams", DictConfig[Gatekeepe
         with open_dict(cfg):
             cfg.gatekeeper.n_montecarlo = n_montecarlo
             cfg.gatekeeper.mc_period = mc_period
-            cfg.gatekeeper.n_controlled = env_cfg['controlled_vehicles']
             cfg.gatekeeper.mc_horizon = env_cfg['mc_horizon']
 
     # Convert to py-dict so we can record the seed in case this is a random run

@@ -69,7 +69,7 @@ def main(cfg: DictConfig):
     risk_model = getattr(models, cfg.risk.model)(preference_prior=preference_prior, **cfg.risk, seed=cfg.seed)
 
     # We have to get seeds based on global seed
-    rkey = utils.JaxRKey(seed)
+    rkey = utils.NpyRKey(seed)
     i_mc = 0
 
     for wdraw in range(run_params['world_draws']):
@@ -91,7 +91,7 @@ def main(cfg: DictConfig):
                     risk, entropy, energy = risk_model(losses, loss_log_probs)
 
                     # Record data
-                    ds["mc_loss"][wdraw, i_mc, :] = losses
+                    # ds["mc_loss"][wdraw, i_mc, :] = losses
                     ds["loss_mean"][wdraw, i_mc] = np.mean(losses)
                     ds["loss_p5"][wdraw, i_mc] = np.percentile(losses, 5)
                     ds["loss_p95"][wdraw, i_mc] = np.percentile(losses, 95)
@@ -108,7 +108,6 @@ def main(cfg: DictConfig):
             ds["defensive_reward"][wdraw, step] = info["rewards"]["defensive_reward"]
             ds["speed_reward"][wdraw, step] = info["rewards"]["speed_reward"]
 
-            logger.debug(f"REWARD: {reward}")
             if terminated or truncated:
                 if terminated:
                     logger.info(f"Collision (terminated) at {step}")

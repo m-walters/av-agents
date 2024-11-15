@@ -2,16 +2,16 @@ from collections import namedtuple
 from enum import Enum
 from typing import Any, Generator, List, Optional, TypedDict, Union
 
-import jax.numpy as jnp
 import numpy as np
 import pymc
 from hydra.utils import instantiate
 from omegaconf import DictConfig
 
-from sim.utils import JaxRKey
+from sim.utils import NpyRKey
 
 # For typing -- It's often hard to say if an object is one or the other
-Array = Union[jnp.ndarray, np.ndarray]
+# Array = Union[jnp.ndarray, np.ndarray]
+Array = Union[np.ndarray]
 # Shortcut
 Number = Union[float, int]
 
@@ -113,7 +113,7 @@ class ParamCollection:
         for p in self.collection.values():
             if p.fixed_value:
                 # Broadcast the fixed value
-                samples[p.name] = p.fixed_value * jnp.ones((1, draws))
+                samples[p.name] = p.fixed_value * np.ones((1, draws))
 
         # Update the tuple
         self.params = self.tuple_definition(**samples)
@@ -126,7 +126,7 @@ class ParamCollection:
         """
         return self.tuple_definition(
             **{
-                name: jnp.vstack(
+                name: np.vstack(
                     [getattr(self.params, name) for _ in range(n_montecarlo)]
                 ) for name in self.collection
             }
@@ -157,7 +157,7 @@ class ParamIterator:
         n_steps: Optional[int] = None,
         *args, **kwargs
     ):
-        self.key = JaxRKey(seed=kwargs.get("seed", 8675309))
+        self.key = NpyRKey(seed=kwargs.get("seed", 8675309))
         self.value = self.x_0 = x_0
         self.x_T = x_T
         self.n_steps = n_steps
