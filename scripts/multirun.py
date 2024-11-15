@@ -244,7 +244,8 @@ def _run_configs(script: str, configs: list[dict]):
         cfg_args = " ".join([f"{k}={v}" for k, v in config.items()])
         command = f"python {script} {cfg_args}"
         print(f"Running: {command}")
-        print("\n\nRemember, this shit hard to kill. Use pkill -f 'python ttc.py' \n")
+        print("\n\nCan be pesky to kill all the spawned processes with using `threads_per_core` > 1. \nUse pkill -f "
+              "'python ttc.py' \n")
         time.sleep(5)
         result = subprocess.run(command, shell=True)
         if result.returncode != 0:
