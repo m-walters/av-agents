@@ -125,22 +125,21 @@ def compare_plot():
     metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
 
 
-    # RESULTS_DIR = "../results/manuscript/freezer/crash-4"
-    RESULTS_DIR = "../results/tmp/"
-    save_path = os.path.join(RESULTS_DIR, "combined-metrics.png")
+    RESULTS_DIR = "../results/manuscript/freezer/"
+    save_path = os.path.join(RESULTS_DIR, "combined-metrics-tmp.png")
     data_tups = [
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "NGK-4"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'crash-4-lrg/online-4/results.nc')), "NGK-4"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-8/results.nc')), "NGK-8"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "NGK-12"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'crash-4/online-12/results.nc')), "NGK-12"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-nom/results.nc')), "Nom"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-def/results.nc')), "Def"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-hotshot/results.nc')), "Hotshot"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-nom/results.nc')), "Nom"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ttc/results.nc')), "tmp"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'crash-4/baselines-def/results.nc')), "Def"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'crash-4/baselines-hotshot/results.nc')), "Hotshot"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'ttc/results.nc')), "tmp"),
     ]
     styles = [
         "-",

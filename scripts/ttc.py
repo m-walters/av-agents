@@ -225,7 +225,9 @@ def main(cfg: DictConfig):
         video_dir = f"{run_dir}/recordings"
         video_prefix = "sim"
         env = recorder.AVRecorder(
-            gym.make(f"AVAgents/{cfg.get('env_type', 'racetrack-v0')}", render_mode=render_mode), video_dir,
+            gym.make(f"AVAgents/{cfg.get('env_type', 'racetrack-v0')}", render_mode=render_mode),
+            video_dir,
+            episode_trigger=recorder.every_other,
             name_prefix=video_prefix
         )
     else:

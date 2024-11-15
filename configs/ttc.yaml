@@ -44,12 +44,12 @@ highway_env:
 #      features: ["presence", "x", "y", "vx", "vy"]
   mc_horizon: 1
   n_montecarlo: 20
-  duration: 60
+  duration: 20
   normalize_reward: true
 #==============
 
 seed: 867
-world_draws: 15
+world_draws: 16
 
 warmup_steps: 0  # included within the duration
 mc_period: 5   # real-world steps between MC issuances
@@ -60,7 +60,7 @@ env_type: "highway-v0"
 
 # Multiprocessing configs
 multiprocessing_cpus: 8
-threads_per_world: 4
+threads_per_world: 2
 # Profiling
 profiling: false
 video: false

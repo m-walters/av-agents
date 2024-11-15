@@ -24,6 +24,10 @@ def capped_cubic_video_schedule(episode_id: int) -> bool:
         return episode_id % 1000 == 0
 
 
+def every_other(episode_id: int) -> bool:
+    return episode_id % 2 == 0
+
+
 class AVRecorder(gym.Wrapper, gym.utils.RecordConstructorArgs):
     """This wrapper records videos of rollouts.
 
