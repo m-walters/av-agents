@@ -53,7 +53,7 @@ class AVHighway(HighwayEnv):
                 "duration": 40,  # [s]
                 "ego_spacing": 2,
                 "vehicles_density": 1,
-                "crash_penalty": -10,  # The reward received when colliding with a vehicle.
+                "crash_penalty": -4,  # The reward received when colliding with a vehicle.
                 "max_defensive_penalty": -6,  # Cap the defensive reward/penalty
                 # The reward received when driving on the right-most lanes, linearly mapped to
                 # zero for other lanes.
@@ -360,7 +360,6 @@ class AVHighway(HighwayEnv):
         # penalty /= n_nbr if n_nbr > 0 else 1
 
         if -penalty < self.config['max_defensive_penalty']:
-            logger.warning(f"MAX DEFENSIVE PENALTY EXCEEDED: {-penalty}")
             penalty = -self.config['max_defensive_penalty']
 
         if self.config['normalize_reward']:

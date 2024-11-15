@@ -429,7 +429,6 @@ class AVRacetrack(RacetrackEnv):
         # penalty /= n_nbr if n_nbr > 0 else 1
 
         if -penalty < self.config['max_defensive_penalty']:
-            logger.debug(f"MAX DEFENSIVE PENALTY EXCEEDED: {-penalty}")
             penalty = -self.config['max_defensive_penalty']
 
         if self.config['normalize_reward']:

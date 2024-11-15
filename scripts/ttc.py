@@ -379,7 +379,7 @@ def main(cfg: DictConfig):
                             )
                         )
 
-                    for future in as_completed(futures):
+                    for future in tqdm(as_completed(futures), desc="Worlds", total=world_draws):
                         world_idx, result_dict = future.result()
 
                         ds["reward"][world_idx, :, :] = result_dict["reward"]
