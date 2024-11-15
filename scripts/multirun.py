@@ -37,7 +37,7 @@ def baseline_configs(run_dir: str, tag: str | None = None):
     script = "ttc.py"
 
     num_cpus = 12
-    cores_per_world = 1
+    threads_per_world = 1
     env_type = "highway-v0"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
     world_draws = 1000
@@ -81,7 +81,7 @@ def baseline_configs(run_dir: str, tag: str | None = None):
             "highway_env.num_vehicles_control_speed": num_vehicles_control_speed,
             "highway_env.vehicles_count": vehicles_count,
             "multiprocessing_cpus": num_cpus,
-            "cores_per_world": cores_per_world,
+            "threads_per_world": threads_per_world,
             "env_type": env_type,
             "highway_env.duration": duration,
             "highway_env.mc_horizon": mc_horizon,
@@ -111,7 +111,7 @@ def online_configs(run_dir: str, tag: str | None = None):
     script = "ttc.py"
 
     num_cpus = 12
-    cores_per_world = 1
+    threads_per_world = 1
     env_type = "highway-v0"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
     world_draws = 50
@@ -153,7 +153,7 @@ def online_configs(run_dir: str, tag: str | None = None):
             "highway_env.num_vehicles_control_speed": num_vehicles_control_speed,
             "highway_env.vehicles_count": vehicles_count,
             "multiprocessing_cpus": num_cpus,
-            "cores_per_world": cores_per_world,
+            "threads_per_world": threads_per_world,
             "env_type": env_type,
             "highway_env.duration": duration,
             "highway_env.mc_horizon": mc_horizon,
@@ -200,14 +200,14 @@ def run_hpc_online_exp():
 
     # Then just update the number of cores accordingly
     num_cpu = 96
-    cores_per_world = 32
+    threads_per_world = 32
     world_draws = 200
     duration = 100
     n_montecarlo = 64
 
     for config in configs:
         config["multiprocessing_cpus"] = num_cpu
-        config["cores_per_world"] = cores_per_world
+        config["threads_per_world"] = threads_per_world
         config["world_draws"] = world_draws
         config["highway_env.duration"] = duration
         config["highway_env.n_montecarlo"] = n_montecarlo
@@ -223,14 +223,14 @@ def run_hpc_baseline():
 
     # Then just update the number of cores accordingly
     num_cpu = 64
-    cores_per_world = 1
+    threads_per_world = 1
     world_draws = 1000
     duration = 100
     # n_montecarlo = 100
 
     for config in configs:
         config["multiprocessing_cpus"] = num_cpu
-        config["cores_per_world"] = cores_per_world
+        config["threads_per_world"] = threads_per_world
         config["world_draws"] = world_draws
         config["highway_env.duration"] = duration
         # config["highway_env.n_montecarlo"] = n_montecarlo

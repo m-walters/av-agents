@@ -59,9 +59,8 @@ num_collision_watch: 4 # Watch the first n vehicles for terminating collision
 env_type: "highway-v0"
 
 # Multiprocessing configs
-multiprocessing_cpus: 4
-# Note that you'll be using an additional CPU for each world parent (but they're low usage)
-cores_per_world: 1
+multiprocessing_cpus: 8
+threads_per_world: 4
 # Profiling
 profiling: false
 video: false

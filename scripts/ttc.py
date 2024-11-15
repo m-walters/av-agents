@@ -93,7 +93,7 @@ def non_mc_worldsim(
 
 def mc_worldsim(
     world_idx: int, world_seed: int, env: AVRacetrack, run_params: dict,
-    gk_cfg: DictConfig[gatekeeper.GatekeeperConfig], cores_per_world: int,
+    gk_cfg: DictConfig[gatekeeper.GatekeeperConfig], threads_per_world: int,
     num_collision_watch: int = 1, profiler: cProfile.Profile | None = None
 ) -> tuple[int, dict]:
     """
@@ -131,8 +131,8 @@ def mc_worldsim(
     i_mc = 0  # Tracking MC steps
 
     with logging_redirect_tqdm():
-        # with multiprocessing.Pool(cores_per_world, maxtasksperchild=100) as pool:
-        # with ProcessPoolExecutor(max_workers=cores_per_world) as executor:
+        # with multiprocessing.Pool(threads_per_world, maxtasksperchild=100) as pool:
+        # with ProcessPoolExecutor(max_workers=threads_per_world) as executor:
         for step in tqdm(range(duration), desc="Steps", leave=False, disable=True):
             # First, record the gatekeeper behavior states
             result["behavior_mode"][step, :] = gk_cmd.collect_behaviors()
@@ -144,7 +144,7 @@ def mc_worldsim(
                 if step % gk_cmd.mc_period == 0:
                     # Returned dimensions are [n_ego]
                     # results = gk_cmd.run(pool)
-                    results = gk_cmd.run(cores_per_world=cores_per_world)
+                    results = gk_cmd.run(threads_per_world=threads_per_world)
 
                     # Record data
                     # result["mc_loss"][i_mc, :, :] = results["losses"]
@@ -258,10 +258,10 @@ def main(cfg: DictConfig):
         profiler = None
 
     num_cpu = cfg.get('multiprocessing_cpus', 1)
-    cores_per_world = cfg.get('cores_per_world', 1)
-    if num_cpu % cores_per_world != 0:
-        raise ValueError("Number of CPUs must be divisible by cores_per_world")
-    world_cores = num_cpu // cores_per_world
+    threads_per_world = cfg.get('threads_per_world', 1)
+    if num_cpu % threads_per_world != 0:
+        raise ValueError("Number of CPUs must be divisible by threads_per_world")
+    world_cores = num_cpu // threads_per_world
 
     if video:
         # For debugging, just a single world
@@ -358,7 +358,7 @@ def main(cfg: DictConfig):
                     #             env,
                     #             run_params,
                     #             gk_cfg,
-                    #             cores_per_world,
+                    #             threads_per_world,
                     #             num_collision_watch,
                     #             profiler,
                     #         )
@@ -373,7 +373,7 @@ def main(cfg: DictConfig):
                                 env,
                                 run_params,
                                 gk_cfg,
-                                cores_per_world,
+                                threads_per_world,
                                 num_collision_watch,
                                 profiler,
                             )
@@ -419,7 +419,7 @@ def main(cfg: DictConfig):
             #         env,
             #         run_params,
             #         gk_cfg,
-            #         cores_per_world,
+            #         threads_per_world,
             #         num_collision_watch,
             #         profiler,
             #     ) for world_idx in range(i_world, end_world)

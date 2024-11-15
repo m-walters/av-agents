@@ -6,7 +6,7 @@ import logging
 import multiprocessing
 from enum import Enum
 from typing import Dict, List, Optional, TypedDict, Union
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 
 import numpy as np
 from highway_env import utils
@@ -445,7 +445,7 @@ class GatekeeperCommand:
     def run(
         self,
         pool: Optional["multiprocessing.Pool"] = None,
-        cores_per_world: int | None = None,
+        threads_per_world: int | None = None,
     ) -> dict:
         """
         Perform montecarlo simulations and calculate risk equations etc.
@@ -469,10 +469,10 @@ class GatekeeperCommand:
             results = pool.map(self._mc_trajectory, seeds)
             # Stack results along first dimension
             results = np.stack(results, axis=0)
-        elif cores_per_world and cores_per_world > 1:
+        elif threads_per_world and threads_per_world > 1:
             # Issue trajectories to workers
             # We treat cores == 1 as being a world-sim per core, so we don't want to parallelize
-            with ProcessPoolExecutor(max_workers=cores_per_world) as executor:
+            with ThreadPoolExecutor(max_workers=threads_per_world) as executor:
                 try:
                     futures = [executor.submit(self._mc_trajectory, seed) for seed in seeds]
                     results = np.stack([f.result() for f in as_completed(futures)], axis=0)
