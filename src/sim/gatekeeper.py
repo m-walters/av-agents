@@ -418,7 +418,7 @@ class GatekeeperCommand:
                     losses[i_gk] = 1 - reward
 
             else:
-                if j % self.risk_eval_period != 0:
+                if (j+1) % self.risk_eval_period != 0:
                     # Not an eval step
                     continue
 
