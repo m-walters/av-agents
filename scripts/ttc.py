@@ -345,13 +345,28 @@ def main(cfg: DictConfig):
             try:
                 with ProcessPoolExecutor(max_workers=world_cores) as executor:
                     # Batch by world cores
-                    for world_start in tqdm(
-                            range(0, world_draws, world_cores), desc="Worlds", unit_scale=world_cores
-                    ):
-                        world_end = min(world_start + world_cores, world_draws)
-                        futures = []
-                        for world_idx in range(world_start, world_end):
-                            future = executor.submit(  # type: ignore
+                    # for world_start in tqdm(
+                    #         range(0, world_draws, world_cores), desc="Worlds", unit_scale=world_cores
+                    # ):
+                    #     world_end = min(world_start + world_cores, world_draws)
+                    #     futures = []
+                    #     for world_idx in range(world_start, world_end):
+                    #         future = executor.submit(  # type: ignore
+                    #             mc_worldsim,
+                    #             world_idx,
+                    #             world_seeds[world_idx],
+                    #             env,
+                    #             run_params,
+                    #             gk_cfg,
+                    #             cores_per_world,
+                    #             num_collision_watch,
+                    #             profiler,
+                    #         )
+                    #         futures.append(future)
+                    futures = []
+                    for world_idx in range(world_draws):
+                        futures.append(
+                            executor.submit(  # type: ignore
                                 mc_worldsim,
                                 world_idx,
                                 world_seeds[world_idx],
@@ -362,25 +377,25 @@ def main(cfg: DictConfig):
                                 num_collision_watch,
                                 profiler,
                             )
-                            futures.append(future)
+                        )
 
-                        for future in as_completed(futures):
-                            world_idx, result_dict = future.result()
+                    for future in as_completed(futures):
+                        world_idx, result_dict = future.result()
 
-                            ds["reward"][world_idx, :, :] = result_dict["reward"]
-                            ds["real_loss"][world_idx, :, :] = result_dict["real_loss"]
-                            ds["crashed"][world_idx, :, :] = result_dict["crashed"]
-                            ds["behavior_mode"][world_idx, :, :] = result_dict["behavior_mode"]
-                            ds["defensive_reward"][world_idx, :, :] = result_dict["defensive_reward"]
-                            ds["speed_reward"][world_idx, :, :] = result_dict["speed_reward"]
-                            ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
-                            # MC data
-                            ds["loss_mean"][world_idx, :, :] = result_dict["loss_mean"]
-                            ds["loss_p5"][world_idx, :, :] = result_dict["loss_p5"]
-                            ds["loss_p95"][world_idx, :, :] = result_dict["loss_p95"]
-                            ds["risk"][world_idx, :, :] = result_dict["risk"]
-                            ds["entropy"][world_idx, :, :] = result_dict["entropy"]
-                            ds["energy"][world_idx, :, :] = result_dict["energy"]
+                        ds["reward"][world_idx, :, :] = result_dict["reward"]
+                        ds["real_loss"][world_idx, :, :] = result_dict["real_loss"]
+                        ds["crashed"][world_idx, :, :] = result_dict["crashed"]
+                        ds["behavior_mode"][world_idx, :, :] = result_dict["behavior_mode"]
+                        ds["defensive_reward"][world_idx, :, :] = result_dict["defensive_reward"]
+                        ds["speed_reward"][world_idx, :, :] = result_dict["speed_reward"]
+                        ds["time_to_collision"][world_idx] = result_dict["time_to_collision"]
+                        # MC data
+                        ds["loss_mean"][world_idx, :, :] = result_dict["loss_mean"]
+                        ds["loss_p5"][world_idx, :, :] = result_dict["loss_p5"]
+                        ds["loss_p95"][world_idx, :, :] = result_dict["loss_p95"]
+                        ds["risk"][world_idx, :, :] = result_dict["risk"]
+                        ds["entropy"][world_idx, :, :] = result_dict["entropy"]
+                        ds["energy"][world_idx, :, :] = result_dict["energy"]
 
             except KeyboardInterrupt:
                 print("KeyboardInterrupt detected. Terminating workers...")
@@ -517,6 +532,7 @@ def main(cfg: DictConfig):
         num_cpu = cfg.get('multiprocessing_cpus', 1)
         with logging_redirect_tqdm():
             with multiprocessing.Pool(num_cpu, maxtasksperchild=10) as pool:
+            # with multiprocessing.Pool(num_cpu, maxtasksperchild=10) as pool:
                 if profiler:
                     profiler.enable()
 

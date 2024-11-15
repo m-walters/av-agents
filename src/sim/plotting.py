@@ -1,11 +1,10 @@
-from typing import Union
+from typing import Any, Union, Optional
 
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import json
 import xarray as xr
 
 """
@@ -21,12 +20,34 @@ class AVPlotter:
 
     def __init__(
         self,
-        sns_context: str = "paper"
+        sns_context: str = "notebook"
     ):
         # Initialize seaborn
         sns.set()
         sns.set_context(sns_context)
         sns.set_palette("colorblind")
+
+        # To my best colorblind-ass visual determination
+        palette = sns.color_palette()
+        paired_pal = sns.color_palette("Paired")
+        brewer = sns.color_palette("Set2")
+        # online_pal = sns.color_palette("crest", n_colors=5)
+        green_pal = sns.light_palette("green", n_colors=5)
+        spectral_pal = sns.color_palette("Spectral", n_colors=8)
+
+        # Color some common plot entities
+        self.color_map = {
+            "blue": palette[0],
+            "orange": palette[1],
+            "green": palette[2],
+            "red": palette[3],
+            "pink": palette[4],
+            "tan": palette[5],
+            "hotshot": palette[3],
+            "defensive": palette[0],
+            "online-4": palette[1],
+            "online-12": palette[2],
+        }
 
         # Custom metric processing override methods
         # Keys are the plot labels, permitting Dataset metric keys to not be confined to a single processor
@@ -98,7 +119,7 @@ class AVPlotter:
             df = data.to_dataframe().reset_index()
             _ = plot_kwargs.pop("errorbar", None)
             sns.lineplot(
-                data=df, x='step', y=var, errorbar='sd', **plot_kwargs
+                data=df, x='step', y=var, errorbar=('pi', 90), **plot_kwargs
             )
             # sns.lineplot(
             #     data=df, x='step', y=var, color=cols[idx], ax=ax,
@@ -584,6 +605,8 @@ class AVPlotter:
         save_path: str,
         datasets: list[tuple[Union[xr.Dataset, str], str]],
         metric_label_map: dict,
+        styles: Optional[list[Any]] = None,
+        colors: Optional[list[Any]] = None,
         axes_layout: list[list[str]] | None = None,
         ylog_plots: list[str] | None = None,
         title: str | None = None,
@@ -599,6 +622,7 @@ class AVPlotter:
         :param save_path: Save path
         :param datasets: List of (Dataset or Dataset path, Name) tuples
         :param metric_label_map: Map of plot labels to Dataset keys
+        :param styles: List of seaborn line styles
         :param axes_layout: Optional 2D layout of axes labels
         :param ylog_plots: Optional list of labels to plot on a log scale
         :param title: Optional title for the plot
@@ -606,6 +630,9 @@ class AVPlotter:
             Provide an int for an end limit or an inclusive window range
         :param world_avg: Average across worlds
         """
+        # Default styles
+        styles = styles or ["-"] * len(datasets)
+
         # Compile datasets
         datasets = [(xr.open_dataset(ds) if isinstance(ds, str) else ds, name) for ds, name in datasets]
 
@@ -619,10 +646,11 @@ class AVPlotter:
 
         # Check that all datasets have the same egos, steps, and mc_steps
         for ds, name in datasets:
-            assert np.array_equal(steps, ds.coords['step'].values), \
-                f"Steps do not match for dataset {name}"
-            assert np.array_equal(mc_steps, ds.coords['mc_step'].values), \
-                f"MC steps do not match for dataset {name}"
+            # assert np.array_equal(steps, ds.coords['step'].values), \
+            #     f"Steps do not match for dataset {name}"
+            # assert np.array_equal(mc_steps, ds.coords['mc_step'].values), \
+            #     f"MC steps do not match for dataset {name}"
+            ...
 
         # Handle truncation
         if isinstance(truncate, int):
@@ -641,8 +669,11 @@ class AVPlotter:
         right_mc_steps_idx = int(np.argwhere(_mc_steps == mc_steps[-1])[0][0])
 
         duration = steps[-1] - steps[0] + 1
-        col_wheel = self.get_color_wheel()
-        cols = [next(col_wheel) for _ in datasets]
+        if not colors:
+            col_wheel = self.get_color_wheel()
+            cols = [next(col_wheel) for _ in datasets]
+        else:
+            cols = colors
 
         num_ax = len(y_labels)
         if axes_layout is None:
@@ -711,24 +742,22 @@ class AVPlotter:
                     if label in self.PLOT_OVERRIDES:
                         self.PLOT_OVERRIDES[label](
                             ds, var=var, steps=steps, mc_steps=mc_steps, world_avg=True, color=cols[idx], ax=ax,
-                            errorbar='sd', legend=False, label=ds_name
+                            errorbar='sd', legend=False, label=ds_name, ls=styles[idx]
                         )
                     else:
                         # Default to mean
                         df = self.world_stats(ds, var, as_df=True)
 
                         if 'mc_step' in ds[var].dims:
-                            x = mc_steps
                             # Std-dev error bars. See https://seaborn.pydata.org/tutorial/error_bars.html
                             sns.lineplot(
                                 data=df, x='mc_step', y=var, color=cols[idx], ax=ax,
-                                errorbar='sd', legend=False, label=ds_name,
+                                errorbar=('pi', 90), legend=False, label=ds_name, ls=styles[idx],
                             )
                         else:
-                            x = steps
                             sns.lineplot(
                                 data=df, x='step', y=var, color=cols[idx], ax=ax,
-                                errorbar='sd', legend=False, label=ds_name,
+                                errorbar=('pi', 90), legend=False, label=ds_name, ls=styles[idx],
                             )
 
                 else:
@@ -852,48 +881,51 @@ class AVPlotter:
         """
         ...
 
-    def ttc_vs_gk(
+    def ttc_vs_online(
         self,
         save_path: str,
         datasets: list[Union[xr.Dataset, str]],
     ):
         """
-        Time-To-Collision as function of number of GK-controlled vehicles.
+        Time-To-Collision as function of number of online GK vehicles
 
         :param save_path: Save path
         :param datasets: List of (Dataset or Dataset path, Label) tuples
         """
         # Compile datasets
-        datasets = [xr.open_dataset(ds) if isinstance(ds, str) else ds for ds in datasets]
+        datasets: list[xr.Dataset] = [xr.open_dataset(ds) if isinstance(ds, str) else ds for ds in datasets]
 
-        df = pd.DataFrame([], columns=['num_gk', 'ttc'], dtype=int)
+        df = pd.DataFrame([], columns=['n_online', 'ttc'], dtype=int)
         for i_ds, ds in enumerate(datasets):
-            n_ego = ds.ego.size
-            ttc = ds.time_to_collision.values
+            n_online = ds.attrs["n_online"]
+            ttc = ds["time_to_collision"]
             # Filter out the inf values
-            ttc = ttc[ttc != np.nan].astype(int)
+            ttc = ttc[~ttc.isnull()].astype(int)
+            print(f"MW MAX -- {ttc.max()}")
             if len(ttc) == 0:
                 print(f"No TTC values for dataset: {i_ds}")
 
             # Add to dataframe
-            df = pd.concat([df, pd.DataFrame({'num_gk': n_ego, 'ttc': ttc})])
+            df = pd.concat([df, pd.DataFrame({'n_online': n_online, 'ttc': ttc})])
 
         # Set placeholder categories to make the x-axis numerical
-        all_x_values = np.arange(0, df['num_gk'].max() + 1)
-        df['num_gk'] = pd.Categorical(df['num_gk'], categories=all_x_values)
+        # all_x_values = np.arange(0, df['n_online'].max() + 1)
+        # df['n_online'] = pd.Categorical(df['n_online'], categories=all_x_values)
+
+        print(df[:100])
 
         col_wheel = self.get_color_wheel()
         fig = sns.violinplot(
-            data=df, x='num_gk', y='ttc', color=next(col_wheel),
+            data=df, x='n_online', y='ttc', color=next(col_wheel),
             cut=0, inner='point',
             # If inner is 'box'
             # inner_kws=dict(box_width=15, whis_width=2, color=".8")
         )
 
-        # Set ylims from 0 to 100 or the max TTC
-        plt.ylim(0, min(200, df['ttc'].max()) + 5)
+        # Set ylims from 0 to 100 or the max TTCe
+        # plt.ylim(0, min(200, df['ttc'].max()) + 5)
         plt.ylabel("TTC")
-        plt.xlabel("Number of GK-controlled vehicles")
+        plt.xlabel("Number of GK-online vehicles")
 
         if save_path:
             print(f"Saving to {save_path}")

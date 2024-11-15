@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import xarray as xr
+import seaborn as sns
 
 from sim import plotting
 
@@ -15,7 +16,6 @@ LABEL_TO_METRIC = {
     "Risk": "risk",
     "Fraction Ego Crashed": "crashed",
     "Crashed": "crashed",
-    "Fraction Conservative": "behavior_mode",
     "Fraction Defensive": "behavior_mode",
 }
 
@@ -124,8 +124,10 @@ def compare_plot():
     # ]
     metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
 
-    RESULTS_DIR = "../results/tmp/crash-test-4"
-    save_path = os.path.join(RESULTS_DIR, "trajectory_metrics.png")
+
+    # RESULTS_DIR = "../results/manuscript/freezer/crash-4"
+    RESULTS_DIR = "../results/tmp/"
+    save_path = os.path.join(RESULTS_DIR, "combined-metrics.png")
     data_tups = [
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
@@ -136,15 +138,33 @@ def compare_plot():
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-def/results.nc')), "Def"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-hotshot/results.nc')), "Hotshot"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-nom/results.nc')), "Nom"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'ttc/results.nc')), "tmp"),
+    ]
+    styles = [
+        "-",
+        "-",
+        "--",
+        "--",
+    ]
+    avplot = plotting.AVPlotter(
+        sns_context="notebook"
+    )
+
+    colors = [
+        avplot.color_map["online-4"],
+        avplot.color_map["online-12"],
+        avplot.color_map["defensive"],
+        avplot.color_map["hotshot"],
     ]
 
-    avplot = plotting.AVPlotter()
     avplot.comparison_plot(
         save_path,
         data_tups,
         metric_label_map,
+        styles=styles,
+        colors=colors,
         axes_layout=axes_layout,
         truncate=truncate,
         title=title,
@@ -153,19 +173,20 @@ def compare_plot():
 
 def ttc_hist():
 
-    RESULTS_DIR = "../results/tmp/crash-test-4"
-    save_path = os.path.join(RESULTS_DIR, "ttc_hist.png")
+
+    RESULTS_DIR = "../results/freezer/crash-4"
+    save_path = os.path.join(RESULTS_DIR, "online-exp-ttc.png")
     data_tups = [
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "NGK-4"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "NGK-4"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-8/results.nc')), "NGK-8"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "NGK-12"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "NGK-12"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-16/results.nc')), "NGK-16"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-4/results.nc')), "NGK-4"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-nom/results.nc')), "Nom"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
     ]
 
     # bin_range = (0, 20)
@@ -181,25 +202,23 @@ def ttc_hist():
     )
 
 
-def ttc_vs_gk():
+def ttc_vs_online():
     """
     Time-to-Collision vs Number controlled by GK
     """
     title = None
 
-    RESULTS_DIR = "../results/freezer"
-    save_dir = RESULTS_DIR + "/"
-    data = [
-        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-1/results.nc"),
-        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-2/results.nc"),
-        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-4/results.nc"),
-        xr.open_dataset(RESULTS_DIR + "/quick-ttc-gk-nc-8/results.nc"),
+    RESULTS_DIR = "../results/manuscript/freezer/crash-4"
+    save_path = os.path.join(RESULTS_DIR, "ttc-violin.png")
+    datasets = [
+        xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')),
+        xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')),
     ]
 
     avplot = plotting.AVPlotter()
-    avplot.ttc_vs_gk(
-        f"{save_dir}/ttc-vs-gk.png",
-        data
+    avplot.ttc_vs_online(
+        save_path,
+        datasets
     )
 
 
