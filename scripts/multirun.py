@@ -91,6 +91,7 @@ def baseline_configs(run_dir: str, tag: str | None = None):
             "mc_period": mc_period,
             "num_collision_watch": num_collision_watch,
             "gatekeeper.enable_time_discounting": enable_time_discounting,
+            "gatekeeper.behavior_cfg.enable": "false",
             "gatekeeper.n_online": n_online,
             "gatekeeper.behavior_cfg.nominal_class": BEHAVIOR,
             "gatekeeper.behavior_cfg.defensive_class": defensive_class,
@@ -114,8 +115,8 @@ def online_configs(run_dir: str, tag: str | None = None):
     threads_per_world = 1
     env_type = "highway-v0"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
-    world_draws = 50
-    duration = 40
+    world_draws = 1
+    duration = 80
     num_control_vehicles = 12  # Total number ego on road, not GK-online though.
     num_vehicles_control_speed = 12
     vehicles_count = 24
@@ -135,7 +136,7 @@ def online_configs(run_dir: str, tag: str | None = None):
     profiling = "false"
 
     runs = {
-        "online-4": 4,
+        # "online-4": 4,
         "online-12": 12,
     }
 
@@ -176,8 +177,8 @@ def online_configs(run_dir: str, tag: str | None = None):
 
 def run_online_exp():
     # Name the run, and where it will be saved
-    run_dir = "tmp/exp-online"
-    tag = None
+    run_dir = "tmp/crash-4"
+    tag = "sample"
 
     script, configs = online_configs(run_dir, tag)
     _run_configs(script, configs)

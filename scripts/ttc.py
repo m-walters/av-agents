@@ -133,7 +133,7 @@ def mc_worldsim(
     with logging_redirect_tqdm():
         # with multiprocessing.Pool(threads_per_world, maxtasksperchild=100) as pool:
         # with ProcessPoolExecutor(max_workers=threads_per_world) as executor:
-        for step in tqdm(range(duration), desc="Steps", leave=False, disable=True):
+        for step in tqdm(range(duration), desc="Steps", leave=False, disable=False):
             # First, record the gatekeeper behavior states
             result["behavior_mode"][step, :] = gk_cmd.collect_behaviors()
             # Advance the policy deltas
@@ -273,8 +273,6 @@ def main(cfg: DictConfig):
         i_mc = 0  # Tracking MC steps
         obs, info = env.reset(seed=w_seed)
 
-        from pprint import pprint
-
         with logging_redirect_tqdm():
             for step in tqdm(range(run_params['duration']), desc="Steps"):
 
@@ -290,7 +288,7 @@ def main(cfg: DictConfig):
                         results = gk_cmd.run(None)
                         # print("MW RESULTS:\n")
                         # pprint(results)
-                        input("...")
+                        # input("...")
 
                         # Record data
 
@@ -534,7 +532,6 @@ def main(cfg: DictConfig):
         num_cpu = cfg.get('multiprocessing_cpus', 1)
         with logging_redirect_tqdm():
             with multiprocessing.Pool(num_cpu, maxtasksperchild=10) as pool:
-            # with multiprocessing.Pool(num_cpu, maxtasksperchild=10) as pool:
                 if profiler:
                     profiler.enable()
 

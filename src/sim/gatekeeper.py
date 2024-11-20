@@ -133,11 +133,11 @@ class Gatekeeper:
                 self.target_policy = Policies.OFFLINE
                 vehicle.set_behavior_params(self.offline_policy)
         else:
-            # Default to nominal behavior
-            self.nominal_policy = utils.class_from_path(behavior_cfg["nominal_class"])
+            # Default to offline behavior
+            self.offline_policy = utils.class_from_path(behavior_cfg["offline_class"])
             self.policy = Policies.NOMINAL
             self.target_policy = Policies.NOMINAL
-            vehicle.set_behavior_params(self.nominal_policy)
+            vehicle.set_behavior_params(self.offline_policy)
 
         # It's hazardous to immediately change the policy, so it must be done gradually
         self.policy_change_delta = behavior_cfg["policy_change_delta"]  # Number of steps to gradually apply the policy
@@ -190,16 +190,11 @@ class Gatekeeper:
         if self.control_policy == ControlPolicies.RISK_THRESHOLD:
             if self.policy == Policies.NOMINAL and nbrhood_cre > self.nominal_risk_threshold:
                 vehicle = self.get_vehicle(env)
-                logger.debug(f"MW TOGGLING TO DEFENSIVE {vehicle}")
-                # vehicle.set_behavior_params(self.defensive_policy)
-                # self.policy = Policies.CONSERVATIVE
                 self.target_policy = Policies.CONSERVATIVE
                 self.change_in_progress = True
 
             elif self.policy == Policies.CONSERVATIVE and nbrhood_cre < self.defensive_risk_threshold:
                 vehicle = self.get_vehicle(env)
-                logger.debug(f"MW TOGGLING TO NOMINAL {vehicle}")
-                # vehicle.set_behavior_params(self.nominal_policy)
                 self.target_policy = Policies.NOMINAL
                 self.change_in_progress = True
 
@@ -207,7 +202,7 @@ class Gatekeeper:
         """
         Step the policy change
         """
-        if not self.change_in_progress:
+        if not self.change_in_progress or not self.behavior_ctrl_enabled:
             return
 
         self.change_step += 1

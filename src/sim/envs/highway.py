@@ -83,7 +83,8 @@ class AVHighway(HighwayEnv):
             "n_montecarlo": 10,
             # MonteCarlo horizon; Note that a given step is sim_freq // policy_freq frames (see self._simulate)
             "mc_horizon": 5,
-            "alpha": 8.,
+            "alpha": 10.,
+            "sigma_s": 10.,
             "beta": 0.25,
             "default_control_behavior": "sim.vehicles.highway.NominalParams",
             # Number of vehicles with the reward_speed target
@@ -269,7 +270,7 @@ class AVHighway(HighwayEnv):
         # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
         forward_speed = vehicle.speed * np.cos(vehicle.heading)
         score = self.config['alpha'] * np.exp(
-            - (forward_speed - self.config['reward_speed']) ** 2 / (self.config['alpha'] ** 2)
+            - (forward_speed - self.config['reward_speed']) ** 2 / (self.config['sigma_s'] ** 2)
         )
         # logger.debug(f">>> SPEED REWARD: v_forward {forward_speed:0.4f} | score {score:0.4f}")
 

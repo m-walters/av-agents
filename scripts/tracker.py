@@ -123,9 +123,9 @@ def main(cfg: DictConfig):
 
     # Create the video with the saved frames and data
     ds_label_map = {
-        "R_Def": "defensive_reward",
-        "R_Spd": "speed_reward",
-        "Actual Loss": "real_loss",
+        r'$R_D$': "defensive_reward",
+        r'$R_S$': "speed_reward",
+        "Loss": "real_loss",
         "E[Loss]": "loss_mean",
         "E[Energy]": "energy",
         "E[Entropy]": "entropy",
