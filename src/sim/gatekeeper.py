@@ -196,7 +196,7 @@ class Gatekeeper:
                 self.target_policy = Policies.NOMINAL
                 self.change_in_progress = True
 
-    def step_policy_change(self, env):
+    def step_policy_change(self, env, video: bool = False):
         """
         Step the policy change
         """
@@ -207,9 +207,9 @@ class Gatekeeper:
         if self.change_step >= self.policy_change_delta:
             self.complete_policy_change(env)
         else:
-            self.increment_policy(env)
+            self.increment_policy(env, video)
 
-    def increment_policy(self, env):
+    def increment_policy(self, env, video: bool = False):
         """
         Increment the policy params towards target
         """
@@ -219,6 +219,7 @@ class Gatekeeper:
             "DISTANCE_WANTED",
             "TIME_WANTED",
             "LANE_CHANGE_MAX_BRAKING_IMPOSED",
+            "COLOR",
         ]
 
         vehicle = self.get_vehicle(env)
@@ -227,9 +228,18 @@ class Gatekeeper:
         for p in valid_params:
             init_val = getattr(initial_params, p)
             target_val = getattr(target_params, p)
-            current_val = getattr(vehicle, p)
-            current_val += (target_val - init_val) / self.policy_change_delta
-            setattr(vehicle, p, current_val)
+            if p == "COLOR" and video:
+                # Color is really this lowercase attribute
+                current_val = getattr(vehicle, "color")
+                updated = tuple(
+                    curr + (targ - init) / self.policy_change_delta
+                    for curr, targ, init in zip(current_val, target_val, init_val)
+                )
+                setattr(vehicle, "color", updated)
+            else:
+                current_val = getattr(vehicle, p)
+                current_val += (target_val - init_val) / self.policy_change_delta
+                setattr(vehicle, p, current_val)
 
     def complete_policy_change(self, env):
         self.change_in_progress = False
@@ -283,9 +293,9 @@ class GatekeeperCommand:
             )
 
         behavior_config = gk_cfg.behavior_cfg
-        if behavior_config['nominal_class'] != env.config['default_control_behavior']:
+        if behavior_config['offline_class'] != env.config['default_control_behavior']:
             raise ValueError(
-                f"GatekeeperCommand received nominal_class {behavior_config['nominal_class']} "
+                f"GatekeeperCommand received offline_class {behavior_config['offline_class']} "
                 f"but the environment is configured for {env.config['default_control_behavior']}"
             )
 
@@ -324,6 +334,7 @@ class GatekeeperCommand:
         # which in the Loss-normalized [0,1] case, the max risk is k = -log(p_star)/l_star
         nominal_rstar = -np.log(gk_cfg['preference_prior']['p_star']) * 1.1
         defensive_rstar = nominal_rstar * 0.9 / 1.1
+        print(f"MW RSTAR -- {defensive_rstar}, {nominal_rstar}")
 
         # Init GKs
         self.nbr_distance = VehicleBase.MAX_SPEED * 0.7  # For GK neighborhood discovery
@@ -427,12 +438,12 @@ class GatekeeperCommand:
 
         return losses, collisions
 
-    def step_gk_policies(self, env):
+    def step_gk_policies(self, env, video: bool=False):
         """
         Step the policy changes for all GKs
         """
         for gk in self.gatekeepers:
-            gk.step_policy_change(env)
+            gk.step_policy_change(env, video)
 
     def run(
         self,

@@ -9,6 +9,8 @@ from highway_env.vehicle.controller import ControlledVehicle
 from highway_env.vehicle.graphics import VehicleGraphics
 from highway_env.vehicle.objects import Obstacle, RoadObject
 
+from sim.plotting import AV_COLORS
+
 logger = logging.getLogger("av-sim")
 
 
@@ -31,6 +33,8 @@ class NominalParams:
     """
     Somewhere between Defensive and Hotshot
     """
+    COLOR = tuple(int(c * 255) for c in AV_COLORS["nominal"])
+
     # Longitudinal policy parameters
     """Maximum acceleration."""
     ACC_MAX = 6.0  # [m/s2]
@@ -85,6 +89,8 @@ class DefensiveParams(NominalParams):
     - Less lane-changing
     - Increased TimeDist
     """
+    COLOR = tuple(int(c * 255) for c in AV_COLORS["defensive"])
+
     POLITENESS = 0.5
     DISTANCE_WANTED = 3.0 + ControlledVehicle.LENGTH
     TIME_WANTED = 1.5
@@ -107,6 +113,8 @@ class HotshotParams(NominalParams):
     - More lane-changing
     - Decreased TimeDist
     """
+    COLOR = tuple(int(c * 255) for c in AV_COLORS["hotshot"])
+
     POLITENESS = 0.
     DISTANCE_WANTED = 1.0 + ControlledVehicle.LENGTH
     TIME_WANTED = 0.3
@@ -116,6 +124,8 @@ class AlterParams(NominalParams):
     """
     Nominal, but they dgaf about lane change risk.
     """
+    COLOR = tuple(int(c * 255) for c in AV_COLORS["alter"])
+
     POLITENESS = 0.
     LANE_CHANGE_MIN_ACC_GAIN = 0.2
     LANE_CHANGE_MAX_BRAKING_IMPOSED = 20.0
@@ -129,7 +139,7 @@ class IDMVehicle(NominalParams, VehicleBase, AggressiveVehicle):
     IDMVehicles don't respond to action inputs, but instead operate
     intelligently from their surroundings.
     """
-    DEFAULT_COLOR = VehicleGraphics.GREEN
+    # COLOR = NominalParams.COLOR
     CRASH_COOLDOWN = 0.2  # seconds
 
     def __init__(
@@ -155,9 +165,9 @@ class IDMVehicle(NominalParams, VehicleBase, AggressiveVehicle):
         # Our internal tracking ID
         self.av_id = av_id
         self.crashed_timer = 0
-        self.color = self.DEFAULT_COLOR
+        self.color = self.COLOR
 
-    def set_behavior_params(self, param_class):
+    def set_behavior_params(self, param_class, color = None):
         """
         Given one of the param classes above, change our vehicle's values
         """
@@ -175,6 +185,8 @@ class IDMVehicle(NominalParams, VehicleBase, AggressiveVehicle):
         self.MERGE_ACC_GAIN = param_class.MERGE_ACC_GAIN
         self.MERGE_VEL_RATIO = param_class.MERGE_VEL_RATIO
         self.MERGE_TARGET_VEL = param_class.MERGE_TARGET_VEL
+        # Color
+        self.color = color or param_class.COLOR
 
     def randomize_behavior(self):
         """
@@ -298,7 +310,7 @@ class IDMVehicle(NominalParams, VehicleBase, AggressiveVehicle):
         self.crashed = False
         self.impact = None
         self.crashed_timer = 0
-        self.color = self.DEFAULT_COLOR
+        self.color = self.COLOR
 
     def clip_actions(self) -> None:
         if self.crashed:
@@ -374,7 +386,7 @@ class MetaActionVehicle(ControlledVehicle):
     """ Length of the vehicle state history, for trajectory display"""
     HISTORY_SIZE = 30
 
-    DEFAULT_COLOR = VehicleGraphics.GREEN
+    COLOR = VehicleGraphics.GREEN
 
     def __init__(
         self,
@@ -392,7 +404,7 @@ class MetaActionVehicle(ControlledVehicle):
         )
         # Our internal tracking ID
         self.av_id = av_id
-        self.color = self.DEFAULT_COLOR
+        self.color = self.COLOR
 
     @classmethod
     def create_random(
@@ -467,7 +479,7 @@ class AlterIDMVehicle(AlterParams, IDMVehicle):
     """
     Distinguish the alter class for visualizations and any other configuring
     """
-    DEFAULT_COLOR = VehicleGraphics.BLUE
+    # COLOR = VehicleGraphics.BLUE
 
     def __str__(self):
         return f"AlterIDMVehicle [#{id(self) % 1000}, AV-{self.av_id}]"

@@ -12,6 +12,34 @@ Note https://docs.xarray.dev/en/stable/user-guide/plotting.html
 for plotting with xarray objects
 """
 
+# To my best colorblind-ass visual determination
+palette = sns.color_palette("colorblind")
+muted_palette = sns.color_palette("muted")
+deep_palette = sns.color_palette("deep")
+paired_pal = sns.color_palette("Paired")
+# brewer = sns.color_palette("Set2")
+# online_pal = sns.color_palette("crest", n_colors=5)
+# green_pal = sns.light_palette("green", n_colors=5)
+# spectral_pal = sns.color_palette("Spectral", n_colors=8)
+
+# Color some common plot entities
+AV_COLORS = {
+    "blue": palette[0],
+    "orange": palette[1],
+    "green": palette[2],
+    "red": palette[3],
+    "pink": palette[4],
+    "tan": palette[5],
+    #####
+    # "nominal": deep_palette[2],  # greensh
+    "nominal": palette[3],  # greensh
+    "alter": palette[5],  # tansh
+    "hotshot": palette[3],  # redsh
+    "defensive": deep_palette[0],  # bluesh
+    "online-4": (0.66, 0.74, 0.66),  # less greysh
+    "online-12": (0.55, 0.66, 0.7),  # greysh
+}
+
 
 class AVPlotter:
     """
@@ -33,28 +61,6 @@ class AVPlotter:
         }
         sns.set_context(sns_context, font_scale=font_scale, rc=rc)
         sns.set_palette("colorblind")
-
-        # To my best colorblind-ass visual determination
-        palette = sns.color_palette()
-        paired_pal = sns.color_palette("Paired")
-        brewer = sns.color_palette("Set2")
-        # online_pal = sns.color_palette("crest", n_colors=5)
-        green_pal = sns.light_palette("green", n_colors=5)
-        spectral_pal = sns.color_palette("Spectral", n_colors=8)
-
-        # Color some common plot entities
-        self.color_map = {
-            "blue": palette[0],
-            "orange": palette[1],
-            "green": palette[2],
-            "red": palette[3],
-            "pink": palette[4],
-            "tan": palette[5],
-            "hotshot": palette[3],
-            "defensive": palette[0],
-            "online-4": palette[1],
-            "online-12": palette[2],
-        }
 
         # Custom metric processing override methods
         # Keys are the plot labels, permitting Dataset metric keys to not be confined to a single processor
@@ -1017,12 +1023,16 @@ class AVPlotter:
             else:
                 ax.set_xlabel("Step")
 
-        # Add legend to the top row
-        axs[0, 0].legend(
-            bbox_to_anchor=(1.15, 0.25),
-            ncol=4,
+        # For baselines
+        axs[0, 1].legend(
             title=None
         )
+        # For compare-plot.pdf
+        # axs[0, 0].legend(
+        #     bbox_to_anchor=(1.15, 0.25),
+        #     ncol=4,
+        #     title=None
+        # )
 
         # Tighten up
         if not title:
@@ -1041,6 +1051,7 @@ class AVPlotter:
         self,
         save_path: str,
         _datasets: list[tuple[xr.Dataset, str]],
+        colors: Optional[list[Any]] = None,
         bin_range: tuple[int, int] | None = None,
         kde: bool = True,
     ):
@@ -1059,6 +1070,7 @@ class AVPlotter:
         ]
 
         col_wheel = self.get_color_wheel()
+        colors = colors or [next(col_wheel) for _ in datasets]
         # Plotting the distributions
         # Get the bin range as the 'duration' of the simulation
         if not bin_range:
@@ -1069,7 +1081,7 @@ class AVPlotter:
 
         for i_ds, ds in enumerate(datasets):
             lbl = _datasets[i_ds][1]
-            col = next(col_wheel)
+            col = colors[i_ds]
             sns.histplot(ds, bins=nbins, kde=kde, label=lbl, color=col, binrange=bin_range)
             print(f"{lbl}: {np.mean(ds)} ({len(ds)}/{world_draws} crashed)")
             # plt.axvline(np.mean(ds), color=col, linestyle='dashed', linewidth=1)
