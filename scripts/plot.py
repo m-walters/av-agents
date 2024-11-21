@@ -23,8 +23,8 @@ LABEL_TO_METRIC = {
 def animate_single():
     # Create the video with the saved frames and data
     # Load the data
-    RESULTS_DIR = "../results/manuscript/freezer/video_sample/"
-    frames = np.load(os.path.join(RESULTS_DIR, "online-1-sample/frames.npy"))
+    RESULTS_DIR = "../results/tmp/sample-baseline"
+    frames = np.load(os.path.join(RESULTS_DIR, "frames.npy"))
     save_path = os.path.join(RESULTS_DIR, "anim.mp4")
 
 
@@ -32,25 +32,18 @@ def animate_single():
         r'$R_D$': "defensive_reward",
         r'$R_S$': "speed_reward",
         "Loss": "real_loss",
-        # "E[Loss]": "loss_mean",
-        # "E[Energy]": "energy",
-        # "Risk": "risk",
+        "E[Loss]": "loss_mean",
+        "E[Energy]": "energy",
+        "Risk": "risk",
     }
 
     datasets = [
-        xr.open_dataset(os.path.join(RESULTS_DIR, "online-1-sample/results.nc")),
-        xr.open_dataset(os.path.join(RESULTS_DIR, "sample-baseline/results.nc")),
+        xr.open_dataset(os.path.join(RESULTS_DIR, "results.nc")),
     ]
 
     avplot = plotting.AVPlotter()
     colors = [
-        # (0.66, 0.74, 0.66),
         (0.55, 0.66, 0.7),
-        # (0.75, 0.75, 0.75),
-        # (0.5, 0.5, 0.5),
-        # avplot.color_map["online-4"],
-        # avplot.color_map["online-12"],
-        # avplot.color_map["defensive"],
         avplot.color_map["hotshot"],
     ]
 
@@ -67,7 +60,7 @@ def animate_single():
 def double_animation():
     # Create the video with the saved frames and data
     # Load the data
-    RESULTS_DIR = "../results/manuscript/freezer/video_sample/"
+    RESULTS_DIR = "../results/tmp"
     save_path = os.path.join(RESULTS_DIR, "double-anim.mp4")
 
 
@@ -80,8 +73,8 @@ def double_animation():
         # "Risk": "risk",
     }
 
-    run1 = "online-1-sample"
-    run2 = "fast"
+    run1 = "sample-online"
+    run2 = "sample-baseline"
     datasets = [
         xr.open_dataset(os.path.join(RESULTS_DIR, f"{run1}/results.nc")),
         xr.open_dataset(os.path.join(RESULTS_DIR, f"{run2}/results.nc")),

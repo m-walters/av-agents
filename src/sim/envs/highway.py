@@ -84,8 +84,9 @@ class AVHighway(HighwayEnv):
             # MonteCarlo horizon; Note that a given step is sim_freq // policy_freq frames (see self._simulate)
             "mc_horizon": 5,
             "alpha": 10.,
-            "sigma_s": 10.,
+            "sigma_s": 12.,
             "beta": 0.25,
+            "zeta": 1.,
             "default_control_behavior": "sim.vehicles.highway.NominalParams",
             # Number of vehicles with the reward_speed target
             # Remainder will have a target speed lower than speed_limit
@@ -268,7 +269,8 @@ class AVHighway(HighwayEnv):
         """
         vehicle = vehicle or self.vehicle
         # Use forward speed rather than speed, see https://github.com/eleurent/highway-env/issues/268
-        forward_speed = vehicle.speed * np.cos(vehicle.heading)
+        # forward_speed = vehicle.speed * np.cos(vehicle.heading)
+        forward_speed = vehicle.speed
         score = self.config['alpha'] * np.exp(
             - (forward_speed - self.config['reward_speed']) ** 2 / (self.config['sigma_s'] ** 2)
         )
@@ -298,16 +300,17 @@ class AVHighway(HighwayEnv):
         :return: collision reward
         """
         vehicle = vehicle or self.vehicle
+        max_pen = self.config["max_defensive_penalty"]
+
         if vehicle.crashed:
             if self.config['normalize_reward']:
-                return -1
-            return self.config['max_defensive_penalty']
+                return 0
+            return max_pen
 
         # See our AV Project, "Vehicle Agent" section for derivation
         # In IDMVehicle.act you can see acceleration getting clipped by [-ACC_MAX, ACC_MAX]
         beta = 1 / (2 * self.ACC_MAX)
 
-        n_nbr = 0
         penalty = 0
         # Boundary of neighbour consideration
         boundary = max(vehicle.speed, 10)
@@ -322,54 +325,50 @@ class AVHighway(HighwayEnv):
             relative_velocity = v.velocity - vehicle.velocity
             dist = np.linalg.norm(relative_pos)
 
-            # if vehicle.av_id == "1":
-            #     print(
-            #         f"MW DEFENCE COMPARE [{vehicle}, {v}]\n\t pos {vehicle.position} | {v.position} -> {relative_pos}"
-            #         f"\n\t dir {vehicle.direction} | {v.direction} -> {v.direction - vehicle.direction}"
-            #         f"\n\t vel {vehicle.velocity} | {v.velocity} -> {relative_velocity}"
-            #         f"\n\t dist {dist:0.4f} | rel_pos . v.direction = {np.dot(relative_pos, v.direction):0.4f} |"
-            #         f" rel_vel . vehicle.direction = {np.dot(relative_velocity, vehicle.direction):0.4f}"
-            #     )
+            lane_differential_pen = 4
+            lane_diff = int(np.abs(lane[2] - vehicle.lane_index[2]))
+            dist = max(dist, vehicle.LENGTH * 1.)
+            denom = (dist * (lane_differential_pen ** lane_diff))
+
+            # proximity_penalty = abs(max_pen) * (vehicle.LENGTH / dist)
+            proximity_penalty = abs(max_pen) * (vehicle.LENGTH / denom)
 
             if np.dot(relative_pos, vehicle.direction) < 0:
                 # Behind
                 # Compare relative velocity with our velocity to see if its approaching or not
                 if np.dot(relative_velocity, vehicle.direction) > 0:
                     # Approaching from behind
-                    ...
+                    relative_speed = np.linalg.norm(relative_velocity)
+                    braking_penalty = abs(max_pen) * beta * (relative_speed ** 2) / denom
                 else:
                     # Moving away, ignore
-                    continue
+                    braking_penalty = 0
             else:
                 # In front
                 # Compare relative velocity with our velocity to see if its approaching or not
                 if np.dot(relative_velocity, vehicle.direction) < 0:
                     # Approaching from front
-                    ...
+                    relative_speed = np.linalg.norm(relative_velocity)
+                    braking_penalty = abs(max_pen) * beta * (relative_speed ** 2) / denom
                 else:
                     # Moving away, ignore
-                    continue
+                    braking_penalty = 0
 
-            # Found approacher
-            n_nbr += 1
-            dist = max(dist, vehicle.LENGTH * 1.)
-            relative_speed = np.linalg.norm(relative_velocity)
-            _penalty = beta * relative_speed ** 2 / (dist * (2 ** np.abs(lane[2] - vehicle.lane_index[2])))
+            _penalty = proximity_penalty + braking_penalty
             penalty += _penalty
 
         # Average over the neighbors
-        # penalty /= n_nbr if n_nbr > 0 else 1
-
-        if -penalty < self.config['max_defensive_penalty']:
-            penalty = -self.config['max_defensive_penalty']
+        reward = max(0, abs(max_pen) - penalty)
 
         if self.config['normalize_reward']:
             # Penalty is in range [0, -max_defensive_penalty], return in range [0,-1]
-            reward = -penalty / abs(self.config['max_defensive_penalty'])
-            assert -1 <= reward <= 0
+            # reward = -penalty / abs(self.config['max_defensive_penalty'])
+            # assert -1 <= reward <= 0
+            reward /= abs(max_pen)
+            assert 0 <= reward <= 1
             return reward
 
-        return -penalty
+        return reward
 
     def _info(self, obs: Observation, action: Optional[Action] = None) -> dict:
         """
@@ -425,16 +424,11 @@ class AVHighway(HighwayEnv):
         if not self.multiagent:
             rewards = rewards or self._rewards(action)
             # Add speed and subtract defensive 'reward' [-1, 0]
-            reward = rewards["speed_reward"] - rewards["defensive_reward"]
+            reward = rewards["speed_reward"] + rewards["defensive_reward"] + rewards["crash_reward"]
             if self.config["normalize_reward"]:
-                # Normalize to [0,1]
-                reward /= 2.
-                # Add the crash penalty if incurred
-                reward += rewards["crash_reward"]
-
                 # Best is 1 for the normalized speed reward
                 # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
-                best = 1
+                best = 2
                 worst = self.config['crash_penalty']
                 reward = utils.lmap(
                     reward,
@@ -454,7 +448,7 @@ class AVHighway(HighwayEnv):
         # Forced normalize_reward
         reward = np.array(
             [
-                (r_tup[1] - r_tup[0]) / 2. + r_tup[2]
+                r_tup[1] + r_tup[0] + r_tup[2]
                 for r_tup in zip(rewards["defensive_reward"], rewards["speed_reward"], rewards["crash_reward"])
             ]
         )
@@ -468,7 +462,7 @@ class AVHighway(HighwayEnv):
         if self.config["normalize_reward"]:
             # Best is 1 for the normalized speed reward
             # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
-            best = 1
+            best = 2
             worst = self.config['crash_penalty']
             reward = utils.lmap(
                 reward,

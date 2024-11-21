@@ -162,11 +162,11 @@ class Gatekeeper:
         rewards = {
             reward: getattr(env, reward)(vehicle) for reward in self.reward_types
         }
-        reward = (rewards['speed_reward'] - rewards['defensive_reward']) / 2. + rewards['crash_reward']
+        reward = rewards['speed_reward'] + rewards['defensive_reward'] + rewards['crash_reward']
         if env.config["normalize_reward"]:
             # Best is 1 for the normalized speed reward
             # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
-            best = 1
+            best = 2
             worst = env.config["crash_penalty"]
             reward = utils.lmap(
                 reward,
@@ -183,18 +183,16 @@ class Gatekeeper:
         """
         Update policy based on nbrhood cre
         """
-        if not self.behavior_ctrl_enabled or not self.online:
+        if not self.behavior_ctrl_enabled or not self.online or self.change_in_progress:
             # Skip behavior monitoring
             return
 
         if self.control_policy == ControlPolicies.RISK_THRESHOLD:
             if self.policy == Policies.NOMINAL and nbrhood_cre > self.nominal_risk_threshold:
-                vehicle = self.get_vehicle(env)
                 self.target_policy = Policies.CONSERVATIVE
                 self.change_in_progress = True
 
             elif self.policy == Policies.CONSERVATIVE and nbrhood_cre < self.defensive_risk_threshold:
-                vehicle = self.get_vehicle(env)
                 self.target_policy = Policies.NOMINAL
                 self.change_in_progress = True
 
@@ -326,7 +324,6 @@ class GatekeeperCommand:
         # which in the Loss-normalized [0,1] case, the max risk is k = -log(p_star)/l_star
         nominal_rstar = -np.log(gk_cfg['preference_prior']['p_star']) * 1.1
         defensive_rstar = nominal_rstar * 0.9 / 1.1
-        logger.debug(f"MW RISK THRESHOLD RANGE: {nominal_rstar} | {defensive_rstar}")
 
         # Init GKs
         self.nbr_distance = VehicleBase.MAX_SPEED * 0.7  # For GK neighborhood discovery
