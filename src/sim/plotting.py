@@ -338,8 +338,9 @@ class AVPlotter:
     def double_animation(
         self,
         save_path: str,
-        datasets: list[xr.Dataset],
         ds_label_map: dict,
+        mc_ds: xr.Dataset,
+        ds2: xr.Dataset,
         sim_frames1: list[np.ndarray],
         sim_frames2: list[np.ndarray],
         sim_labels: list[str],
@@ -347,11 +348,10 @@ class AVPlotter:
         colors: list[Any] | None = None,
     ):
         """
-        Use pyplot animation to create video + data animation
-        'ds_label_map' maps the figure labels to keys in the dataset
+        Compare a MC-dataset with another (ie baseline)
         """
         # First dataset is reference
-        ref_ds = datasets[0]
+        ref_ds = mc_ds
 
         # There is one more frame than recorded data, so we'll drop the first frame
         frames1 = sim_frames1[1:]
@@ -395,7 +395,7 @@ class AVPlotter:
 
         # We initialize our plots to get limits etc.
         whl = self.get_color_wheel()
-        colors = colors or [next(whl) for _ in datasets]
+        colors = colors or [next(whl) for _ in range(2)]
         line_groups = []  # Line2D objects
         y_values = []
         x_values = []
@@ -415,23 +415,26 @@ class AVPlotter:
                 x_values.append(steps.copy())
 
             y_values.append([])  # store the y values of this var from each dataset
-            for i_ds, ds in enumerate(datasets):
-                y_values[-1].append(
-                    ds[var].sel(world=0, ego=0).values
+            # First grab and plot the MC data
+            y_values[-1].append(
+                mc_ds[var].sel(world=0, ego=0).values
+            )
+            sns.lineplot(
+                x=x_values[-1], y=y_values[-1][-1], color=colors[0], ax=data_axes[i],
+                legend=False, label=None,
+            )
+            # Check if partner dataset has values for this var
+            ds2_vals = ds2[var].sel(world=0, ego=0).values
+            if np.isnan(ds2_vals).all():
+                # Don't add this line
+                ...
+            else:
+                y_values[-1].append(ds2_vals)
+                sns.lineplot(
+                    x=x_values[-1], y=ds2_vals, color=colors[1], ax=data_axes[i],
+                    legend=False, label=None,
                 )
-                if not any(y_values[-1][-1]):
-                    print(f"MW NO YVALS")
-                    y_values[-1][-1] = []
-                    # Plot empty line
-                    sns.lineplot(
-                        x=[], y=[], ax=data_axes[i], legend=False, label=None,
-                    )
-                else:
-                    # Plot the line
-                    sns.lineplot(
-                        x=x_values[-1], y=y_values[-1][-1], color=colors[i_ds], ax=data_axes[i],
-                        legend=False, label=None,
-                    )
+
 
             # data_axes[i].set_yticks(np.linspace(-1, 1, 3))
             # data_axes[i].set_ylim(0, 1)
@@ -1024,15 +1027,15 @@ class AVPlotter:
                 ax.set_xlabel("Step")
 
         # For baselines
-        axs[0, 1].legend(
-            title=None
-        )
-        # For compare-plot.pdf
-        # axs[0, 0].legend(
-        #     bbox_to_anchor=(1.15, 0.25),
-        #     ncol=4,
+        # axs[0, 1].legend(
         #     title=None
         # )
+        # For compare-plot.pdf
+        axs[0, 0].legend(
+            bbox_to_anchor=(1.15, 0.25),
+            ncol=4,
+            title=None
+        )
 
         # Tighten up
         if not title:

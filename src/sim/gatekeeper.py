@@ -133,16 +133,20 @@ class Gatekeeper:
                 self.target_policy = Policies.OFFLINE
                 vehicle.set_behavior_params(self.offline_policy)
         else:
-            # Default to offline behavior
-            self.offline_policy = utils.class_from_path(behavior_cfg["offline_class"])
+            # Default to nominal behavior
+            self.nominal_policy = utils.class_from_path(behavior_cfg["nominal_class"])
             self.policy = Policies.NOMINAL
             self.target_policy = Policies.NOMINAL
-            vehicle.set_behavior_params(self.offline_policy)
+            vehicle.set_behavior_params(self.nominal_policy)
 
         # It's hazardous to immediately change the policy, so it must be done gradually
+        # The policy freeze is just appended to change delta basically (but the delta completes before the freeze)
         self.policy_change_delta = behavior_cfg["policy_change_delta"]  # Number of steps to gradually apply the policy
-        # change over
+        if self.policy_change_delta < 1:
+            raise ValueError("Policy change delta must be at least 1")
+        self.policy_freeze_delta = 5  # After changing a policy, hold it for at least these steps
         self.change_in_progress = False
+        self.policy_frozen = False
         self.change_step = 0  # Current step in the policy change
 
     def get_vehicle(self, env):
@@ -183,7 +187,7 @@ class Gatekeeper:
         """
         Update policy based on nbrhood cre
         """
-        if not self.behavior_ctrl_enabled or not self.online or self.change_in_progress:
+        if not self.behavior_ctrl_enabled or not self.online or self.change_in_progress or self.policy_frozen:
             # Skip behavior monitoring
             return
 
@@ -196,7 +200,7 @@ class Gatekeeper:
                 self.target_policy = Policies.NOMINAL
                 self.change_in_progress = True
 
-    def step_policy_change(self, env, video: bool = False):
+    def step_policy(self, env, video: bool = False):
         """
         Step the policy change
         """
@@ -205,7 +209,10 @@ class Gatekeeper:
 
         self.change_step += 1
         if self.change_step >= self.policy_change_delta:
-            self.complete_policy_change(env)
+            if self.change_step == self.policy_change_delta:
+                self.complete_policy_change(env)
+            if self.change_step >= self.policy_change_delta + self.policy_freeze_delta:
+                self.release_policy_change(env)
         else:
             self.increment_policy(env, video)
 
@@ -242,11 +249,17 @@ class Gatekeeper:
                 setattr(vehicle, p, current_val)
 
     def complete_policy_change(self, env):
-        self.change_in_progress = False
-        self.change_step = 0
+        """Change the values and the policy status. Enter policy freeze"""
         vehicle = self.get_vehicle(env)
         vehicle.set_behavior_params(self.policy_map[self.target_policy])
         self.policy = self.target_policy
+        self.policy_frozen = True
+
+    def release_policy_change(self, env):
+        """Reset the statuses"""
+        self.policy_frozen = False
+        self.change_in_progress = False
+        self.change_step = 0
 
 
     def __str__(self):
@@ -293,12 +306,6 @@ class GatekeeperCommand:
             )
 
         behavior_config = gk_cfg.behavior_cfg
-        if behavior_config['offline_class'] != env.config['default_control_behavior']:
-            raise ValueError(
-                f"GatekeeperCommand received offline_class {behavior_config['offline_class']} "
-                f"but the environment is configured for {env.config['default_control_behavior']}"
-            )
-
         if not behavior_config['enable'] and self.n_online > 0:
             logger.warning(
                 f"GatekeeperCommand has behavior-operation disabled while n_online > 0"
@@ -443,7 +450,7 @@ class GatekeeperCommand:
         Step the policy changes for all GKs
         """
         for gk in self.gatekeepers:
-            gk.step_policy_change(env, video)
+            gk.step_policy(env, video)
 
     def run(
         self,

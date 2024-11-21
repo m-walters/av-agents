@@ -23,7 +23,7 @@ LABEL_TO_METRIC = {
 def animate_single():
     # Create the video with the saved frames and data
     # Load the data
-    RESULTS_DIR = "../results/tmp/sample-online"
+    RESULTS_DIR = "../results/tmp/sample-online-nosp"
     frames = np.load(os.path.join(RESULTS_DIR, "frames.npy"))
     save_path = os.path.join(RESULTS_DIR, "anim.mp4")
 
@@ -61,8 +61,17 @@ def double_animation():
     # Create the video with the saved frames and data
     # Load the data
     RESULTS_DIR = "../results/tmp"
-    save_path = os.path.join(RESULTS_DIR, "double-anim-def.mp4")
-
+    save_path = os.path.join(RESULTS_DIR, "double-anim.mp4")
+    run1 = "sample-online"
+    run2 = "sample-baseline-hot"
+    colors = [
+        plotting.AV_COLORS["online-12"],
+        plotting.AV_COLORS["hotshot"],
+    ]
+    datasets = [
+        xr.open_dataset(os.path.join(RESULTS_DIR, f"{run1}/results.nc")),
+        xr.open_dataset(os.path.join(RESULTS_DIR, f"{run2}/results.nc")),
+    ]
 
     ds_label_map = {
         r'$R_D$': "defensive_reward",
@@ -70,15 +79,9 @@ def double_animation():
         "Loss": "real_loss",
         # "E[Loss]": "loss_mean",
         # "E[Energy]": "energy",
-        # "Risk": "risk",
+        "Risk": "risk",
     }
 
-    run1 = "sample-online"
-    run2 = "sample-baseline-def"
-    datasets = [
-        xr.open_dataset(os.path.join(RESULTS_DIR, f"{run1}/results.nc")),
-        xr.open_dataset(os.path.join(RESULTS_DIR, f"{run2}/results.nc")),
-    ]
     frames = [
         np.load(os.path.join(RESULTS_DIR, f"{run1}/frames.npy")),
         np.load(os.path.join(RESULTS_DIR, f"{run2}/frames.npy")),
@@ -89,18 +92,15 @@ def double_animation():
     ]
 
     avplot = plotting.AVPlotter()
-    colors = [
-        plotting.AV_COLORS["online-12"],
-        plotting.AV_COLORS["hotshot"],
-    ]
 
     avplot.double_animation(
         save_path,
-        datasets,
         ds_label_map,
-        frames[0],
-        frames[1],
-        video_labels,
+        mc_ds=datasets[0],
+        ds2=datasets[1],
+        sim_frames1=frames[0],
+        sim_frames2=frames[1],
+        sim_labels=video_labels,
         fps=10,
         colors=colors,
     )
@@ -141,53 +141,53 @@ def compare_plot():
     title = None
 
     truncate = None
-    #
-    # labels = [
-    #     r'$R_D$',
-    #     r'$R_S$',
-    #     "Loss",
-    #     # "E[Loss]",
-    #     "E[Energy]",
-    #     # "E[Entropy]",
-    #     "Risk",
-    #     "Crashed",
-    #     "Fraction Defensive",
-    # ]
-    # # 4 rows, 2 columns
-    # axes_layout = [
-    #     [r'$R_D$', None],
-    #     [r'$R_S$', "Loss"],
-    #     ["E[Energy]", "Risk"],
-    #     ["Fraction Defensive", "Crashed"],
-    # ]
 
     labels = [
         r'$R_D$',
         r'$R_S$',
         "Loss",
+        # "E[Loss]",
+        "E[Energy]",
+        # "E[Entropy]",
+        "Risk",
         "Crashed",
+        "Fraction Defensive",
     ]
     # 4 rows, 2 columns
     axes_layout = [
-        [r'$R_D$', "Loss"],
-        [r'$R_S$', "Crashed"],
+        [r'$R_D$', None],
+        [r'$R_S$', "Loss"],
+        ["E[Energy]", "Risk"],
+        ["Fraction Defensive", "Crashed"],
     ]
+
+    # labels = [
+    #     r'$R_D$',
+    #     r'$R_S$',
+    #     "Loss",
+    #     "Crashed",
+    # ]
+    # # 4 rows, 2 columns
+    # axes_layout = [
+    #     [r'$R_D$', "Loss"],
+    #     [r'$R_S$', "Crashed"],
+    # ]
 
     metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
 
 
     RESULTS_DIR = "../results/manuscript/ex2"
-    save_path = os.path.join(RESULTS_DIR, "figs/baseline-metrics.pdf")
+    save_path = os.path.join(RESULTS_DIR, "figs/combined-metrics.pdf")
     data_tups = [
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "Online-4"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "Online-12"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "Online-4"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "Online-12"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-nom/results.nc')), "Nom"),
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def."),
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
     ]
     styles = [
-        # "-",
-        # "-",
+        "-",
+        "-",
         "--",
         "--",
     ]
@@ -202,8 +202,8 @@ def compare_plot():
     ]
 
     colors = [
-        # plotting.AV_COLORS["online-4"],
-        # plotting.AV_COLORS["online-12"],
+        plotting.AV_COLORS["online-4"],
+        plotting.AV_COLORS["online-12"],
         plotting.AV_COLORS["defensive"],
         plotting.AV_COLORS["hotshot"],
     ]
