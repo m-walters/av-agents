@@ -12,6 +12,34 @@ Note https://docs.xarray.dev/en/stable/user-guide/plotting.html
 for plotting with xarray objects
 """
 
+# To my best colorblind-ass visual determination
+palette = sns.color_palette("colorblind")
+muted_palette = sns.color_palette("muted")
+deep_palette = sns.color_palette("deep")
+paired_pal = sns.color_palette("Paired")
+# brewer = sns.color_palette("Set2")
+# online_pal = sns.color_palette("crest", n_colors=5)
+# green_pal = sns.light_palette("green", n_colors=5)
+# spectral_pal = sns.color_palette("Spectral", n_colors=8)
+
+# Color some common plot entities
+AV_COLORS = {
+    "blue": palette[0],
+    "orange": palette[1],
+    "green": palette[2],
+    "red": palette[3],
+    "pink": palette[4],
+    "tan": palette[5],
+    #####
+    # "nominal": deep_palette[2],  # greensh
+    "nominal": palette[3],  # greensh
+    "alter": palette[5],  # tansh
+    "hotshot": palette[3],  # redsh
+    "defensive": deep_palette[0],  # bluesh
+    "online-4": (0.66, 0.74, 0.66),  # less greysh
+    "online-12": (0.55, 0.66, 0.7),  # greysh
+}
+
 
 class AVPlotter:
     """
@@ -33,28 +61,6 @@ class AVPlotter:
         }
         sns.set_context(sns_context, font_scale=font_scale, rc=rc)
         sns.set_palette("colorblind")
-
-        # To my best colorblind-ass visual determination
-        palette = sns.color_palette()
-        paired_pal = sns.color_palette("Paired")
-        brewer = sns.color_palette("Set2")
-        # online_pal = sns.color_palette("crest", n_colors=5)
-        green_pal = sns.light_palette("green", n_colors=5)
-        spectral_pal = sns.color_palette("Spectral", n_colors=8)
-
-        # Color some common plot entities
-        self.color_map = {
-            "blue": palette[0],
-            "orange": palette[1],
-            "green": palette[2],
-            "red": palette[3],
-            "pink": palette[4],
-            "tan": palette[5],
-            "hotshot": palette[3],
-            "defensive": palette[0],
-            "online-4": palette[1],
-            "online-12": palette[2],
-        }
 
         # Custom metric processing override methods
         # Keys are the plot labels, permitting Dataset metric keys to not be confined to a single processor
@@ -332,8 +338,9 @@ class AVPlotter:
     def double_animation(
         self,
         save_path: str,
-        datasets: list[xr.Dataset],
         ds_label_map: dict,
+        mc_ds: xr.Dataset,
+        ds2: xr.Dataset,
         sim_frames1: list[np.ndarray],
         sim_frames2: list[np.ndarray],
         sim_labels: list[str],
@@ -341,11 +348,10 @@ class AVPlotter:
         colors: list[Any] | None = None,
     ):
         """
-        Use pyplot animation to create video + data animation
-        'ds_label_map' maps the figure labels to keys in the dataset
+        Compare a MC-dataset with another (ie baseline)
         """
         # First dataset is reference
-        ref_ds = datasets[0]
+        ref_ds = mc_ds
 
         # There is one more frame than recorded data, so we'll drop the first frame
         frames1 = sim_frames1[1:]
@@ -389,7 +395,7 @@ class AVPlotter:
 
         # We initialize our plots to get limits etc.
         whl = self.get_color_wheel()
-        colors = colors or [next(whl) for _ in datasets]
+        colors = colors or [next(whl) for _ in range(2)]
         line_groups = []  # Line2D objects
         y_values = []
         x_values = []
@@ -409,23 +415,26 @@ class AVPlotter:
                 x_values.append(steps.copy())
 
             y_values.append([])  # store the y values of this var from each dataset
-            for i_ds, ds in enumerate(datasets):
-                y_values[-1].append(
-                    ds[var].sel(world=0, ego=0).values
+            # First grab and plot the MC data
+            y_values[-1].append(
+                mc_ds[var].sel(world=0, ego=0).values
+            )
+            sns.lineplot(
+                x=x_values[-1], y=y_values[-1][-1], color=colors[0], ax=data_axes[i],
+                legend=False, label=None,
+            )
+            # Check if partner dataset has values for this var
+            ds2_vals = ds2[var].sel(world=0, ego=0).values
+            if np.isnan(ds2_vals).all():
+                # Don't add this line
+                ...
+            else:
+                y_values[-1].append(ds2_vals)
+                sns.lineplot(
+                    x=x_values[-1], y=ds2_vals, color=colors[1], ax=data_axes[i],
+                    legend=False, label=None,
                 )
-                if not any(y_values[-1][-1]):
-                    print(f"MW NO YVALS")
-                    y_values[-1][-1] = []
-                    # Plot empty line
-                    sns.lineplot(
-                        x=[], y=[], ax=data_axes[i], legend=False, label=None,
-                    )
-                else:
-                    # Plot the line
-                    sns.lineplot(
-                        x=x_values[-1], y=y_values[-1][-1], color=colors[i_ds], ax=data_axes[i],
-                        legend=False, label=None,
-                    )
+
 
             # data_axes[i].set_yticks(np.linspace(-1, 1, 3))
             # data_axes[i].set_ylim(0, 1)
@@ -1017,7 +1026,11 @@ class AVPlotter:
             else:
                 ax.set_xlabel("Step")
 
-        # Add legend to the top row
+        # For baselines
+        # axs[0, 1].legend(
+        #     title=None
+        # )
+        # For compare-plot.pdf
         axs[0, 0].legend(
             bbox_to_anchor=(1.15, 0.25),
             ncol=4,
@@ -1041,6 +1054,7 @@ class AVPlotter:
         self,
         save_path: str,
         _datasets: list[tuple[xr.Dataset, str]],
+        colors: Optional[list[Any]] = None,
         bin_range: tuple[int, int] | None = None,
         kde: bool = True,
     ):
@@ -1059,6 +1073,7 @@ class AVPlotter:
         ]
 
         col_wheel = self.get_color_wheel()
+        colors = colors or [next(col_wheel) for _ in datasets]
         # Plotting the distributions
         # Get the bin range as the 'duration' of the simulation
         if not bin_range:
@@ -1069,7 +1084,7 @@ class AVPlotter:
 
         for i_ds, ds in enumerate(datasets):
             lbl = _datasets[i_ds][1]
-            col = next(col_wheel)
+            col = colors[i_ds]
             sns.histplot(ds, bins=nbins, kde=kde, label=lbl, color=col, binrange=bin_range)
             print(f"{lbl}: {np.mean(ds)} ({len(ds)}/{world_draws} crashed)")
             # plt.axvline(np.mean(ds), color=col, linestyle='dashed', linewidth=1)

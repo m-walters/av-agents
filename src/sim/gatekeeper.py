@@ -133,16 +133,20 @@ class Gatekeeper:
                 self.target_policy = Policies.OFFLINE
                 vehicle.set_behavior_params(self.offline_policy)
         else:
-            # Default to offline behavior
-            self.offline_policy = utils.class_from_path(behavior_cfg["offline_class"])
+            # Default to nominal behavior
+            self.nominal_policy = utils.class_from_path(behavior_cfg["nominal_class"])
             self.policy = Policies.NOMINAL
             self.target_policy = Policies.NOMINAL
-            vehicle.set_behavior_params(self.offline_policy)
+            vehicle.set_behavior_params(self.nominal_policy)
 
         # It's hazardous to immediately change the policy, so it must be done gradually
+        # The policy freeze is just appended to change delta basically (but the delta completes before the freeze)
         self.policy_change_delta = behavior_cfg["policy_change_delta"]  # Number of steps to gradually apply the policy
-        # change over
+        if self.policy_change_delta < 1:
+            raise ValueError("Policy change delta must be at least 1")
+        self.policy_freeze_delta = 5  # After changing a policy, hold it for at least these steps
         self.change_in_progress = False
+        self.policy_frozen = False
         self.change_step = 0  # Current step in the policy change
 
     def get_vehicle(self, env):
@@ -162,11 +166,11 @@ class Gatekeeper:
         rewards = {
             reward: getattr(env, reward)(vehicle) for reward in self.reward_types
         }
-        reward = (rewards['speed_reward'] - rewards['defensive_reward']) / 2. + rewards['crash_reward']
+        reward = rewards['speed_reward'] + rewards['defensive_reward'] + rewards['crash_reward']
         if env.config["normalize_reward"]:
             # Best is 1 for the normalized speed reward
             # Worst is -2 for the normalized crash penalty and the normalized defensive penalty
-            best = 1
+            best = 2
             worst = env.config["crash_penalty"]
             reward = utils.lmap(
                 reward,
@@ -183,22 +187,20 @@ class Gatekeeper:
         """
         Update policy based on nbrhood cre
         """
-        if not self.behavior_ctrl_enabled or not self.online:
+        if not self.behavior_ctrl_enabled or not self.online or self.change_in_progress or self.policy_frozen:
             # Skip behavior monitoring
             return
 
         if self.control_policy == ControlPolicies.RISK_THRESHOLD:
             if self.policy == Policies.NOMINAL and nbrhood_cre > self.nominal_risk_threshold:
-                vehicle = self.get_vehicle(env)
                 self.target_policy = Policies.CONSERVATIVE
                 self.change_in_progress = True
 
             elif self.policy == Policies.CONSERVATIVE and nbrhood_cre < self.defensive_risk_threshold:
-                vehicle = self.get_vehicle(env)
                 self.target_policy = Policies.NOMINAL
                 self.change_in_progress = True
 
-    def step_policy_change(self, env):
+    def step_policy(self, env, video: bool = False):
         """
         Step the policy change
         """
@@ -207,11 +209,14 @@ class Gatekeeper:
 
         self.change_step += 1
         if self.change_step >= self.policy_change_delta:
-            self.complete_policy_change(env)
+            if self.change_step == self.policy_change_delta:
+                self.complete_policy_change(env)
+            if self.change_step >= self.policy_change_delta + self.policy_freeze_delta:
+                self.release_policy_change(env)
         else:
-            self.increment_policy(env)
+            self.increment_policy(env, video)
 
-    def increment_policy(self, env):
+    def increment_policy(self, env, video: bool = False):
         """
         Increment the policy params towards target
         """
@@ -221,6 +226,7 @@ class Gatekeeper:
             "DISTANCE_WANTED",
             "TIME_WANTED",
             "LANE_CHANGE_MAX_BRAKING_IMPOSED",
+            "COLOR",
         ]
 
         vehicle = self.get_vehicle(env)
@@ -229,16 +235,31 @@ class Gatekeeper:
         for p in valid_params:
             init_val = getattr(initial_params, p)
             target_val = getattr(target_params, p)
-            current_val = getattr(vehicle, p)
-            current_val += (target_val - init_val) / self.policy_change_delta
-            setattr(vehicle, p, current_val)
+            if p == "COLOR" and video:
+                # Color is really this lowercase attribute
+                current_val = getattr(vehicle, "color")
+                updated = tuple(
+                    curr + (targ - init) / self.policy_change_delta
+                    for curr, targ, init in zip(current_val, target_val, init_val)
+                )
+                setattr(vehicle, "color", updated)
+            else:
+                current_val = getattr(vehicle, p)
+                current_val += (target_val - init_val) / self.policy_change_delta
+                setattr(vehicle, p, current_val)
 
     def complete_policy_change(self, env):
-        self.change_in_progress = False
-        self.change_step = 0
+        """Change the values and the policy status. Enter policy freeze"""
         vehicle = self.get_vehicle(env)
         vehicle.set_behavior_params(self.policy_map[self.target_policy])
         self.policy = self.target_policy
+        self.policy_frozen = True
+
+    def release_policy_change(self, env):
+        """Reset the statuses"""
+        self.policy_frozen = False
+        self.change_in_progress = False
+        self.change_step = 0
 
 
     def __str__(self):
@@ -285,12 +306,6 @@ class GatekeeperCommand:
             )
 
         behavior_config = gk_cfg.behavior_cfg
-        if behavior_config['nominal_class'] != env.config['default_control_behavior']:
-            raise ValueError(
-                f"GatekeeperCommand received nominal_class {behavior_config['nominal_class']} "
-                f"but the environment is configured for {env.config['default_control_behavior']}"
-            )
-
         if not behavior_config['enable'] and self.n_online > 0:
             logger.warning(
                 f"GatekeeperCommand has behavior-operation disabled while n_online > 0"
@@ -326,7 +341,7 @@ class GatekeeperCommand:
         # which in the Loss-normalized [0,1] case, the max risk is k = -log(p_star)/l_star
         nominal_rstar = -np.log(gk_cfg['preference_prior']['p_star']) * 1.1
         defensive_rstar = nominal_rstar * 0.9 / 1.1
-        logger.debug(f"MW RISK THRESHOLD RANGE: {nominal_rstar} | {defensive_rstar}")
+        print(f"MW RSTAR -- {defensive_rstar}, {nominal_rstar}")
 
         # Init GKs
         self.nbr_distance = VehicleBase.MAX_SPEED * 0.7  # For GK neighborhood discovery
@@ -430,12 +445,12 @@ class GatekeeperCommand:
 
         return losses, collisions
 
-    def step_gk_policies(self, env):
+    def step_gk_policies(self, env, video: bool=False):
         """
         Step the policy changes for all GKs
         """
         for gk in self.gatekeepers:
-            gk.step_policy_change(env)
+            gk.step_policy(env, video)
 
     def run(
         self,

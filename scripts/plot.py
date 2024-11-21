@@ -23,8 +23,8 @@ LABEL_TO_METRIC = {
 def animate_single():
     # Create the video with the saved frames and data
     # Load the data
-    RESULTS_DIR = "../results/manuscript/freezer/video_sample/"
-    frames = np.load(os.path.join(RESULTS_DIR, "online-1-sample/frames.npy"))
+    RESULTS_DIR = "../results/tmp/sample-online-nosp"
+    frames = np.load(os.path.join(RESULTS_DIR, "frames.npy"))
     save_path = os.path.join(RESULTS_DIR, "anim.mp4")
 
 
@@ -32,26 +32,19 @@ def animate_single():
         r'$R_D$': "defensive_reward",
         r'$R_S$': "speed_reward",
         "Loss": "real_loss",
-        # "E[Loss]": "loss_mean",
-        # "E[Energy]": "energy",
-        # "Risk": "risk",
+        "E[Loss]": "loss_mean",
+        "E[Energy]": "energy",
+        "Risk": "risk",
     }
 
     datasets = [
-        xr.open_dataset(os.path.join(RESULTS_DIR, "online-1-sample/results.nc")),
-        xr.open_dataset(os.path.join(RESULTS_DIR, "sample-baseline/results.nc")),
+        xr.open_dataset(os.path.join(RESULTS_DIR, "results.nc")),
     ]
 
     avplot = plotting.AVPlotter()
     colors = [
-        # (0.66, 0.74, 0.66),
-        (0.55, 0.66, 0.7),
-        # (0.75, 0.75, 0.75),
-        # (0.5, 0.5, 0.5),
-        # avplot.color_map["online-4"],
-        # avplot.color_map["online-12"],
-        # avplot.color_map["defensive"],
-        avplot.color_map["hotshot"],
+        plotting.AV_COLORS["online-12"],
+        # plotting.AV_COLORS["hotshot"],
     ]
 
     avplot.create_animation(
@@ -67,9 +60,18 @@ def animate_single():
 def double_animation():
     # Create the video with the saved frames and data
     # Load the data
-    RESULTS_DIR = "../results/manuscript/freezer/video_sample/"
+    RESULTS_DIR = "../results/tmp"
     save_path = os.path.join(RESULTS_DIR, "double-anim.mp4")
-
+    run1 = "sample-online"
+    run2 = "sample-baseline-hot"
+    colors = [
+        plotting.AV_COLORS["online-12"],
+        plotting.AV_COLORS["hotshot"],
+    ]
+    datasets = [
+        xr.open_dataset(os.path.join(RESULTS_DIR, f"{run1}/results.nc")),
+        xr.open_dataset(os.path.join(RESULTS_DIR, f"{run2}/results.nc")),
+    ]
 
     ds_label_map = {
         r'$R_D$': "defensive_reward",
@@ -77,15 +79,9 @@ def double_animation():
         "Loss": "real_loss",
         # "E[Loss]": "loss_mean",
         # "E[Energy]": "energy",
-        # "Risk": "risk",
+        "Risk": "risk",
     }
 
-    run1 = "online-1-sample"
-    run2 = "fast"
-    datasets = [
-        xr.open_dataset(os.path.join(RESULTS_DIR, f"{run1}/results.nc")),
-        xr.open_dataset(os.path.join(RESULTS_DIR, f"{run2}/results.nc")),
-    ]
     frames = [
         np.load(os.path.join(RESULTS_DIR, f"{run1}/frames.npy")),
         np.load(os.path.join(RESULTS_DIR, f"{run2}/frames.npy")),
@@ -96,18 +92,15 @@ def double_animation():
     ]
 
     avplot = plotting.AVPlotter()
-    colors = [
-        (0.55, 0.66, 0.7),
-        avplot.color_map["hotshot"],
-    ]
 
     avplot.double_animation(
         save_path,
-        datasets,
         ds_label_map,
-        frames[0],
-        frames[1],
-        video_labels,
+        mc_ds=datasets[0],
+        ds2=datasets[1],
+        sim_frames1=frames[0],
+        sim_frames2=frames[1],
+        sim_labels=video_labels,
         fps=10,
         colors=colors,
     )
@@ -183,21 +176,14 @@ def compare_plot():
     metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
 
 
-    RESULTS_DIR = "../results/manuscript/freezer/crash-4-lrg"
-    save_path = os.path.join(RESULTS_DIR, "figs/combined-metrics-66.pdf")
+    RESULTS_DIR = "../results/manuscript/ex2"
+    save_path = os.path.join(RESULTS_DIR, "figs/combined-metrics.pdf")
     data_tups = [
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "4 Online"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-8/results.nc')), "NGK-8"),
-        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "12 Online"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-nom/results.nc')), "Nom"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-def/results.nc')), "Def"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-latest-hotshot/results.nc')), "Hotshot"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "Online-4"),
+        (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "Online-12"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-nom/results.nc')), "Nom"),
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def."),
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'ttc/results.nc')), "tmp"),
     ]
     styles = [
         "-",
@@ -216,14 +202,10 @@ def compare_plot():
     ]
 
     colors = [
-        (0.66, 0.74, 0.66),
-        (0.55, 0.66, 0.7),
-        # (0.75, 0.75, 0.75),
-        # (0.5, 0.5, 0.5),
-        # avplot.color_map["online-4"],
-        # avplot.color_map["online-12"],
-        avplot.color_map["defensive"],
-        avplot.color_map["hotshot"],
+        plotting.AV_COLORS["online-4"],
+        plotting.AV_COLORS["online-12"],
+        plotting.AV_COLORS["defensive"],
+        plotting.AV_COLORS["hotshot"],
     ]
 
     avplot.comparison_plot(
@@ -242,16 +224,11 @@ def compare_plot():
 def ttc_hist():
 
 
-    RESULTS_DIR = "../results/manuscript/freezer/crash-4-lrg"
-    save_path = os.path.join(RESULTS_DIR, "baselines-ttc.png")
+    RESULTS_DIR = "../results/manuscript/ex2"
+    save_path = os.path.join(RESULTS_DIR, "figs/combined-ttc.png")
     data_tups = [
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-1/results.nc')), "NGK-1"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "NGK-2"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "NGK-4"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-8/results.nc')), "NGK-8"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "NGK-12"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-16/results.nc')), "NGK-16"),
-        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'multi/ttc-4/results.nc')), "NGK-4"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-2/results.nc')), "Online-4"),
+        # (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "Online-12"),
         # (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-nom/results.nc')), "Nom"),
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-def/results.nc')), "Def"),
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'baselines-hotshot/results.nc')), "Hotshot"),
@@ -262,9 +239,17 @@ def ttc_hist():
     kde = False
 
     avplot = plotting.AVPlotter()
+    colors = [
+        # plotting.AV_COLORS["online-4"],
+        # plotting.AV_COLORS["online-12"],
+        plotting.AV_COLORS["defensive"],
+        plotting.AV_COLORS["hotshot"],
+    ]
+
     avplot.ttc_hist(
         save_path,
         data_tups,
+        colors=colors,
         bin_range=bin_range,
         kde=kde,
     )

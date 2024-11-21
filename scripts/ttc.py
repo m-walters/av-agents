@@ -137,7 +137,7 @@ def mc_worldsim(
             # First, record the gatekeeper behavior states
             result["behavior_mode"][step, :] = gk_cmd.collect_behaviors()
             # Advance the policy deltas
-            gk_cmd.step_gk_policies(uenv)
+            gk_cmd.step_gk_policies(uenv, video=False)
 
             # We'll use the gatekeeper params for montecarlo control
             if step >= warmup_steps:
@@ -279,7 +279,7 @@ def main(cfg: DictConfig):
                 # First, record the gatekeeper behavior states
                 ds["behavior_mode"][0, step, :] = gk_cmd.collect_behaviors()
                 # Advance the policy deltas
-                gk_cmd.step_gk_policies(uenv)
+                gk_cmd.step_gk_policies(uenv, video=True)
 
                 # We'll use the gatekeeper params for montecarlo control
                 if step >= run_params['warmup_steps']:

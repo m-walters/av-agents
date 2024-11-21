@@ -41,7 +41,7 @@ def baseline_configs(run_dir: str, tag: str | None = None):
     env_type = "highway-v0"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
     world_draws = 1000
-    duration = 50
+    duration = 80
     num_control_vehicles = 12  # Total number ego on road, not GK-online though.
     num_vehicles_control_speed = 12
     vehicles_count = 24
@@ -186,7 +186,7 @@ def run_online_exp():
 
 def run_baseline():
     # Name the run, and where it will be saved
-    run_dir = "tmp/crash-test-4"
+    run_dir = "tmp/ex2"
     tag = "baselines"
 
     script, configs = baseline_configs(run_dir, tag)
