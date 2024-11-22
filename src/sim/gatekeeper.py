@@ -341,7 +341,6 @@ class GatekeeperCommand:
         # which in the Loss-normalized [0,1] case, the max risk is k = -log(p_star)/l_star
         nominal_rstar = -np.log(gk_cfg['preference_prior']['p_star']) * 1.1
         defensive_rstar = nominal_rstar * 0.9 / 1.1
-        print(f"MW RSTAR -- {defensive_rstar}, {nominal_rstar}")
 
         # Init GKs
         self.nbr_distance = VehicleBase.MAX_SPEED * 0.7  # For GK neighborhood discovery
@@ -477,6 +476,7 @@ class GatekeeperCommand:
             # Issue trajectories to workers
             # Use starmap if you need to provide more arguments
             results = pool.map(self._mc_trajectory, seeds)
+
             # Stack results along first dimension
             results = np.stack(results, axis=0)
         elif threads_per_world and threads_per_world > 1:

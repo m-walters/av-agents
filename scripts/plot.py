@@ -60,7 +60,7 @@ def animate_single():
 def double_animation():
     # Create the video with the saved frames and data
     # Load the data
-    RESULTS_DIR = "../results/tmp"
+    RESULTS_DIR = "../results/tmp/sample200"
     save_path = os.path.join(RESULTS_DIR, "double-anim.mp4")
     run1 = "sample-online"
     run2 = "sample-baseline-hot"
@@ -87,8 +87,8 @@ def double_animation():
         np.load(os.path.join(RESULTS_DIR, f"{run2}/frames.npy")),
     ]
     video_labels = [
-        "Online",
-        "Hotshot",
+        "GK",
+        "Non-GK",
     ]
 
     avplot = plotting.AVPlotter()
