@@ -125,9 +125,10 @@ class Gatekeeper:
 
             # Set the starting policy
             if online:
-                self.policy = Policies.NOMINAL
-                self.target_policy = Policies.NOMINAL
-                vehicle.set_behavior_params(self.nominal_policy)
+                # We're going to try a run starting with defensive policy
+                self.policy = Policies.CONSERVATIVE
+                self.target_policy = Policies.CONSERVATIVE
+                vehicle.set_behavior_params(self.defensive_policy)
             else:
                 self.policy = Policies.OFFLINE
                 self.target_policy = Policies.OFFLINE
@@ -226,7 +227,7 @@ class Gatekeeper:
             "DISTANCE_WANTED",
             "TIME_WANTED",
             "LANE_CHANGE_MAX_BRAKING_IMPOSED",
-            "COLOR",
+            # "COLOR",
         ]
 
         vehicle = self.get_vehicle(env)
@@ -341,7 +342,6 @@ class GatekeeperCommand:
         # which in the Loss-normalized [0,1] case, the max risk is k = -log(p_star)/l_star
         nominal_rstar = -np.log(gk_cfg['preference_prior']['p_star']) * 1.1
         defensive_rstar = nominal_rstar * 0.9 / 1.1
-        print(f"MW RSTAR -- {defensive_rstar}, {nominal_rstar}")
 
         # Init GKs
         self.nbr_distance = VehicleBase.MAX_SPEED * 0.7  # For GK neighborhood discovery
@@ -477,6 +477,7 @@ class GatekeeperCommand:
             # Issue trajectories to workers
             # Use starmap if you need to provide more arguments
             results = pool.map(self._mc_trajectory, seeds)
+
             # Stack results along first dimension
             results = np.stack(results, axis=0)
         elif threads_per_world and threads_per_world > 1:

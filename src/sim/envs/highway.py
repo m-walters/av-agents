@@ -110,6 +110,13 @@ class AVHighway(HighwayEnv):
 
         return self.controlled_vehicles[0] if self.controlled_vehicles else None
 
+    @property
+    def average_speed(self) -> float:
+        """
+        Return the average speed of all vehicles
+        """
+        return np.mean([v.speed for v in self.road.vehicles])
+
     def _reset(self) -> None:
         """
         Init road and vehicles
@@ -227,7 +234,7 @@ class AVHighway(HighwayEnv):
                     vehicle.target_speed = self.config["reward_speed"]
                     num_alter_control_speed -= 1
                 else:
-                    vehicle.target_speed = self.config["speed_limit"]
+                    vehicle.target_speed = 1. * self.np_random.normal(self.config["speed_limit"])
 
                 if hasattr(vehicle, "randomize_behavior"):
                     vehicle.randomize_behavior()

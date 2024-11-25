@@ -60,7 +60,7 @@ def animate_single():
 def double_animation():
     # Create the video with the saved frames and data
     # Load the data
-    RESULTS_DIR = "../results/tmp"
+    RESULTS_DIR = "../results/tmp/sample200"
     save_path = os.path.join(RESULTS_DIR, "double-anim.mp4")
     run1 = "sample-online"
     run2 = "sample-baseline-hot"
@@ -87,8 +87,8 @@ def double_animation():
         np.load(os.path.join(RESULTS_DIR, f"{run2}/frames.npy")),
     ]
     video_labels = [
-        "Online",
-        "Hotshot",
+        "GK",
+        "Non-GK",
     ]
 
     avplot = plotting.AVPlotter()
@@ -176,8 +176,8 @@ def compare_plot():
     metric_label_map = {k: LABEL_TO_METRIC[k] for k in labels}
 
 
-    RESULTS_DIR = "../results/manuscript/ex2"
-    save_path = os.path.join(RESULTS_DIR, "figs/combined-metrics.pdf")
+    RESULTS_DIR = "../results/manuscript/ex2-def-first"
+    save_path = os.path.join(RESULTS_DIR, "figs/combined-metrics-ci.pdf")
     data_tups = [
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-4/results.nc')), "Online-4"),
         (xr.open_dataset(os.path.join(RESULTS_DIR, 'online-12/results.nc')), "Online-12"),
@@ -194,12 +194,6 @@ def compare_plot():
     avplot = plotting.AVPlotter(
         sns_context="paper", font_scale=1.3
     )
-    skip_error = [
-        False,
-        False,
-        True,
-        True
-    ]
 
     colors = [
         plotting.AV_COLORS["online-4"],
@@ -214,7 +208,7 @@ def compare_plot():
         metric_label_map,
         styles=styles,
         colors=colors,
-        skip_error=skip_error,
+        skip_error=None,
         axes_layout=axes_layout,
         truncate=truncate,
         title=title,

@@ -73,6 +73,20 @@ class NpyRKey:
 #         return sample, log_probs
 #
 
+
+def combine_results(ds1: xr.Dataset, ds2: xr.Dataset, dim: str) -> xr.Dataset:
+    """
+    Combine along dimension dim.
+    Shifts dimension of ds2 up by the max in ds1
+    """
+    if dim != "world":
+        raise NotImplementedError(f"combine_results only configured for 'world' dimension")
+
+    if dim == "world":
+        ds2 = ds2.assign_coords(world=ds2.world + int(ds1.world[-1]) + 1)
+        return xr.concat([ds1, ds2], dim=dim)
+
+
 class Results:
     @staticmethod
     def save_ds(ds: xr.Dataset, path):

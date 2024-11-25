@@ -33,7 +33,7 @@ AV_COLORS = {
     #####
     # "nominal": deep_palette[2],  # greensh
     "nominal": palette[3],  # greensh
-    "alter": palette[5],  # tansh
+    "alter": [0.7 * c for c in palette[5]],  # tansh
     "hotshot": palette[3],  # redsh
     "defensive": deep_palette[0],  # bluesh
     "online-4": (0.66, 0.74, 0.66),  # less greysh
@@ -231,7 +231,6 @@ class AVPlotter:
         mc_axes = []  # Mask for MC graphs
 
         for i, label in enumerate(y_labels):
-            print(f"MW VAR -- {label}")
             data_axes[i].set_ylabel(label)
             var = ds_label_map[label]
 
@@ -249,7 +248,6 @@ class AVPlotter:
                     ds[var].sel(world=0, ego=0).values
                 )
                 if not any(y_values[-1][-1]):
-                    print(f"MW NO YVALS")
                     y_values[-1][-1] = []
                     # Plot empty line
                     sns.lineplot(
@@ -368,18 +366,24 @@ class AVPlotter:
         fig, axs = self.subplots(nrow, 1, figsize=(6.4, nrow * 1.6))
         # fig, axs = self.subplots(nrow, 1)
         sim_axes, data_axes = axs[:2], axs[2:]
-        [sax.axis('off') for sax in sim_axes]
+        for sax, img_lbl in zip(sim_axes, sim_labels):
+            sax.spines['left'].set_color('none')  # Hide specific spines
+            sax.tick_params(left=False, bottom=False)  # Remove ticks
+            sax.set_xticks([])  # Remove x-ticks
+            sax.set_yticks([])  # Remove y-ticks
+            sax.set_ylabel(img_lbl, rotation=90, labelpad=10)
 
         steps = ref_ds.coords['step'].values
         # Make ticks nice
         if nframe < 20:
             xticks = np.arange(0, nframe + 1)
-        elif nframe < 50:
+        elif nframe < 100:
             xticks = np.arange(0, nframe + 1, 10)
         elif nframe <= 200:
-            # Round to nearest 10
-            r = 10 - nframe % 10
-            xticks = np.arange(0, nframe + r + 1, 10, dtype=int)
+            # Round to nearest w
+            w = 20
+            r = w - nframe % w
+            xticks = np.arange(0, nframe + r + 1, w, dtype=int)
         else:
             # Do at most 20 of some multiple of 10
             size = nframe // 20
@@ -402,7 +406,6 @@ class AVPlotter:
         mc_axes = []  # Mask for MC graphs
 
         for i, label in enumerate(y_labels):
-            print(f"MW VAR -- {label}")
             data_axes[i].set_ylabel(label)
             var = ds_label_map[label]
 
@@ -421,7 +424,7 @@ class AVPlotter:
             )
             sns.lineplot(
                 x=x_values[-1], y=y_values[-1][-1], color=colors[0], ax=data_axes[i],
-                legend=False, label=None,
+                legend=False, label=sim_labels[0],
             )
             # Check if partner dataset has values for this var
             ds2_vals = ds2[var].sel(world=0, ego=0).values
@@ -432,9 +435,8 @@ class AVPlotter:
                 y_values[-1].append(ds2_vals)
                 sns.lineplot(
                     x=x_values[-1], y=ds2_vals, color=colors[1], ax=data_axes[i],
-                    legend=False, label=None,
+                    legend=False, label=sim_labels[1],
                 )
-
 
             # data_axes[i].set_yticks(np.linspace(-1, 1, 3))
             # data_axes[i].set_ylim(0, 1)
@@ -455,6 +457,8 @@ class AVPlotter:
             else:
                 # Set the final plot's label
                 data_axes[i].set_xlabel("Step")
+
+        data_axes[0].legend(title=None, loc='upper right', fontsize='small')
 
         # Init the frames ax
         sim_img1 = sim_axes[0].imshow(frames1[0])
@@ -962,7 +966,7 @@ class AVPlotter:
             ax = label2axis(label)
 
             for idx, (ds, ds_name) in enumerate(datasets):
-                err = ('pi', 66)
+                err = ('ci', 90)
                 if skip_error and skip_error[idx]:
                     # Indication to skip
                     err = None
