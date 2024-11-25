@@ -125,9 +125,10 @@ class Gatekeeper:
 
             # Set the starting policy
             if online:
-                self.policy = Policies.NOMINAL
-                self.target_policy = Policies.NOMINAL
-                vehicle.set_behavior_params(self.nominal_policy)
+                # We're going to try a run starting with defensive policy
+                self.policy = Policies.CONSERVATIVE
+                self.target_policy = Policies.CONSERVATIVE
+                vehicle.set_behavior_params(self.defensive_policy)
             else:
                 self.policy = Policies.OFFLINE
                 self.target_policy = Policies.OFFLINE
@@ -226,7 +227,7 @@ class Gatekeeper:
             "DISTANCE_WANTED",
             "TIME_WANTED",
             "LANE_CHANGE_MAX_BRAKING_IMPOSED",
-            "COLOR",
+            # "COLOR",
         ]
 
         vehicle = self.get_vehicle(env)

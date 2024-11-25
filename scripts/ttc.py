@@ -133,7 +133,7 @@ def mc_worldsim(
     with logging_redirect_tqdm():
         # with multiprocessing.Pool(threads_per_world, maxtasksperchild=100) as pool:
         # with ProcessPoolExecutor(max_workers=threads_per_world) as executor:
-        for step in tqdm(range(duration), desc="Steps", leave=False, disable=False):
+        for step in tqdm(range(duration), desc="Steps", leave=False, disable=True):
             # First, record the gatekeeper behavior states
             result["behavior_mode"][step, :] = gk_cmd.collect_behaviors()
             # Advance the policy deltas

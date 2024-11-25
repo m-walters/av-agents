@@ -4,7 +4,6 @@ One-off script for running multiple runs
 import os
 import subprocess
 import time
-import multiprocessing
 
 CONTROL_BEHAVIORS = {
     "nom": "sim.vehicles.highway.NominalParams",
@@ -111,11 +110,11 @@ def online_configs(run_dir: str, tag: str | None = None):
     seed = 867
     script = "ttc.py"
 
-    num_cpus = 12
+    num_cpus = 10
     threads_per_world = 1
     env_type = "highway-v0"
     default_control_behavior = "sim.vehicles.highway.HotshotParams"
-    world_draws = 1
+    world_draws = 400
     duration = 80
     num_control_vehicles = 12  # Total number ego on road, not GK-online though.
     num_vehicles_control_speed = 12
@@ -123,9 +122,9 @@ def online_configs(run_dir: str, tag: str | None = None):
     num_collision_watch = 4
     # GK/MC Stuff
     warmup = 0
-    mc_period = 5
+    mc_period = 4
     mc_horizon = 10
-    n_montecarlo = 20
+    n_montecarlo = 40
     enable_time_discounting = "false"
     # Paradoxically our GK 'nominal' is the risky one
     nominal_class = "sim.vehicles.highway.HotshotParams"
@@ -136,7 +135,7 @@ def online_configs(run_dir: str, tag: str | None = None):
     profiling = "false"
 
     runs = {
-        # "online-4": 4,
+        "online-4": 4,
         "online-12": 12,
     }
 
@@ -177,8 +176,8 @@ def online_configs(run_dir: str, tag: str | None = None):
 
 def run_online_exp():
     # Name the run, and where it will be saved
-    run_dir = "tmp/crash-4"
-    tag = "sample"
+    run_dir = "tmp/ex2-def-first"
+    tag = None
 
     script, configs = online_configs(run_dir, tag)
     _run_configs(script, configs)
@@ -245,8 +244,10 @@ def _run_configs(script: str, configs: list[dict]):
         cfg_args = " ".join([f"{k}={v}" for k, v in config.items()])
         command = f"python {script} {cfg_args}"
         print(f"Running: {command}")
-        print("\n\nCan be pesky to kill all the spawned processes with using `threads_per_core` > 1. \nUse pkill -f "
-              "'python ttc.py' \n")
+        print(
+            "\n\nCan be pesky to kill all the spawned processes with using `threads_per_core` > 1. \nUse pkill -f "
+            "'python ttc.py' \n"
+        )
         time.sleep(5)
         result = subprocess.run(command, shell=True)
         if result.returncode != 0:
@@ -257,6 +258,7 @@ def _run_configs(script: str, configs: list[dict]):
 if __name__ == '__main__':
     # Accept first argument as function name to be called
     import sys
+
     # multiprocessing.set_start_method("spawn", force=True)
 
     if len(sys.argv) < 2:

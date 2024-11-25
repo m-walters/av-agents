@@ -966,7 +966,7 @@ class AVPlotter:
             ax = label2axis(label)
 
             for idx, (ds, ds_name) in enumerate(datasets):
-                err = ('pi', 66)
+                err = ('ci', 90)
                 if skip_error and skip_error[idx]:
                     # Indication to skip
                     err = None
