@@ -2,8 +2,9 @@
 
 Modeling agentic autonomous vehicles and safety metrics under an Active Inference framework.
 
-
-![blah](media/double-anim.gif)
+<div align="center">
+  <img src="media/double-anim.gif" width="500">
+</div>
 
 
 ## Setup
