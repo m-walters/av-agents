@@ -61,7 +61,7 @@ def double_animation():
     # Create the video with the saved frames and data
     # Load the data
     RESULTS_DIR = "../results/tmp/sample200"
-    save_path = os.path.join(RESULTS_DIR, "double-anim.mp4")
+    save_path = os.path.join(RESULTS_DIR, "double-anim-2.mp4")
     run1 = "sample-online"
     run2 = "sample-baseline-hot"
     colors = [
